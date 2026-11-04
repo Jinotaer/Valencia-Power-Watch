@@ -1,0 +1,16 @@
+{
+  "id": "/community/login",
+  "name": "Valencia PowerWatch Resident App",
+  "short_name": "PowerWatch Resident",
+  "description": "Report interruptions and follow outage information in Valencia City.",
+  "start_url": "/community/login",
+  "scope": "/community",
+  "display": "standalone",
+  "background_color": "#f7f8fb",
+  "theme_color": "#24449a",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

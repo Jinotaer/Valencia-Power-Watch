@@ -1,0 +1,33 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  --color-brand-blue: #24449a;
+  --color-brand-navy: #172b68;
+  --color-brand-yellow: #ffd500;
+  --color-brand-ink: #101114;
+  --color-brand-muted: #555b66;
+  --color-brand-paper: #f7f8fb;
+  --color-brand-line: #d8dce6;
+  --shadow-brand: 0 18px 45px rgba(23, 43, 104, .14);
+}
+
+@layer base {
+  html {
+    @apply scroll-smooth bg-brand-paper font-sans text-brand-ink;
+  }
+
+  body {
+    @apply m-0 min-w-[320px] bg-brand-paper;
+  }
+
+  a {
+    @apply text-inherit;
+  }
+
+  a:focus-visible,
+  button:focus-visible,
+  summary:focus-visible {
+    @apply outline-3 outline-brand-yellow outline-offset-4;
+  }
+}
