@@ -2,14 +2,14 @@ import electricityIllustration from '../../assets/electricity.png'
 
 export function AdminAuthLayout({ children }) {
   return (
-    <main className="relative flex min-h-screen w-full items-center justify-center overflow-x-clip bg-[#f3f5ff] px-4 py-8 text-[#101b4f] selection:bg-[#ffe000] selection:text-[#101b4f] sm:px-6 sm:py-10 lg:p-12">
+    <main className="relative flex min-h-screen w-full items-center justify-center overflow-x-clip bg-brand-paper px-4 py-8 text-brand-navy selection:bg-brand-yellow selection:text-brand-navy sm:px-6 sm:py-10 lg:p-12">
       {/* Decorative Faint Orbital Circles */}
       <div
-        className="pointer-events-none absolute -left-44 -top-44 size-[640px] rounded-full border border-[#d6def7]/80"
+        className="pointer-events-none absolute -left-44 -top-44 size-[640px] rounded-full border border-brand-line/80"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute -bottom-72 -right-44 size-[720px] rounded-full border border-[#d6def7]/80"
+        className="pointer-events-none absolute -bottom-72 -right-44 size-[720px] rounded-full border border-brand-line/80"
         aria-hidden="true"
       />
 

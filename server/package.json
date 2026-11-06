@@ -1,0 +1,15 @@
+{
+  "name": "valencia-powerwatch-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch index.js",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "@supabase/supabase-js": "^2.47.10",
+    "dotenv": "^16.4.7"
+  }
+}

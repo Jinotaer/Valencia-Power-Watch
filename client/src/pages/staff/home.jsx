@@ -57,7 +57,7 @@ export default function StaffHome() {
       location: 'Brgy. Lurogan',
       time: 'Assigned 9:15 AM',
       status: 'New',
-      statusColor: 'bg-[#fff3c4] text-[#9a6700]',
+      statusColor: 'bg-[fff1a8] text-[#9a6700]',
       icon: ClipboardList,
     },
     {
@@ -66,7 +66,7 @@ export default function StaffHome() {
       location: 'Brgy. Poblacion',
       time: 'Assigned 8:50 AM',
       status: 'Acknowledged',
-      statusColor: 'bg-[#e7effc] text-[#24449a]',
+      statusColor: 'bg-[e5e9f6] text-brand-blue',
       icon: AlertTriangle,
     },
   ]
@@ -78,28 +78,28 @@ export default function StaffHome() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f7fb] text-[#172b68] flex flex-col justify-between">
+    <div className="min-h-screen bg-brand-paper text-brand-navy flex flex-col justify-between">
       {/* Toast Notice */}
       {toastMessage && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-2 rounded-xl bg-[#172b68] px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-2">
-          <Check className="size-4 text-[#ffd500]" />
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-2">
+          <Check className="size-4 text-brand-yellow" />
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* TOP HEADER */}
-      <header className="sticky top-0 z-20 border-b border-[#e2eaf4] bg-white/95 px-4 py-3 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-brand-line bg-white/95 px-4 py-3 backdrop-blur-md">
         <div className="mx-auto flex max-w-md items-center justify-between">
           {/* Logo & Portal Branding */}
           <a href="/staff" className="flex items-center gap-2.5 no-underline">
-            <span className="grid size-9 place-items-center rounded-xl bg-[#ffd500] text-[#101114] shadow-xs">
+            <span className="grid size-9 place-items-center rounded-xl bg-brand-yellow text-brand-ink shadow-xs">
               <Zap className="size-5 fill-current" />
             </span>
             <div>
-              <span className="block text-[9.5px] font-extrabold uppercase tracking-[.14em] text-[#60748e]">
+              <span className="block text-[9.5px] font-extrabold uppercase tracking-[.14em] text-brand-muted">
                 STAFF PORTAL
               </span>
-              <span className="block text-base font-black tracking-[-.03em] text-[#172b68]">
+              <span className="block text-base font-black tracking-[-.03em] text-brand-navy">
                 PowerWatch
               </span>
             </div>
@@ -108,11 +108,11 @@ export default function StaffHome() {
           {/* Notification Button */}
           <button
             type="button"
-            className="relative grid size-10 place-items-center rounded-2xl border border-[#dbe4ef] bg-white text-[#172b68] shadow-xs transition-colors hover:bg-[#f4f7fb] cursor-pointer"
+            className="relative grid size-10 place-items-center rounded-2xl border border-brand-line bg-white text-brand-navy shadow-xs transition-colors hover:bg-brand-paper cursor-pointer"
             aria-label="Notifications"
           >
-            <Bell className="size-5 text-[#24449a]" />
-            <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-[#ffd500] ring-2 ring-white" />
+            <Bell className="size-5 text-brand-blue" />
+            <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-brand-yellow ring-2 ring-white" />
           </button>
         </div>
       </header>
@@ -121,26 +121,26 @@ export default function StaffHome() {
       <main className="mx-auto w-full max-w-md px-4 pb-32 pt-5 flex-1">
         {/* USER GREETING */}
         <section className="mb-4">
-          <h1 className="text-3xl font-black tracking-tight text-[#172b68]">Hello, Ramon</h1>
-          <p className="text-xs font-semibold text-[#58708a] mt-0.5">Line Crew 2 · Valencia City</p>
+          <h1 className="text-3xl font-black tracking-tight text-brand-navy">Hello, Ramon</h1>
+          <p className="text-xs font-semibold text-brand-muted mt-0.5">Line Crew 2 · Valencia City</p>
         </section>
 
         {/* ON DUTY STATUS CARD */}
-        <section className="mb-5 rounded-2xl border border-[#e2eaf4] bg-white p-3.5 shadow-[0_4px_16px_rgba(23,43,104,0.04)] flex items-center justify-between">
+        <section className="mb-5 rounded-2xl border border-brand-line bg-white p-3.5 shadow-[0_4px_16px_rgba(23,43,104,0.04)] flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
               <span
                 className={`size-2.5 rounded-full ${
                   isOnDuty
                     ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,.5)]'
-                    : 'bg-slate-300'
+                    : 'bg-brand-line'
                 }`}
               />
-              <span className="text-sm font-extrabold text-[#172b68]">
+              <span className="text-sm font-extrabold text-brand-navy">
                 {isOnDuty ? 'On duty' : 'Off duty'}
               </span>
             </div>
-            <p className="text-xs text-[#58708a] font-medium mt-0.5">
+            <p className="text-xs text-brand-muted font-medium mt-0.5">
               {isOnDuty ? 'Sharing location with dispatch' : 'Location sharing paused'}
             </p>
           </div>
@@ -156,7 +156,7 @@ export default function StaffHome() {
               showToast(next ? 'You are now marked ON DUTY' : 'You are now marked OFF DUTY')
             }}
             className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-              isOnDuty ? 'bg-[#1b3d8f]' : 'bg-[#cbd5e1]'
+              isOnDuty ? 'bg-brand-blue' : 'bg-brand-line'
             }`}
           >
             <span
@@ -168,18 +168,18 @@ export default function StaffHome() {
         </section>
 
         {/* CURRENT JOB HERO CARD */}
-        <section className="relative mb-6 overflow-hidden rounded-3xl bg-[#1b3d8f] p-5 text-white shadow-[0_10px_25px_rgba(27,61,143,0.25)]">
+        <section className="relative mb-6 overflow-hidden rounded-3xl bg-brand-blue p-5 text-white shadow-[0_10px_25px_rgba(27,61,143,0.25)]">
           {/* Subtle Decorative Curves */}
           <div className="pointer-events-none absolute -right-10 -top-10 size-48 rounded-full border border-white/10" />
           <div className="pointer-events-none absolute -right-4 -top-4 size-32 rounded-full border border-white/10" />
 
           {/* Top Badge & WO Code */}
           <div className="relative z-10 flex items-center justify-between">
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#ffdc00] px-2.5 py-1 text-xs font-black text-[#172b68] shadow-xs">
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand-yellow px-2.5 py-1 text-xs font-black text-brand-navy shadow-xs">
               <Zap className="size-3 fill-current" />
               <span>Current job</span>
             </span>
-            <span className="font-mono text-xs font-bold text-[#b8ccf0] tracking-wide">
+            <span className="font-mono text-xs font-bold text-brand-line tracking-wide">
               {currentJob.orderNo}
             </span>
           </div>
@@ -190,8 +190,8 @@ export default function StaffHome() {
           </h2>
 
           {/* Location line */}
-          <div className="relative z-10 mt-2 flex items-center gap-1.5 text-xs font-medium text-[#dbe7ff]">
-            <MapPin className="size-3.5 text-[#ffd500] shrink-0" />
+          <div className="relative z-10 mt-2 flex items-center gap-1.5 text-xs font-medium text-[e5e9f6]">
+            <MapPin className="size-3.5 text-brand-yellow shrink-0" />
             <span>
               {currentJob.location} · {currentJob.distance} · {currentJob.duration}
             </span>
@@ -204,7 +204,7 @@ export default function StaffHome() {
               <div className="absolute left-3 right-3 top-3.5 h-[2px] bg-white/20 -z-0" />
               {/* Active Progress Line */}
               <div
-                className="absolute left-3 top-3.5 h-[2px] bg-[#ffd500] transition-all duration-300 -z-0"
+                className="absolute left-3 top-3.5 h-[2px] bg-brand-yellow transition-all duration-300 -z-0"
                 style={{ width: `${((jobStage - 1) / 3) * 100}%` }}
               />
 
@@ -217,17 +217,17 @@ export default function StaffHome() {
                     <div
                       className={`grid size-7 place-items-center rounded-full text-xs font-black transition-all ${
                         isPassed
-                          ? 'bg-[#ffd500] text-[#172b68]'
+                          ? 'bg-brand-yellow text-brand-navy'
                           : isCurrent
-                          ? 'bg-white text-[#172b68] ring-2 ring-[#ffd500] shadow-sm'
-                          : 'bg-[#1b3d8f] border border-white/40 text-white/70'
+                          ? 'bg-white text-brand-navy ring-2 ring-brand-yellow shadow-sm'
+                          : 'bg-brand-blue border border-white/40 text-white/70'
                       }`}
                     >
                       {isPassed ? <Check className="size-3.5 stroke-[3]" /> : stg.id}
                     </div>
                     <span
                       className={`mt-1.5 text-[10px] font-extrabold whitespace-nowrap ${
-                        isCurrent ? 'text-white' : isPassed ? 'text-[#ffd500]' : 'text-white/60'
+                        isCurrent ? 'text-white' : isPassed ? 'text-brand-yellow' : 'text-white/60'
                       }`}
                     >
                       {stg.label}
@@ -244,7 +244,7 @@ export default function StaffHome() {
             <button
               type="button"
               onClick={() => setShowNavModal(true)}
-              className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-white text-xs sm:text-sm font-bold text-[#1b3d8f] shadow-xs hover:bg-[#f6f9fc] active:scale-[0.98] transition-all cursor-pointer"
+              className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-white text-xs sm:text-sm font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.98] transition-all cursor-pointer"
             >
               <Navigation className="size-4 rotate-45" />
               <span>Navigate</span>
@@ -254,7 +254,7 @@ export default function StaffHome() {
             <button
               type="button"
               onClick={() => setShowStatusModal(true)}
-              className="flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-[#ffd500] text-xs sm:text-sm font-black text-[#172b68] shadow-xs hover:bg-[#ffdc00] active:scale-[0.98] transition-all cursor-pointer"
+              className="flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-brand-yellow text-xs sm:text-sm font-black text-brand-navy shadow-xs hover:bg-brand-yellow active:scale-[0.98] transition-all cursor-pointer"
             >
               <span>Update status</span>
             </button>
@@ -264,8 +264,8 @@ export default function StaffHome() {
         {/* ASSIGNED TO YOU SECTION */}
         <section>
           <div className="mb-2.5 flex items-center justify-between px-1">
-            <h2 className="text-base font-black text-[#172b68]">Assigned to you</h2>
-            <span className="text-xs font-bold text-[#58708a]">{assignedJobs.length + 1} jobs</span>
+            <h2 className="text-base font-black text-brand-navy">Assigned to you</h2>
+            <span className="text-xs font-bold text-brand-muted">{assignedJobs.length + 1} jobs</span>
           </div>
 
           <div className="space-y-3">
@@ -275,17 +275,17 @@ export default function StaffHome() {
                 <div
                   key={job.id}
                   onClick={() => setSelectedAssignedJob(job)}
-                  className="flex items-center justify-between rounded-2xl border border-[#e2eaf4] bg-white p-3.5 shadow-xs hover:border-[#b8cde6] active:scale-[0.99] transition-all cursor-pointer"
+                  className="flex items-center justify-between rounded-2xl border border-brand-line bg-white p-3.5 shadow-xs hover:border-brand-line active:scale-[0.99] transition-all cursor-pointer"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e8f0fe] text-[#24449a]">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[e5e9f6] text-brand-blue">
                       <Icon className="size-5" />
                     </span>
                     <div className="min-w-0">
-                      <h3 className="text-sm font-extrabold text-[#172b68] truncate leading-tight">
+                      <h3 className="text-sm font-extrabold text-brand-navy truncate leading-tight">
                         {job.title}
                       </h3>
-                      <p className="text-xs text-[#58708a] font-medium truncate mt-0.5">
+                      <p className="text-xs text-brand-muted font-medium truncate mt-0.5">
                         {job.location} · {job.time}
                       </p>
                     </div>
@@ -307,20 +307,20 @@ export default function StaffHome() {
       {showStatusModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
           <div
-            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
+            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-brand-line bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
             role="dialog"
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center justify-between border-b border-brand-line pb-3">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
                   {currentJob.orderNo}
                 </span>
-                <h3 className="text-base font-extrabold text-[#172b68]">Update Job Status</h3>
+                <h3 className="text-base font-extrabold text-brand-navy">Update Job Status</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowStatusModal(false)}
-                className="grid size-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
               >
                 <X className="size-4" />
               </button>
@@ -334,21 +334,21 @@ export default function StaffHome() {
                   onClick={() => handleUpdateStage(stg.id)}
                   className={`flex w-full items-center justify-between rounded-xl p-3 text-xs font-bold transition-all cursor-pointer border ${
                     jobStage === stg.id
-                      ? 'border-[#1b3d8f] bg-[#e7effc] text-[#1b3d8f]'
-                      : 'border-slate-100 bg-white text-slate-700 hover:bg-slate-50'
+                      ? 'border-brand-blue bg-[e5e9f6] text-brand-blue'
+                      : 'border-brand-line bg-white text-brand-ink hover:bg-brand-paper'
                   }`}
                 >
                   <span className="flex items-center gap-2.5">
                     <span
                       className={`grid size-6 place-items-center rounded-full text-[11px] font-extrabold ${
-                        jobStage === stg.id ? 'bg-[#1b3d8f] text-white' : 'bg-slate-100 text-slate-500'
+                        jobStage === stg.id ? 'bg-brand-blue text-white' : 'bg-[#e5e9f6] text-brand-muted'
                       }`}
                     >
                       {stg.id}
                     </span>
                     <span>{stg.label}</span>
                   </span>
-                  {jobStage === stg.id && <Check className="size-4 text-[#1b3d8f]" />}
+                  {jobStage === stg.id && <Check className="size-4 text-brand-blue" />}
                 </button>
               ))}
             </div>
@@ -360,25 +360,25 @@ export default function StaffHome() {
       {showNavModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
           <div
-            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
+            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-brand-line bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
             role="dialog"
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-extrabold text-[#172b68]">Directions to Site</h3>
+            <div className="flex items-center justify-between border-b border-brand-line pb-3">
+              <h3 className="text-base font-extrabold text-brand-navy">Directions to Site</h3>
               <button
                 type="button"
                 onClick={() => setShowNavModal(false)}
-                className="grid size-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
               >
                 <X className="size-4" />
               </button>
             </div>
 
             <div className="pt-4 space-y-3 text-xs">
-              <div className="rounded-2xl border border-slate-100 bg-[#f4f7fb] p-3.5">
-                <span className="text-[10px] font-bold uppercase text-slate-400">Destination</span>
-                <p className="font-extrabold text-[#172b68] text-sm mt-0.5">{currentJob.location}</p>
-                <p className="text-slate-500 mt-1 font-medium">
+              <div className="rounded-2xl border border-brand-line bg-brand-paper p-3.5">
+                <span className="text-[10px] font-bold uppercase text-brand-muted">Destination</span>
+                <p className="font-extrabold text-brand-navy text-sm mt-0.5">{currentJob.location}</p>
+                <p className="text-brand-muted mt-1 font-medium">
                   {currentJob.distance} · Estimated arrival: {currentJob.duration}
                 </p>
               </div>
@@ -388,14 +388,14 @@ export default function StaffHome() {
                   href={`https://www.google.com/maps/dir/?api=1&destination=Valencia+City+Guinoyuran`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-[#1b3d8f] py-2.5 font-bold text-white shadow-xs hover:bg-[#142e6d]"
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-brand-blue py-2.5 font-bold text-white shadow-xs hover:bg-brand-navy"
                 >
                   <Navigation className="size-3.5" />
                   <span>Open Google Maps</span>
                 </a>
                 <a
                   href="/staff/map"
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2.5 font-bold text-slate-700 hover:bg-slate-50"
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-brand-line py-2.5 font-bold text-brand-ink hover:bg-brand-paper"
                 >
                   <Compass className="size-3.5" />
                   <span>View in Field Map</span>
@@ -410,30 +410,30 @@ export default function StaffHome() {
       {selectedAssignedJob && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
           <div
-            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
+            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-brand-line bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
             role="dialog"
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-extrabold text-[#172b68]">
+            <div className="flex items-center justify-between border-b border-brand-line pb-3">
+              <h3 className="text-base font-extrabold text-brand-navy">
                 {selectedAssignedJob.title}
               </h3>
               <button
                 type="button"
                 onClick={() => setSelectedAssignedJob(null)}
-                className="grid size-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
               >
                 <X className="size-4" />
               </button>
             </div>
 
             <div className="pt-4 space-y-3 text-xs">
-              <div className="flex justify-between items-center rounded-xl bg-[#f4f7fb] p-3 border border-slate-100">
-                <span className="text-slate-500 font-medium">Location</span>
-                <strong className="text-[#172b68]">{selectedAssignedJob.location}</strong>
+              <div className="flex justify-between items-center rounded-xl bg-brand-paper p-3 border border-brand-line">
+                <span className="text-brand-muted font-medium">Location</span>
+                <strong className="text-brand-navy">{selectedAssignedJob.location}</strong>
               </div>
-              <div className="flex justify-between items-center rounded-xl bg-[#f4f7fb] p-3 border border-slate-100">
-                <span className="text-slate-500 font-medium">Assignment time</span>
-                <strong className="text-[#172b68]">{selectedAssignedJob.time}</strong>
+              <div className="flex justify-between items-center rounded-xl bg-brand-paper p-3 border border-brand-line">
+                <span className="text-brand-muted font-medium">Assignment time</span>
+                <strong className="text-brand-navy">{selectedAssignedJob.time}</strong>
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -443,7 +443,7 @@ export default function StaffHome() {
                     showToast('Set as active work order')
                     setSelectedAssignedJob(null)
                   }}
-                  className="flex-1 rounded-xl bg-[#1b3d8f] py-2.5 font-bold text-white shadow-xs hover:bg-[#142e6d]"
+                  className="flex-1 rounded-xl bg-brand-blue py-2.5 font-bold text-white shadow-xs hover:bg-brand-navy"
                 >
                   Switch to this job
                 </button>

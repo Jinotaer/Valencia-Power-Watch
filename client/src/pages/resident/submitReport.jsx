@@ -1,23 +1,25 @@
 import {
   AlertTriangle,
-  ArrowRight,
   Camera,
   Check,
   ChevronLeft,
   ChevronRight,
-  House,
   Image as ImageIcon,
   Info,
-  Lightbulb,
   LocateFixed,
-  MoreHorizontal,
+  Maximize2,
   Plus,
-  Power,
   Send,
-  TowerControl,
+  Video,
   X,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import L from 'leaflet'
+import { useEffect, useRef, useState } from 'react'
+import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
+import { addReport } from '../../lib/reports'
+import { VALENCIA_CENTER } from './mapData'
+import { SubmitReportSuccess } from './submitReportSuccess'
 
 const valenciaBarangays = [
   'Guinoyuran',
@@ -53,37 +55,207 @@ const valenciaBarangays = [
   'Vintar',
 ]
 
+// OSM sometimes spells these differently from the barangay list.
+const barangayAliases = {
+  guinyoran: 'Guinoyuran',
+  lurogan: 'Lurugan',
+}
+
 const outageTypes = [
-  { id: 'no-power', label: 'No power', icon: Power },
-  { id: 'flickering', label: 'Flickering lights', icon: Lightbulb },
-  { id: 'damaged-line', label: 'Damaged line or pole', icon: AlertTriangle },
-  { id: 'other', label: 'Other', icon: MoreHorizontal },
+  { id: 'line-fault', label: 'Line Fault' },
+  { id: 'transformer-issue', label: 'Transformer Issue' },
+  { id: 'weather-disturbance', label: 'Weather Disturbance' },
+  { id: 'power-supply-interruption', label: 'Power Supply Interruption' },
+  { id: 'equipment-related', label: 'Equipment-related' },
+  { id: 'scheduled-maintenance', label: 'Scheduled Maintenance' },
+  { id: 'unknown', label: 'Unknown' },
+  { id: 'other', label: 'Other' },
 ]
 
-const timeOptions = ['Just now', 'Within 1 hour', 'Earlier today']
+const MAX_VIDEO_BYTES = 25 * 1024 * 1024
+
+function toDateTimeLocalValue(date = new Date()) {
+  const offset = date.getTimezoneOffset()
+  return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16)
+}
+
+function formatNoticedAt(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function normalizeName(value) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+}
+
+function matchBarangay(address = {}, displayName = '') {
+  const candidates = [
+    address.suburb,
+    address.village,
+    address.quarter,
+    address.hamlet,
+    address.neighbourhood,
+    address.town,
+    address.city_district,
+  ].filter(Boolean)
+
+  for (const candidate of candidates) {
+    const normalized = normalizeName(candidate)
+    const alias = barangayAliases[normalized]
+    if (alias) return alias
+
+    const match = valenciaBarangays.find((barangay) => normalizeName(barangay) === normalized)
+    if (match) return match
+  }
+
+  const normalizedDisplay = normalizeName(displayName)
+  const displayAlias = Object.entries(barangayAliases).find(([alias]) => normalizedDisplay.includes(alias))
+  if (displayAlias) return displayAlias[1]
+
+  return valenciaBarangays.find((barangay) => normalizedDisplay.includes(normalizeName(barangay))) ?? null
+}
+
+function formatCoordinates(lat, lng) {
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+}
+
+const DEFAULT_PIN = { lat: VALENCIA_CENTER[0], lng: VALENCIA_CENTER[1] }
+
+const reportPinIcon = L.divIcon({
+  className: '',
+  iconSize: [36, 36],
+  iconAnchor: [18, 18],
+  html: `
+    <div style="width:36px;height:36px;border-radius:50%;background:#ffd500;border:3px solid #172b68;box-shadow:0 4px 12px rgba(23,43,104,.3);display:flex;align-items:center;justify-content:center;">
+      <div style="width:10px;height:10px;border-radius:50%;background:#172b68;"></div>
+    </div>
+  `,
+})
+
+function MapClickToPin({ onPick }) {
+  useMapEvents({
+    click(event) {
+      onPick(event.latlng.lat, event.latlng.lng)
+    },
+  })
+  return null
+}
+
+function LocationMap({ pin, onPick, mapRef, expanded = false }) {
+  return (
+    <MapContainer
+      ref={mapRef}
+      center={[pin.lat, pin.lng]}
+      zoom={15}
+      zoomControl={expanded}
+      scrollWheelZoom={expanded}
+      className="h-full w-full"
+    >
+      <TileLayer
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+      />
+      <MapClickToPin onPick={onPick} />
+      <Marker
+        position={[pin.lat, pin.lng]}
+        icon={reportPinIcon}
+        draggable
+        eventHandlers={{
+          dragend: (event) => {
+            const { lat, lng } = event.target.getLatLng()
+            onPick(lat, lng)
+          },
+        }}
+      />
+    </MapContainer>
+  )
+}
+
+function readPhoto(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onload = () => {
+      const image = new Image()
+      image.onload = () => {
+        const scale = Math.min(1, 1200 / Math.max(image.width, image.height))
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(image.width * scale)
+        canvas.height = Math.round(image.height * scale)
+
+        const context = canvas.getContext('2d')
+        if (!context) {
+          reject(new Error('Canvas is unavailable'))
+          return
+        }
+
+        context.drawImage(image, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL('image/jpeg', 0.72))
+      }
+      image.onerror = () => reject(new Error('Image could not be decoded'))
+      image.src = reader.result
+    }
+
+    reader.onerror = () => reject(new Error('File could not be read'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function locationErrorMessage(error) {
+  if (error.code === 1) return 'Location permission was denied. You can still place the pin on the map.'
+  if (error.code === 2) return 'Your location is unavailable right now. Place the pin on the map instead.'
+  if (error.code === 3) return 'Locating took too long. Try again or place the pin on the map.'
+  return 'Your location could not be read. Place the pin on the map instead.'
+}
 
 export default function SubmitReport() {
   const [step, setStep] = useState(1) // 1, 2, 3, 4, or 5 (success)
 
   // Form State
-  const [outageType, setOutageType] = useState('no-power')
-  const [startedTime, setStartedTime] = useState('Just now')
+  const [outageType, setOutageType] = useState('')
+  const [noticedAt, setNoticedAt] = useState(() => toDateTimeLocalValue())
   const [description, setDescription] = useState('')
 
   const [barangay, setBarangay] = useState('Guinoyuran')
   const [landmark, setLandmark] = useState('')
-  const [pinLocation, setPinLocation] = useState({ x: 50, y: 50 })
+  const [pinnedLocation, setPinnedLocation] = useState('')
+  const [isResolvingLocation, setIsResolvingLocation] = useState(false)
+  const [pinPosition, setPinPosition] = useState(DEFAULT_PIN)
+  const [pinSource, setPinSource] = useState('manual')
+  const [coordinates, setCoordinates] = useState(null)
   const [isLocating, setIsLocating] = useState(false)
+  const [locationMessage, setLocationMessage] = useState('')
+  const [isLocationError, setIsLocationError] = useState(false)
+  const [isMapExpanded, setIsMapExpanded] = useState(false)
 
-  // Photos state (initial demo photos matching screenshot)
-  const [photos, setPhotos] = useState([
-    { id: 1, type: 'pole', label: 'Line / pole photo' },
-    { id: 2, type: 'meter', label: 'House / meter photo' },
-  ])
+  const [photos, setPhotos] = useState([])
+  const [photoError, setPhotoError] = useState('')
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false)
   const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
+  const videoInputRef = useRef(null)
+  const mapRef = useRef(null)
+  const expandedMapRef = useRef(null)
+  const expandMapButtonRef = useRef(null)
+  const closeMapButtonRef = useRef(null)
+  const geocodeControllerRef = useRef(null)
+  const geocodeTimerRef = useRef(null)
 
-  const [confirmed, setConfirmed] = useState(true)
+  const [confirmed, setConfirmed] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const [reportReference, setReportReference] = useState('')
 
   const stepTitles = {
@@ -93,143 +265,277 @@ export default function SubmitReport() {
     4: 'Review',
   }
 
-  // Handle Current Location
-  const handleUseCurrentLocation = () => {
-    setIsLocating(true)
-    setTimeout(() => {
-      setIsLocating(false)
-      setPinLocation({ x: 52, y: 48 })
-      if (!landmark) setLandmark('Purok 3, Near Barangay Hall')
-    }, 600)
+  useEffect(() => {
+    if (!isMapExpanded) return
+
+    closeMapButtonRef.current?.focus()
+    const expandButton = expandMapButtonRef.current
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setIsMapExpanded(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+      expandButton?.focus()
+    }
+  }, [isMapExpanded])
+
+  useEffect(() => () => {
+    clearTimeout(geocodeTimerRef.current)
+    geocodeControllerRef.current?.abort()
+  }, [])
+
+  // Auto-fill the pinned location and barangay from the map pin.
+  // shortcut: public Nominatim lookup; cache or self-host the geocoder for high-volume production.
+  const resolvePinnedLocation = (lat, lng) => {
+    setPinnedLocation(formatCoordinates(lat, lng))
+    setIsResolvingLocation(true)
+    clearTimeout(geocodeTimerRef.current)
+    geocodeControllerRef.current?.abort()
+
+    geocodeTimerRef.current = setTimeout(async () => {
+      const controller = new AbortController()
+      geocodeControllerRef.current = controller
+
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=en`,
+          { signal: controller.signal },
+        )
+        if (!response.ok) throw new Error('Address lookup failed')
+
+        const data = await response.json()
+        const shortAddress = (data.display_name ?? '')
+          .split(',')
+          .map((part) => part.trim())
+          .filter(Boolean)
+          .slice(0, 4)
+          .join(', ')
+        if (shortAddress) setPinnedLocation(shortAddress)
+
+        const matchedBarangay = matchBarangay(data.address, data.display_name)
+        if (matchedBarangay) setBarangay(matchedBarangay)
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          // Offline or lookup failure: the coordinate fallback stays filled in.
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsResolvingLocation(false)
+      }
+    }, 500)
   }
 
-  // Handle Photo Upload
-  const handleAddPhoto = (e) => {
-    const file = e.target.files?.[0]
-    if (file && photos.length < 3) {
-      const newPhoto = {
-        id: Date.now(),
-        type: 'custom',
-        url: URL.createObjectURL(file),
-        label: file.name,
+  // Handle Current Location
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setIsLocationError(true)
+      setLocationMessage('Location is not available on this device. Place the pin on the map instead.')
+      return
+    }
+
+    setIsLocating(true)
+    setLocationMessage('')
+    setIsLocationError(false)
+
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const nextPin = { lat: coords.latitude, lng: coords.longitude }
+        setIsLocating(false)
+        setCoordinates({
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy: coords.accuracy,
+        })
+        setPinPosition(nextPin)
+        setPinSource('gps')
+        setIsLocationError(false)
+        mapRef.current?.flyTo([nextPin.lat, nextPin.lng], 16)
+        expandedMapRef.current?.flyTo([nextPin.lat, nextPin.lng], 16)
+        resolvePinnedLocation(nextPin.lat, nextPin.lng)
+        setLocationMessage(`Location captured to about ${Math.round(coords.accuracy)} m. Adjust the pin if it looks off.`)
+      },
+      (error) => {
+        setIsLocating(false)
+        setIsLocationError(true)
+        setLocationMessage(locationErrorMessage(error))
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    )
+  }
+
+  const handlePickPin = (lat, lng) => {
+    setPinPosition({ lat, lng })
+    setCoordinates({ latitude: lat, longitude: lng, accuracy: null })
+    setPinSource('manual')
+    setLocationMessage('')
+    setIsLocationError(false)
+    resolvePinnedLocation(lat, lng)
+  }
+
+  // Handle evidence upload (photo or video)
+  const handleAddEvidence = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!file || isProcessingPhoto) return
+    if (photos.length >= 3) {
+      setPhotoError('You can attach up to 3 photos or videos.')
+      return
+    }
+
+    const isImage = file.type.startsWith('image/')
+    const isVideo = file.type.startsWith('video/')
+
+    if (!isImage && !isVideo) {
+      setPhotoError('Choose a photo or video file.')
+      return
+    }
+
+    if (isVideo && file.size > MAX_VIDEO_BYTES) {
+      setPhotoError('Choose a video under 25 MB.')
+      return
+    }
+
+    setIsProcessingPhoto(true)
+    setPhotoError('')
+
+    try {
+      if (isImage) {
+        const dataUrl = await readPhoto(file)
+        setPhotos((current) => (
+          current.length >= 3
+            ? current
+            : [...current, { id: `${Date.now()}-${current.length}`, label: file.name, type: 'image/jpeg', kind: 'image', dataUrl, previewUrl: dataUrl }]
+        ))
+      } else {
+        const previewUrl = URL.createObjectURL(file)
+        setPhotos((current) => (
+          current.length >= 3
+            ? current
+            : [...current, { id: `${Date.now()}-${current.length}`, label: file.name, type: file.type, kind: 'video', file, previewUrl }]
+        ))
       }
-      setPhotos([...photos, newPhoto])
+    } catch {
+      setPhotoError('That file could not be read. Try a different one.')
+    } finally {
+      setIsProcessingPhoto(false)
     }
   }
 
   const handleRemovePhoto = (id) => {
-    setPhotos(photos.filter((p) => p.id !== id))
+    const photo = photos.find((item) => item.id === id)
+    if (photo?.kind === 'video') URL.revokeObjectURL(photo.previewUrl)
+    setPhotos((current) => current.filter((item) => item.id !== id))
   }
 
   // Handle Submission
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    if (!confirmed) return
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    if (!confirmed || isSubmitting || isProcessingPhoto) return
+    if (!outageType || !noticedAt || !pinnedLocation) return
+
     setIsSubmitting(true)
-    setTimeout(() => {
-      setIsSubmitting(false)
-      setReportReference(`PW-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`)
+    setSubmitError('')
+
+    const typeLabel = outageTypes.find((type) => type.id === outageType)?.label ?? 'Power interruption'
+    const now = new Date()
+
+    try {
+      const report = await addReport({
+        title: `${typeLabel} in Brgy. ${barangay}`,
+        location: `Brgy. ${barangay}`,
+        status: 'Pending',
+        tone: 'pending',
+        progress: 1,
+        description: `Reported at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}. Waiting for verification.`,
+        outageType: typeLabel,
+        outageTypeId: outageType,
+        startedTime: formatNoticedAt(noticedAt),
+        notes: description.trim(),
+        barangay,
+        landmark: landmark.trim(),
+        pinnedLocation: pinnedLocation.trim(),
+        // pin_x/pin_y are legacy columns; the real map position is in `coordinates`.
+        pin: { x: 50, y: 50 },
+        pinSource,
+        coordinates,
+        photos,
+      })
+
+      setReportReference(report.id)
       setStep(5)
-    }, 800)
+    } catch {
+      setSubmitError('We could not save this report. Check your connection and try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   // SUCCESS SCREEN
   if (step === 5) {
     return (
-      <div className="min-h-screen bg-[#f4f7fb] text-[#172b68] flex flex-col justify-between">
-        <header className="sticky top-0 z-20 border-b border-[#e2eaf4] bg-white px-4 py-3.5">
-          <div className="mx-auto flex max-w-md items-center justify-between">
-            <span className="text-sm font-extrabold text-[#172b68]">Report Submitted</span>
-            <a href="/community" className="text-slate-400 hover:text-slate-600">
-              <X className="size-5" />
-            </a>
-          </div>
-        </header>
-
-        <main className="mx-auto w-full max-w-md p-5 flex-1 flex flex-col items-center justify-center text-center">
-          <div className="relative mb-4 flex size-20 items-center justify-center rounded-full bg-[#dcfce7] text-[#15803d] shadow-sm">
-            <Check className="size-10 stroke-[3]" />
-          </div>
-
-          <span className="rounded-full bg-[#edf4ff] px-3 py-1 text-xs font-bold text-[#24449a]">
-            Reference: {reportReference}
-          </span>
-
-          <h1 className="mt-3 text-2xl font-black text-[#172b68] tracking-tight">
-            Thank you for reporting!
-          </h1>
-          <p className="mt-2 text-xs text-[#58708a] max-w-xs leading-relaxed">
-            Your report in <strong>Brgy. {barangay}</strong> has been received and queued for dispatch verification.
-          </p>
-
-          <div className="mt-6 w-full rounded-2xl border border-[#e2eaf4] bg-white p-4 text-left shadow-xs space-y-2.5 text-xs">
-            <div className="flex justify-between">
-              <span className="text-slate-500 font-medium">Issue</span>
-              <strong className="text-slate-800">{outageTypes.find((t) => t.id === outageType)?.label}</strong>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500 font-medium">Barangay</span>
-              <strong className="text-slate-800">{barangay}</strong>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500 font-medium">Status</span>
-              <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md">Pending Verification</span>
-            </div>
-          </div>
-
-          <div className="mt-8 flex w-full flex-col gap-2.5">
-            <a
-              href="/community/reports"
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#1b3d8f] text-sm font-bold text-white shadow-xs hover:bg-[#142e6d] transition-all"
-            >
-              Track report status
-              <ArrowRight className="size-4" />
-            </a>
-            <a
-              href="/community"
-              className="flex h-12 w-full items-center justify-center rounded-2xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all"
-            >
-              Back to home
-            </a>
-          </div>
-        </main>
-      </div>
+      <SubmitReportSuccess
+        reportReference={reportReference}
+        outageType={outageTypes.find((t) => t.id === outageType)?.label}
+        barangay={barangay}
+      />
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f7fb] text-[#172b68] flex flex-col justify-between">
-      {/* Hidden File Input */}
+    <div className="min-h-screen bg-brand-paper text-brand-navy flex flex-col justify-between">
+      {/* Hidden File Inputs */}
       <input
         type="file"
         ref={fileInputRef}
+        accept="image/*,video/*"
+        onChange={handleAddEvidence}
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={cameraInputRef}
         accept="image/*"
-        onChange={handleAddPhoto}
+        capture="environment"
+        onChange={handleAddEvidence}
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={videoInputRef}
+        accept="video/*"
+        capture="environment"
+        onChange={handleAddEvidence}
         className="hidden"
       />
 
       {/* TOP HEADER */}
-      <header className="sticky top-0 z-20 border-b border-[#e2eaf4] bg-white/95 px-4 py-3 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-brand-line bg-white/95 px-4 py-3 backdrop-blur-md">
         <div className="mx-auto flex max-w-md items-center justify-between">
           <button
             type="button"
             onClick={() => (step > 1 ? setStep(step - 1) : (window.location.href = '/community'))}
-            className="grid size-9 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 cursor-pointer"
+            className="grid size-9 place-items-center rounded-xl text-brand-muted hover:bg-[#e5e9f6] cursor-pointer"
             aria-label="Back"
           >
             <ChevronLeft className="size-5" />
           </button>
 
           <div className="text-center">
-            <h1 className="text-sm font-extrabold text-[#172b68]">Report an interruption</h1>
-            <p className="text-[11px] font-semibold text-[#58708a]">
+            <h1 className="text-sm font-extrabold text-brand-navy">Report an interruption</h1>
+            <p className="text-[11px] font-semibold text-brand-muted">
               Step {step} of 4 · {stepTitles[step]}
             </p>
           </div>
 
           <a
             href="/community"
-            className="grid size-9 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="grid size-9 place-items-center rounded-xl text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
             aria-label="Close"
           >
             <X className="size-5" />
@@ -240,9 +546,9 @@ export default function SubmitReport() {
         <div className="mx-auto max-w-md pt-3 pb-1 px-3">
           <div className="relative flex items-center justify-between">
             {/* Connecting Track Line */}
-            <div className="absolute left-4 right-4 top-3.5 h-[2px] bg-[#dbe5f2] -z-0" />
+            <div className="absolute left-4 right-4 top-3.5 h-[2px] bg-brand-line -z-0" />
             <div
-              className="absolute left-4 top-3.5 h-[2px] bg-[#1b3d8f] transition-all duration-300 -z-0"
+              className="absolute left-4 top-3.5 h-[2px] bg-brand-blue transition-all duration-300 -z-0"
               style={{ width: `${((step - 1) / 3) * 100}%` }}
             />
 
@@ -255,17 +561,17 @@ export default function SubmitReport() {
                   <div
                     className={`grid size-7 place-items-center rounded-full text-xs font-bold transition-all ${
                       isActive
-                        ? 'bg-[#ffd500] text-[#172b68] ring-2 ring-white shadow-xs scale-110 font-extrabold'
+                        ? 'bg-brand-yellow text-brand-navy ring-2 ring-white shadow-xs scale-110 font-extrabold'
                         : isDone
-                        ? 'bg-[#1b3d8f] text-white'
-                        : 'bg-white border-2 border-[#dbe5f2] text-slate-400'
+                        ? 'bg-brand-blue text-white'
+                        : 'bg-white border-2 border-brand-line text-brand-muted'
                     }`}
                   >
                     {isDone ? <Check className="size-3.5 stroke-[3]" /> : s}
                   </div>
                   <span
                     className={`mt-1 text-[10px] font-bold ${
-                      isActive ? 'text-[#172b68]' : isDone ? 'text-[#1b3d8f]' : 'text-slate-400'
+                      isActive ? 'text-brand-navy' : isDone ? 'text-brand-blue' : 'text-brand-muted'
                     }`}
                   >
                     {stepTitles[s]}
@@ -282,74 +588,50 @@ export default function SubmitReport() {
         {/* STEP 1: DETAILS */}
         {step === 1 && (
           <div className="space-y-5 animate-in fade-in">
-            {/* Outage Type Grid */}
+            {/* Interruption Type */}
             <section>
-              <h2 className="mb-2.5 text-xs font-bold uppercase tracking-wider text-[#60748e]">
-                What is happening?
-              </h2>
-              <div className="grid grid-cols-2 gap-3">
-                {outageTypes.map(({ id, label, icon: Icon }) => {
-                  const isSelected = outageType === id
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setOutageType(id)}
-                      className={`relative flex min-h-[96px] flex-col items-center justify-center gap-2 rounded-2xl p-3.5 text-center transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-2 border-[#1b3d8f] bg-[#f2f7ff] shadow-[0_4px_16px_rgba(27,61,143,0.08)]'
-                          : 'border border-[#dce6f2] bg-white hover:border-[#b8cde6] hover:bg-slate-50'
-                      }`}
-                    >
-                      {/* Check badge on selected */}
-                      {isSelected && (
-                        <span className="absolute right-2.5 top-2.5 grid size-5 place-items-center rounded-full bg-[#1b3d8f] text-white">
-                          <Check className="size-3 stroke-[3]" />
-                        </span>
-                      )}
-                      <Icon
-                        className={`size-6 ${
-                          isSelected ? 'text-[#1b3d8f]' : 'text-[#24449a]'
-                        }`}
-                      />
-                      <span className="text-xs font-extrabold text-[#172b68] leading-tight">
-                        {label}
-                      </span>
-                    </button>
-                  )
-                })}
+              <label htmlFor="interruption-type" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
+                Interruption type
+              </label>
+              <div className="relative">
+                <select
+                  id="interruption-type"
+                  value={outageType}
+                  onChange={(e) => setOutageType(e.target.value)}
+                  required
+                  className="w-full appearance-none rounded-2xl border border-brand-line bg-white px-3.5 py-2.5 text-xs font-bold text-brand-navy shadow-xs focus:border-brand-blue focus:outline-none cursor-pointer"
+                >
+                  <option value="" disabled>Select a type</option>
+                  {outageTypes.map((type) => (
+                    <option key={type.id} value={type.id}>{type.label}</option>
+                  ))}
+                </select>
+                <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 rotate-90 text-brand-muted" />
               </div>
+              {!outageType && (
+                <p className="mt-1.5 text-[11px] text-[#9a6500]">Choose the type that best matches what happened.</p>
+              )}
             </section>
 
-            {/* Time Selector */}
+            {/* Date and Time Noticed */}
             <section>
-              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-[#60748e]">
-                When did it start?
-              </h2>
-              <div className="flex gap-2">
-                {timeOptions.map((time) => {
-                  const isSelected = startedTime === time
-                  return (
-                    <button
-                      key={time}
-                      type="button"
-                      onClick={() => setStartedTime(time)}
-                      className={`flex-1 rounded-full py-2 text-xs font-bold transition-all cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#1b3d8f] text-white shadow-xs'
-                          : 'border border-[#dce6f2] bg-white text-[#172b68] hover:bg-slate-50'
-                      }`}
-                    >
-                      {time}
-                    </button>
-                  )
-                })}
-              </div>
+              <label htmlFor="noticed-at" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
+                Date and time noticed
+              </label>
+              <input
+                id="noticed-at"
+                type="datetime-local"
+                value={noticedAt}
+                max={toDateTimeLocalValue()}
+                onChange={(e) => setNoticedAt(e.target.value)}
+                required
+                className="w-full rounded-2xl border border-brand-line bg-white px-3.5 py-2.5 text-xs font-bold text-brand-navy shadow-xs focus:border-brand-blue focus:outline-none"
+              />
             </section>
 
             {/* Description Textarea */}
             <section>
-              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-[#60748e]">
+              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-muted">
                 Description (Optional)
               </h2>
               <textarea
@@ -357,12 +639,12 @@ export default function SubmitReport() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Add details that help the response team"
-                className="w-full rounded-2xl border border-[#dce6f2] bg-white p-3.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-[#1b3d8f] focus:outline-none"
+                className="w-full rounded-2xl border border-brand-line bg-white p-3.5 text-xs text-brand-ink placeholder:text-brand-muted focus:border-brand-blue focus:outline-none"
               />
             </section>
 
             {/* Safety Caution Box */}
-            <div className="flex items-start gap-2.5 rounded-2xl border border-[#ffec99] bg-[#fff9db] p-3.5 text-[11px] leading-relaxed text-[#744210]">
+            <div className="flex items-start gap-2.5 rounded-2xl border border-[fff1a8] bg-[fff1a8] p-3.5 text-[11px] leading-relaxed text-[#744210]">
               <AlertTriangle className="size-4 shrink-0 text-[#b45309] mt-0.5" />
               <span>
                 Fallen wire or sparks? Keep away from it and call your local emergency number.
@@ -374,40 +656,23 @@ export default function SubmitReport() {
         {/* STEP 2: LOCATION */}
         {step === 2 && (
           <div className="space-y-4 animate-in fade-in">
-            {/* Stylized Interactive Map Preview */}
-            <div className="relative h-44 w-full overflow-hidden rounded-2xl border border-[#dce6f2] bg-[#eaf2fb] shadow-inner">
-              <svg className="w-full h-full" viewBox="0 0 300 170" preserveAspectRatio="none">
-                {/* Land Parcels */}
-                <rect x="20" y="20" width="40" height="30" rx="4" fill="#d7e2ed" />
-                <rect x="80" y="20" width="50" height="40" rx="4" fill="#d7e2ed" />
-                <rect x="220" y="30" width="60" height="40" rx="4" fill="#d8e8dc" />
-                <rect x="230" y="110" width="50" height="35" rx="4" fill="#d7e2ed" />
+            {/* Real OpenStreetMap location picker */}
+            <div className="relative z-0 h-44 w-full overflow-hidden rounded-2xl border border-brand-line bg-[e5e9f6] shadow-inner">
+              <LocationMap pin={pinPosition} onPick={handlePickPin} mapRef={mapRef} />
 
-                {/* White Roads */}
-                <path d="M -10,80 L 310,75" stroke="#ffffff" strokeWidth="16" fill="none" />
-                <path d="M 150,-10 L 145,180" stroke="#ffffff" strokeWidth="16" fill="none" />
-                <path d="M 60,-10 L 60,180" stroke="#ffffff" strokeWidth="10" fill="none" />
-                <path d="M 230,-10 L 225,180" stroke="#ffffff" strokeWidth="12" fill="none" />
-                <path d="M -10,135 L 310,135" stroke="#ffffff" strokeWidth="12" fill="none" />
-              </svg>
-
-              {/* Center Target Ring */}
-              <div
-                className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all"
-                style={{ left: `${pinLocation.x}%`, top: `${pinLocation.y}%` }}
-              >
-                <div className="grid size-16 place-items-center rounded-full bg-[#24449a]/15 border border-[#24449a]/30">
-                  {/* Pin Marker */}
-                  <div className="grid size-9 place-items-center rounded-full bg-[#ffdc00] border-2 border-[#172b68] shadow-md animate-bounce">
-                    <div className="size-2.5 rounded-full bg-[#172b68]" />
-                  </div>
-                </div>
-              </div>
-
-              {/* Floating Pin Hint */}
-              <span className="absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-bold text-[#172b68] shadow-sm backdrop-blur-xs">
-                Drag the pin to adjust
+              <span className="pointer-events-none absolute left-2 top-2 z-[1000] rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-bold text-brand-navy shadow-sm backdrop-blur-xs">
+                Tap the map or drag the pin
               </span>
+
+              <button
+                ref={expandMapButtonRef}
+                type="button"
+                onClick={() => setIsMapExpanded(true)}
+                aria-label="Expand map"
+                className="absolute right-2 top-2 z-[1000] grid size-9 place-items-center rounded-xl border border-brand-line bg-white/95 text-brand-blue shadow-sm backdrop-blur-xs transition-colors hover:bg-white cursor-pointer"
+              >
+                <Maximize2 className="size-4" />
+              </button>
             </div>
 
             {/* Use My Current Location Button */}
@@ -415,22 +680,46 @@ export default function SubmitReport() {
               type="button"
               onClick={handleUseCurrentLocation}
               disabled={isLocating}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#dce6f2] bg-white text-xs font-bold text-[#1b3d8f] shadow-xs hover:bg-[#f6f9fc] active:scale-[0.99] transition-all cursor-pointer"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-brand-line bg-white text-xs font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.99] transition-all cursor-pointer disabled:cursor-wait disabled:opacity-70"
             >
               <LocateFixed className={`size-4 ${isLocating ? 'animate-spin' : ''}`} />
               <span>{isLocating ? 'Locating...' : 'Use my current location'}</span>
             </button>
 
+            {locationMessage && (
+              <p className={`text-[11px] leading-relaxed ${isLocationError ? 'text-[#9a6500]' : 'text-[#137a48]'}`}>{locationMessage}</p>
+            )}
+
+            {/* Pinned Location */}
+            <section>
+              <label htmlFor="pinned-location" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
+                Pinned location
+              </label>
+              <input
+                id="pinned-location"
+                type="text"
+                value={pinnedLocation}
+                onChange={(e) => setPinnedLocation(e.target.value)}
+                placeholder="Tap the map to fill this"
+                required
+                className="w-full rounded-2xl border border-brand-line bg-white px-3.5 py-2.5 text-xs text-brand-navy shadow-xs placeholder:text-brand-muted focus:border-brand-blue focus:outline-none font-medium"
+              />
+              {isResolvingLocation && (
+                <p className="mt-1.5 text-[11px] text-brand-muted">Finding the address…</p>
+              )}
+            </section>
+
             {/* Barangay Dropdown */}
             <section>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#60748e]">
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
                 Barangay
               </label>
               <div className="relative">
                 <select
                   value={barangay}
                   onChange={(e) => setBarangay(e.target.value)}
-                  className="w-full appearance-none rounded-2xl border border-[#dce6f2] bg-white px-3.5 py-2.5 text-xs font-bold text-[#172b68] shadow-xs focus:border-[#1b3d8f] focus:outline-none cursor-pointer"
+                  required
+                  className="w-full appearance-none rounded-2xl border border-brand-line bg-white px-3.5 py-2.5 text-xs font-bold text-brand-navy shadow-xs focus:border-brand-blue focus:outline-none cursor-pointer"
                 >
                   {valenciaBarangays.map((b) => (
                     <option key={b} value={b}>
@@ -438,13 +727,14 @@ export default function SubmitReport() {
                     </option>
                   ))}
                 </select>
-                <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 rotate-90 text-slate-400" />
+                <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 rotate-90 text-brand-muted" />
               </div>
+              <p className="mt-1.5 text-[11px] text-brand-muted">Auto-filled from the pin when it can be matched.</p>
             </section>
 
             {/* Street or Landmark Input */}
             <section>
-              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#60748e]">
+              <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
                 Street or landmark
               </label>
               <input
@@ -452,15 +742,15 @@ export default function SubmitReport() {
                 value={landmark}
                 onChange={(e) => setLandmark(e.target.value)}
                 placeholder="e.g., near the chapel, Purok 3"
-                className="w-full rounded-2xl border border-[#dce6f2] bg-white px-3.5 py-2.5 text-xs text-[#172b68] shadow-xs placeholder:text-slate-400 focus:border-[#1b3d8f] focus:outline-none font-medium"
+                className="w-full rounded-2xl border border-brand-line bg-white px-3.5 py-2.5 text-xs text-brand-navy shadow-xs placeholder:text-brand-muted focus:border-brand-blue focus:outline-none font-medium"
               />
             </section>
 
             {/* GPS Accuracy Notice */}
-            <div className="flex items-start gap-1.5 text-[11px] text-[#58708a] leading-relaxed">
-              <Info className="size-3.5 shrink-0 text-slate-400 mt-0.5" />
+            <div className="flex items-start gap-1.5 text-[11px] text-brand-muted leading-relaxed">
+              <Info className="size-3.5 shrink-0 text-brand-muted mt-0.5" />
               <span>
-                GPS accuracy is about 15 m. The location is approximate, so adjust the pin if it looks off.
+                The pin is approximate. Drag it or tap the map to match the reported spot.
               </span>
             </div>
           </div>
@@ -469,61 +759,87 @@ export default function SubmitReport() {
         {/* STEP 3: EVIDENCE */}
         {step === 3 && (
           <div className="space-y-4 animate-in fade-in">
-            <p className="text-xs text-[#58708a] leading-relaxed">
-              Photos help the team verify your report faster. This step is optional.
+            <p className="text-xs text-brand-muted leading-relaxed">
+              Photos or a short video help the team verify your report faster. This step is optional.
             </p>
 
-            {/* Action Buttons: Take Photo & Upload */}
+            {/* Action Buttons */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-[#b8cde6] bg-white p-5 text-center transition-all hover:bg-[#f6f9fc] active:scale-[0.98] cursor-pointer"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={isProcessingPhoto || photos.length >= 3}
+                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-line bg-white p-5 text-center transition-all hover:bg-brand-paper active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <div className="grid size-10 place-items-center rounded-xl bg-[#edf4ff] text-[#1b3d8f]">
+                <div className="grid size-10 place-items-center rounded-xl bg-[e5e9f6] text-brand-blue">
                   <Camera className="size-5" />
                 </div>
-                <span className="text-xs font-bold text-[#1b3d8f]">Take photo</span>
+                <span className="text-xs font-bold text-brand-blue">Take photo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                disabled={isProcessingPhoto || photos.length >= 3}
+                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-line bg-white p-5 text-center transition-all hover:bg-brand-paper active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <div className="grid size-10 place-items-center rounded-xl bg-[e5e9f6] text-brand-blue">
+                  <Video className="size-5" />
+                </div>
+                <span className="text-xs font-bold text-brand-blue">Record video</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-[#b8cde6] bg-white p-5 text-center transition-all hover:bg-[#f6f9fc] active:scale-[0.98] cursor-pointer"
+                disabled={isProcessingPhoto || photos.length >= 3}
+                className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-line bg-white text-xs font-bold text-brand-blue transition-all hover:bg-brand-paper active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <div className="grid size-10 place-items-center rounded-xl bg-[#edf4ff] text-[#1b3d8f]">
-                  <ImageIcon className="size-5" />
-                </div>
-                <span className="text-xs font-bold text-[#1b3d8f]">Upload photo</span>
+                <ImageIcon className="size-4" />
+                Upload photo or video
               </button>
             </div>
 
-            {/* Added Photos Grid */}
+            {photoError && <p className="text-[11px] font-semibold text-[#b42318]">{photoError}</p>}
+
+            {/* Added Evidence Grid */}
             <section>
-              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-[#60748e]">
-                Added ({photos.length} of 3)
+              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-muted">
+                Added ({photos.length} of 3){isProcessingPhoto ? ' · Processing…' : ''}
               </h2>
-              <div className="flex items-center gap-3">
-                {photos.map((item) => (
+              <div className="flex flex-wrap items-center gap-3">
+                {photos.map((photo) => (
                   <div
-                    key={item.id}
-                    className="relative flex size-20 items-center justify-center rounded-2xl border border-[#dce6f2] bg-[#edf4ff] text-[#1b3d8f] shadow-xs"
+                    key={photo.id}
+                    className="relative flex size-20 items-center justify-center rounded-2xl border border-brand-line bg-[e5e9f6] text-brand-blue shadow-xs"
                   >
-                    {item.type === 'pole' && <TowerControl className="size-8" />}
-                    {item.type === 'meter' && <House className="size-8" />}
-                    {item.type === 'custom' && (
+                    {photo.kind === 'video' ? (
+                      <>
+                        <video
+                          src={photo.previewUrl}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="size-full rounded-2xl object-cover"
+                        />
+                        <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-2xl bg-black/25">
+                          <Video className="size-5 text-white" />
+                        </span>
+                      </>
+                    ) : (
                       <img
-                        src={item.url}
-                        alt="Uploaded evidence"
+                        src={photo.previewUrl}
+                        alt={photo.label || 'Uploaded evidence'}
                         className="size-full rounded-2xl object-cover"
                       />
                     )}
 
-                    {/* Remove Photo Button */}
+                    {/* Remove Evidence Button */}
                     <button
                       type="button"
-                      onClick={() => handleRemovePhoto(item.id)}
-                      className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-white border border-slate-300 text-slate-500 shadow-xs hover:bg-red-50 hover:text-red-600"
+                      onClick={() => handleRemovePhoto(photo.id)}
+                      className="absolute -right-1.5 -top-1.5 z-10 grid size-5 place-items-center rounded-full border border-brand-line bg-white text-brand-muted shadow-xs hover:bg-red-50 hover:text-red-600"
+                      aria-label={`Remove ${photo.label || 'attachment'}`}
                     >
                       <X className="size-3" />
                     </button>
@@ -535,8 +851,9 @@ export default function SubmitReport() {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="grid size-20 place-items-center rounded-2xl border-2 border-dashed border-[#c6d7eb] text-[#24449a] hover:bg-slate-50 cursor-pointer"
-                    aria-label="Add photo"
+                    disabled={isProcessingPhoto}
+                    className="grid size-20 place-items-center rounded-2xl border-2 border-dashed border-brand-line text-brand-blue hover:bg-brand-paper cursor-pointer disabled:cursor-wait disabled:opacity-50"
+                    aria-label="Add photo or video"
                   >
                     <Plus className="size-6" />
                   </button>
@@ -545,8 +862,8 @@ export default function SubmitReport() {
             </section>
 
             {/* Privacy Guidance Box */}
-            <div className="flex items-start gap-2.5 rounded-2xl border border-[#d6e5fb] bg-[#edf4ff] p-3.5 text-[11px] leading-relaxed text-[#1b3d8f]">
-              <Info className="size-4 shrink-0 text-[#24449a] mt-0.5" />
+            <div className="flex items-start gap-2.5 rounded-2xl border border-brand-line bg-[e5e9f6] p-3.5 text-[11px] leading-relaxed text-brand-blue">
+              <Info className="size-4 shrink-0 text-brand-blue mt-0.5" />
               <span>
                 Show the transformer, lines or your meter if you can. Avoid faces and license plates.
               </span>
@@ -558,122 +875,133 @@ export default function SubmitReport() {
         {step === 4 && (
           <div className="space-y-4 animate-in fade-in">
             {/* Details Summary Card */}
-            <div className="rounded-2xl border border-[#dce6f2] bg-white p-4 shadow-xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <h3 className="text-sm font-extrabold text-[#172b68]">Details</h3>
+            <div className="rounded-2xl border border-brand-line bg-white p-4 shadow-xs">
+              <div className="flex items-center justify-between border-b border-brand-line pb-2">
+                <h3 className="text-sm font-extrabold text-brand-navy">Details</h3>
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="text-xs font-bold text-[#1b3d8f] hover:underline"
+                  className="text-xs font-bold text-brand-blue hover:underline"
                 >
                   Edit
                 </button>
               </div>
               <div className="mt-2.5 space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Type</span>
-                  <strong className="text-slate-800">
-                    {outageTypes.find((t) => t.id === outageType)?.label}
+                <div className="flex justify-between gap-3">
+                  <span className="text-brand-muted">Type</span>
+                  <strong className="text-right text-brand-ink">
+                    {outageTypes.find((t) => t.id === outageType)?.label ?? 'Not selected'}
                   </strong>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Started</span>
-                  <strong className="text-slate-800">{startedTime}</strong>
+                <div className="flex justify-between gap-3">
+                  <span className="text-brand-muted">Noticed</span>
+                  <strong className="text-right text-brand-ink">{formatNoticedAt(noticedAt)}</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Notes</span>
-                  <span className="font-semibold text-slate-800 text-right max-w-[200px] truncate">
-                    {description || 'Whole street is dark since 8:30 AM'}
+                  <span className="text-brand-muted">Notes</span>
+                  <span className="font-semibold text-brand-ink text-right max-w-[200px] truncate">
+                    {description || 'No notes added'}
                   </span>
                 </div>
               </div>
             </div>
 
             {/* Location Summary Card */}
-            <div className="rounded-2xl border border-[#dce6f2] bg-white p-4 shadow-xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <h3 className="text-sm font-extrabold text-[#172b68]">Location</h3>
+            <div className="rounded-2xl border border-brand-line bg-white p-4 shadow-xs">
+              <div className="flex items-center justify-between border-b border-brand-line pb-2">
+                <h3 className="text-sm font-extrabold text-brand-navy">Location</h3>
                 <button
                   type="button"
                   onClick={() => setStep(2)}
-                  className="text-xs font-bold text-[#1b3d8f] hover:underline"
+                  className="text-xs font-bold text-brand-blue hover:underline"
                 >
                   Edit
                 </button>
               </div>
               <div className="mt-2.5 space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Barangay</span>
-                  <strong className="text-slate-800">{barangay}</strong>
+                <div className="flex justify-between gap-3">
+                  <span className="text-brand-muted">Barangay</span>
+                  <strong className="text-brand-ink">{barangay}</strong>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Landmark</span>
-                  <strong className="text-slate-800">
-                    {landmark || 'Near the chapel, Purok 3'}
+                <div className="flex justify-between gap-3">
+                  <span className="text-brand-muted">Pinned location</span>
+                  <strong className="max-w-[210px] truncate text-right text-brand-ink">
+                    {pinnedLocation || 'Not pinned'}
+                  </strong>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-brand-muted">Landmark</span>
+                  <strong className="max-w-[210px] truncate text-right text-brand-ink">
+                    {landmark || 'Not provided'}
                   </strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Pin</span>
-                  <strong className="text-slate-800">GPS, about 15 m</strong>
+                  <span className="text-brand-muted">Pin</span>
+                  <strong className="text-brand-ink">
+                    {pinSource === 'gps'
+                      ? `GPS${coordinates?.accuracy ? `, about ${Math.round(coordinates.accuracy)} m` : ''}`
+                      : 'Placed manually'}
+                  </strong>
                 </div>
               </div>
             </div>
 
             {/* Evidence Summary Card */}
-            <div className="rounded-2xl border border-[#dce6f2] bg-white p-4 shadow-xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                <h3 className="text-sm font-extrabold text-[#172b68]">Evidence</h3>
+            <div className="rounded-2xl border border-brand-line bg-white p-4 shadow-xs">
+              <div className="flex items-center justify-between border-b border-brand-line pb-2">
+                <h3 className="text-sm font-extrabold text-brand-navy">Evidence</h3>
                 <button
                   type="button"
                   onClick={() => setStep(3)}
-                  className="text-xs font-bold text-[#1b3d8f] hover:underline"
+                  className="text-xs font-bold text-brand-blue hover:underline"
                 >
                   Edit
                 </button>
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
-                  {photos.map((item) => (
-                    <div
-                      key={item.id}
-                      className="grid size-9 place-items-center rounded-xl bg-[#edf4ff] text-[#1b3d8f]"
-                    >
-                      {item.type === 'pole' && <TowerControl className="size-4.5" />}
-                      {item.type === 'meter' && <House className="size-4.5" />}
-                      {item.type === 'custom' && (
-                        <img src={item.url} alt="" className="size-full rounded-xl object-cover" />
+                  {photos.map((photo) => (
+                    <div key={photo.id} className="grid size-9 place-items-center overflow-hidden rounded-xl bg-[e5e9f6] text-brand-blue">
+                      {photo.kind === 'video' ? (
+                        <Video className="size-4" aria-hidden="true" />
+                      ) : (
+                        <img src={photo.previewUrl} alt="" className="size-full object-cover" />
                       )}
                     </div>
                   ))}
                 </div>
-                <span className="text-xs font-semibold text-slate-600">
-                  {photos.length} photos attached
+                <span className="text-xs font-semibold text-brand-muted">
+                  {photos.length === 0
+                    ? 'No evidence attached'
+                    : `${photos.length} attachment${photos.length === 1 ? '' : 's'} attached`}
                 </span>
               </div>
             </div>
 
             {/* Confirmation Checkbox */}
-            <label className="flex items-start gap-2.5 pt-2 text-xs font-medium text-slate-700 cursor-pointer">
+            <label className="flex items-start gap-2.5 pt-2 text-xs font-medium text-brand-ink cursor-pointer">
               <input
                 type="checkbox"
                 checked={confirmed}
                 onChange={(e) => setConfirmed(e.target.checked)}
-                className="size-4 rounded border-slate-300 text-[#1b3d8f] accent-[#1b3d8f] mt-0.5 cursor-pointer"
+                className="size-4 rounded border-brand-line text-brand-blue accent-brand-blue mt-0.5 cursor-pointer"
               />
               <span>I confirm this information is accurate to the best of my knowledge.</span>
             </label>
+
+            {submitError && <p className="text-[11px] font-semibold text-[#b42318]">{submitError}</p>}
           </div>
         )}
       </main>
 
       {/* STICKY FOOTER ACTIONS */}
-      <footer className="sticky bottom-0 z-20 border-t border-[#e2eaf4] bg-white/95 px-4 py-3 backdrop-blur-md">
+      <footer className="sticky bottom-0 z-20 border-t border-brand-line bg-white/95 px-4 py-3 backdrop-blur-md">
         <div className="mx-auto flex max-w-md items-center gap-3">
           {/* Back or Cancel Button */}
           <button
             type="button"
             onClick={() => (step > 1 ? setStep(step - 1) : (window.location.href = '/community'))}
-            className="flex-1 rounded-2xl border border-[#dce6f2] bg-white py-3 text-xs font-bold text-[#172b68] hover:bg-[#f6f9fc] active:scale-[0.99] transition-all cursor-pointer"
+            className="flex-1 rounded-2xl border border-brand-line bg-white py-3 text-xs font-bold text-brand-navy hover:bg-brand-paper active:scale-[0.99] transition-all cursor-pointer"
           >
             {step === 1 ? 'Cancel' : 'Back'}
           </button>
@@ -683,7 +1011,8 @@ export default function SubmitReport() {
             <button
               type="button"
               onClick={() => setStep(step + 1)}
-              className="flex-1 rounded-2xl bg-[#1b3d8f] py-3 text-xs font-bold text-white shadow-xs hover:bg-[#142e6d] active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-1"
+              disabled={isProcessingPhoto || (step === 1 && (!outageType || !noticedAt)) || (step >= 2 && !pinnedLocation)}
+              className="flex-1 rounded-2xl bg-brand-blue py-3 text-xs font-bold text-white shadow-xs hover:bg-brand-navy active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-1 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span>Next</span>
               <ChevronRight className="size-4" />
@@ -691,12 +1020,12 @@ export default function SubmitReport() {
           ) : (
             <button
               type="button"
-              disabled={!confirmed || isSubmitting}
+              disabled={!confirmed || isSubmitting || isProcessingPhoto}
               onClick={handleSubmit}
               className={`flex-1 rounded-2xl py-3 text-xs font-black shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                confirmed && !isSubmitting
-                  ? 'bg-[#ffd500] text-[#172b68] hover:bg-[#ffdc00] active:scale-[0.99]'
-                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                confirmed && !isSubmitting && !isProcessingPhoto
+                  ? 'bg-brand-yellow text-brand-navy hover:bg-brand-yellow active:scale-[0.99]'
+                  : 'bg-brand-line text-brand-muted cursor-not-allowed'
               }`}
             >
               <Send className="size-3.5 fill-current" />
@@ -705,6 +1034,53 @@ export default function SubmitReport() {
           )}
         </div>
       </footer>
+
+      {isMapExpanded && (
+        <div
+          className="fixed inset-0 z-[2000] flex flex-col bg-brand-paper"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="expanded-map-title"
+        >
+          <header className="flex items-center justify-between border-b border-brand-line bg-white px-4 py-3">
+            <div>
+              <h2 id="expanded-map-title" className="text-sm font-extrabold text-brand-navy">Pick the report location</h2>
+              <p className="text-[11px] text-brand-muted">Tap the map or drag the pin.</p>
+            </div>
+            <button
+              ref={closeMapButtonRef}
+              type="button"
+              onClick={() => setIsMapExpanded(false)}
+              aria-label="Close expanded map"
+              className="grid size-9 place-items-center rounded-xl border border-brand-line bg-white text-brand-muted cursor-pointer"
+            >
+              <X className="size-4.5" />
+            </button>
+          </header>
+
+          <div className="relative z-0 min-h-0 flex-1">
+            <LocationMap pin={pinPosition} onPick={handlePickPin} mapRef={expandedMapRef} expanded />
+          </div>
+
+          <div className="space-y-2 border-t border-brand-line bg-white p-4">
+            <button
+              type="button"
+              onClick={handleUseCurrentLocation}
+              disabled={isLocating}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-brand-line bg-white text-xs font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.99] transition-all cursor-pointer disabled:cursor-wait disabled:opacity-70"
+            >
+              <LocateFixed className={`size-4 ${isLocating ? 'animate-spin' : ''}`} />
+              <span>{isLocating ? 'Locating...' : 'Use my current location'}</span>
+            </button>
+            {locationMessage && (
+              <p className={`text-[11px] leading-relaxed ${isLocationError ? 'text-[#9a6500]' : 'text-[#137a48]'}`}>{locationMessage}</p>
+            )}
+            <p className="text-[11px] text-brand-muted">
+              Pin: {pinPosition.lat.toFixed(5)}, {pinPosition.lng.toFixed(5)}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

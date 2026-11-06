@@ -10,76 +10,7 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
-
-const initialJobs = [
-  {
-    id: 'WO-2026-0418',
-    title: 'Power interruption near Guinyoran',
-    location: 'Brgy. Guinuyoran',
-    distance: '2.4 km away',
-    assignedTime: '8:42 AM',
-    status: 'In progress',
-    statusType: 'in-progress',
-    step: 2,
-    stepLabel: 'Step 2 of 4 · En route',
-    hasHazard: false,
-  },
-  {
-    id: 'WO-2026-0421',
-    title: 'Flickering lights',
-    location: 'Brgy. Lurogan',
-    distance: '5.1 km away',
-    assignedTime: '9:15 AM',
-    status: 'New',
-    statusType: 'new',
-    step: 0,
-    stepLabel: 'Not started · Acknowledge to begin',
-    hasHazard: false,
-  },
-  {
-    id: 'WO-2026-0415',
-    title: 'Damaged line near chapel',
-    location: 'Brgy. Poblacion',
-    distance: '3.8 km away',
-    assignedTime: '8:50 AM',
-    status: 'Acknowledged',
-    statusType: 'acknowledged',
-    step: 1,
-    stepLabel: 'Step 1 of 4 · Acknowledged',
-    hasHazard: true,
-  },
-  {
-    id: 'WO-2026-0410',
-    title: 'Blown fuse replacement',
-    location: 'Brgy. Catumbalon',
-    distance: '6.2 km away',
-    assignedTime: '7:10 AM',
-    status: 'Done',
-    statusType: 'done',
-    step: 4,
-    stepLabel: 'Step 4 of 4 · Resolved at 8:05 AM',
-    hasHazard: false,
-  },
-  {
-    id: 'WO-2026-0408',
-    title: 'Meter box inspection',
-    location: 'Brgy. Batangan',
-    distance: '4.5 km away',
-    assignedTime: 'Yesterday',
-    status: 'Done',
-    statusType: 'done',
-    step: 4,
-    stepLabel: 'Step 4 of 4 · Resolved yesterday',
-    hasHazard: false,
-  },
-]
-
-const stageNames = [
-  { id: 1, label: 'Acknowledged' },
-  { id: 2, label: 'En route' },
-  { id: 3, label: 'On site' },
-  { id: 4, label: 'Resolved' },
-]
+import { initialJobs, stageNames } from './jobsData'
 
 export default function StaffJobs() {
   const [jobs, setJobs] = useState(initialJobs)
@@ -152,28 +83,28 @@ export default function StaffJobs() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f7fb] text-[#172b68] flex flex-col justify-between">
+    <div className="min-h-screen bg-brand-paper text-brand-navy flex flex-col justify-between">
       {/* Toast Notice */}
       {toastMessage && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-2 rounded-xl bg-[#172b68] px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-2">
-          <Check className="size-4 text-[#ffd500]" />
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-2">
+          <Check className="size-4 text-brand-yellow" />
           <span>{toastMessage}</span>
         </div>
       )}
 
       {/* TOP HEADER */}
-      <header className="sticky top-0 z-20 border-b border-[#e2eaf4] bg-white/95 px-4 py-3 backdrop-blur-md">
+      <header className="sticky top-0 z-20 border-b border-brand-line bg-white/95 px-4 py-3 backdrop-blur-md">
         <div className="mx-auto flex max-w-md items-center justify-between">
           {/* Logo & Portal Branding */}
           <a href="/staff" className="flex items-center gap-2.5 no-underline">
-            <span className="grid size-9 place-items-center rounded-xl bg-[#ffd500] text-[#101114] shadow-xs">
+            <span className="grid size-9 place-items-center rounded-xl bg-brand-yellow text-brand-ink shadow-xs">
               <Zap className="size-5 fill-current" />
             </span>
             <div>
-              <span className="block text-[9.5px] font-extrabold uppercase tracking-[.14em] text-[#60748e]">
+              <span className="block text-[9.5px] font-extrabold uppercase tracking-[.14em] text-brand-muted">
                 STAFF PORTAL
               </span>
-              <span className="block text-base font-black tracking-[-.03em] text-[#172b68]">
+              <span className="block text-base font-black tracking-[-.03em] text-brand-navy">
                 PowerWatch
               </span>
             </div>
@@ -182,11 +113,11 @@ export default function StaffJobs() {
           {/* Notification Button */}
           <button
             type="button"
-            className="relative grid size-10 place-items-center rounded-2xl border border-[#dbe4ef] bg-white text-[#172b68] shadow-xs transition-colors hover:bg-[#f4f7fb] cursor-pointer"
+            className="relative grid size-10 place-items-center rounded-2xl border border-brand-line bg-white text-brand-navy shadow-xs transition-colors hover:bg-brand-paper cursor-pointer"
             aria-label="Notifications"
           >
-            <Bell className="size-5 text-[#24449a]" />
-            <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-[#ffd500] ring-2 ring-white" />
+            <Bell className="size-5 text-brand-blue" />
+            <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-brand-yellow ring-2 ring-white" />
           </button>
         </div>
       </header>
@@ -195,8 +126,8 @@ export default function StaffJobs() {
       <main className="mx-auto w-full max-w-md px-4 pb-32 pt-5 flex-1">
         {/* Page Heading */}
         <section className="mb-4">
-          <h1 className="text-3xl font-black tracking-tight text-[#172b68]">Jobs</h1>
-          <p className="text-xs font-semibold text-[#58708a] mt-0.5">Your assigned work orders.</p>
+          <h1 className="text-3xl font-black tracking-tight text-brand-navy">Jobs</h1>
+          <p className="text-xs font-semibold text-brand-muted mt-0.5">Your assigned work orders.</p>
         </section>
 
         {/* Filter Pills */}
@@ -206,8 +137,8 @@ export default function StaffJobs() {
             onClick={() => setFilter('all')}
             className={`rounded-full px-4 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
               filter === 'all'
-                ? 'bg-[#1b3d8f] text-white'
-                : 'bg-white border border-[#d6e2ef] text-[#172b68] hover:bg-slate-50'
+                ? 'bg-brand-blue text-white'
+                : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
             }`}
           >
             All {counts.all}
@@ -218,8 +149,8 @@ export default function StaffJobs() {
             onClick={() => setFilter('new')}
             className={`rounded-full px-4 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
               filter === 'new'
-                ? 'bg-[#1b3d8f] text-white'
-                : 'bg-white border border-[#d6e2ef] text-[#172b68] hover:bg-slate-50'
+                ? 'bg-brand-blue text-white'
+                : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
             }`}
           >
             New {counts.new}
@@ -230,8 +161,8 @@ export default function StaffJobs() {
             onClick={() => setFilter('active')}
             className={`rounded-full px-4 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
               filter === 'active'
-                ? 'bg-[#1b3d8f] text-white'
-                : 'bg-white border border-[#d6e2ef] text-[#172b68] hover:bg-slate-50'
+                ? 'bg-brand-blue text-white'
+                : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
             }`}
           >
             Active {counts.active}
@@ -242,8 +173,8 @@ export default function StaffJobs() {
             onClick={() => setFilter('done')}
             className={`rounded-full px-4 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
               filter === 'done'
-                ? 'bg-[#1b3d8f] text-white'
-                : 'bg-white border border-[#d6e2ef] text-[#172b68] hover:bg-slate-50'
+                ? 'bg-brand-blue text-white'
+                : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
             }`}
           >
             Done {counts.done}
@@ -261,21 +192,21 @@ export default function StaffJobs() {
             return (
               <article
                 key={job.id}
-                className="rounded-3xl border border-[#e2eaf4] bg-white p-4 sm:p-5 shadow-[0_4px_20px_rgba(23,43,104,0.04)]"
+                className="rounded-3xl border border-brand-line bg-white p-4 sm:p-5 shadow-[0_4px_20px_rgba(23,43,104,0.04)]"
               >
                 {/* Header: Title + Status Badge */}
                 <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-base font-extrabold text-[#172b68] leading-snug">
+                  <h2 className="text-base font-extrabold text-brand-navy leading-snug">
                     {job.title}
                   </h2>
                   <span
                     className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
                       isInProgress
-                        ? 'bg-[#dce7ff] text-[#1e40af]'
+                        ? 'bg-[e5e9f6] text-brand-blue'
                         : isNew
-                        ? 'bg-[#fff3c4] text-[#9a6700]'
+                        ? 'bg-[fff1a8] text-[#9a6700]'
                         : isAcknowledged
-                        ? 'bg-[#dce7ff] text-[#1e40af]'
+                        ? 'bg-[e5e9f6] text-brand-blue'
                         : 'bg-emerald-50 text-emerald-700'
                     }`}
                   >
@@ -284,15 +215,15 @@ export default function StaffJobs() {
                 </div>
 
                 {/* Location Line */}
-                <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-[#58708a]">
-                  <MapPin className="size-3.5 text-[#24449a] shrink-0" />
+                <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-brand-muted">
+                  <MapPin className="size-3.5 text-brand-blue shrink-0" />
                   <span>
                     {job.location} · {job.distance}
                   </span>
                 </div>
 
                 {/* Order ID & Assignment Time + Optional Hazard Tag */}
-                <div className="mt-1 flex items-center justify-between text-xs font-medium text-[#58708a]">
+                <div className="mt-1 flex items-center justify-between text-xs font-medium text-brand-muted">
                   <span>
                     {job.id} · Assigned {job.assignedTime}
                   </span>
@@ -310,14 +241,14 @@ export default function StaffJobs() {
                     <div
                       key={seg}
                       className={`h-1.5 flex-1 rounded-full transition-colors ${
-                        job.step >= seg ? 'bg-[#1b3d8f]' : 'bg-[#e2eaf4]'
+                        job.step >= seg ? 'bg-brand-blue' : 'bg-brand-line'
                       }`}
                     />
                   ))}
                 </div>
 
                 {/* Step Subtitle Caption */}
-                <p className="mt-1.5 text-[11px] font-semibold text-[#58708a]">{job.stepLabel}</p>
+                <p className="mt-1.5 text-[11px] font-semibold text-brand-muted">{job.stepLabel}</p>
 
                 {/* Action Buttons Row */}
                 <div className="mt-4">
@@ -326,7 +257,7 @@ export default function StaffJobs() {
                     <button
                       type="button"
                       onClick={() => handleAcknowledge(job.id)}
-                      className="flex h-11 w-full items-center justify-center rounded-2xl bg-[#ffd500] text-xs sm:text-sm font-black text-[#172b68] shadow-xs hover:bg-[#ffdc00] active:scale-[0.99] transition-all cursor-pointer"
+                      className="flex h-11 w-full items-center justify-center rounded-2xl bg-brand-yellow text-xs sm:text-sm font-black text-brand-navy shadow-xs hover:bg-brand-yellow active:scale-[0.99] transition-all cursor-pointer"
                     >
                       Acknowledge job
                     </button>
@@ -338,7 +269,7 @@ export default function StaffJobs() {
                       <button
                         type="button"
                         onClick={() => setNavJob(job)}
-                        className="flex h-11 items-center justify-center gap-1.5 rounded-2xl border border-[#d2dde8] bg-white text-xs sm:text-sm font-bold text-[#1b3d8f] shadow-xs hover:bg-[#f6f9fc] active:scale-[0.98] transition-all cursor-pointer"
+                        className="flex h-11 items-center justify-center gap-1.5 rounded-2xl border border-brand-line bg-white text-xs sm:text-sm font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.98] transition-all cursor-pointer"
                       >
                         <Navigation className="size-4 rotate-45" />
                         <span>Navigate</span>
@@ -347,7 +278,7 @@ export default function StaffJobs() {
                       <button
                         type="button"
                         onClick={() => setSelectedJobForStatus(job)}
-                        className="flex h-11 items-center justify-center rounded-2xl bg-[#1b3d8f] text-xs sm:text-sm font-bold text-white shadow-xs hover:bg-[#142e6d] active:scale-[0.98] transition-all cursor-pointer"
+                        className="flex h-11 items-center justify-center rounded-2xl bg-brand-blue text-xs sm:text-sm font-bold text-white shadow-xs hover:bg-brand-navy active:scale-[0.98] transition-all cursor-pointer"
                       >
                         Update status
                       </button>
@@ -359,7 +290,7 @@ export default function StaffJobs() {
                     <button
                       type="button"
                       onClick={() => setSelectedJobForStatus(job)}
-                      className="flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
+                      className="flex h-10 w-full items-center justify-center rounded-xl border border-brand-line bg-white text-xs font-bold text-brand-muted hover:bg-brand-paper transition-all cursor-pointer"
                     >
                       View resolution summary
                     </button>
@@ -370,7 +301,7 @@ export default function StaffJobs() {
           })}
 
           {filteredJobs.length === 0 && (
-            <div className="rounded-3xl border border-dashed border-[#cbd5e1] p-8 text-center text-xs text-slate-400">
+            <div className="rounded-3xl border border-dashed border-brand-line p-8 text-center text-xs text-brand-muted">
               No jobs found under this filter.
             </div>
           )}
@@ -381,20 +312,20 @@ export default function StaffJobs() {
       {selectedJobForStatus && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
           <div
-            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
+            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-brand-line bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
             role="dialog"
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center justify-between border-b border-brand-line pb-3">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
                   {selectedJobForStatus.id}
                 </span>
-                <h3 className="text-base font-extrabold text-[#172b68]">Update Job Status</h3>
+                <h3 className="text-base font-extrabold text-brand-navy">Update Job Status</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedJobForStatus(null)}
-                className="grid size-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
               >
                 <X className="size-4" />
               </button>
@@ -408,16 +339,16 @@ export default function StaffJobs() {
                   onClick={() => handleSetStage(selectedJobForStatus.id, stg.id)}
                   className={`flex w-full items-center justify-between rounded-xl p-3 text-xs font-bold transition-all cursor-pointer border ${
                     selectedJobForStatus.step === stg.id
-                      ? 'border-[#1b3d8f] bg-[#e7effc] text-[#1b3d8f]'
-                      : 'border-slate-100 bg-white text-slate-700 hover:bg-slate-50'
+                      ? 'border-brand-blue bg-[e5e9f6] text-brand-blue'
+                      : 'border-brand-line bg-white text-brand-ink hover:bg-brand-paper'
                   }`}
                 >
                   <span className="flex items-center gap-2.5">
                     <span
                       className={`grid size-6 place-items-center rounded-full text-[11px] font-extrabold ${
                         selectedJobForStatus.step === stg.id
-                          ? 'bg-[#1b3d8f] text-white'
-                          : 'bg-slate-100 text-slate-500'
+                          ? 'bg-brand-blue text-white'
+                          : 'bg-[#e5e9f6] text-brand-muted'
                       }`}
                     >
                       {stg.id}
@@ -425,7 +356,7 @@ export default function StaffJobs() {
                     <span>{stg.label}</span>
                   </span>
                   {selectedJobForStatus.step === stg.id && (
-                    <Check className="size-4 text-[#1b3d8f]" />
+                    <Check className="size-4 text-brand-blue" />
                   )}
                 </button>
               ))}
@@ -438,25 +369,25 @@ export default function StaffJobs() {
       {navJob && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
           <div
-            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
+            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-brand-line bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
             role="dialog"
           >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-extrabold text-[#172b68]">Directions to Site</h3>
+            <div className="flex items-center justify-between border-b border-brand-line pb-3">
+              <h3 className="text-base font-extrabold text-brand-navy">Directions to Site</h3>
               <button
                 type="button"
                 onClick={() => setNavJob(null)}
-                className="grid size-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
               >
                 <X className="size-4" />
               </button>
             </div>
 
             <div className="pt-4 space-y-3 text-xs">
-              <div className="rounded-2xl border border-slate-100 bg-[#f4f7fb] p-3.5">
-                <span className="text-[10px] font-bold uppercase text-slate-400">Destination</span>
-                <p className="font-extrabold text-[#172b68] text-sm mt-0.5">{navJob.location}</p>
-                <p className="text-slate-500 mt-1 font-medium">{navJob.distance} from your location</p>
+              <div className="rounded-2xl border border-brand-line bg-brand-paper p-3.5">
+                <span className="text-[10px] font-bold uppercase text-brand-muted">Destination</span>
+                <p className="font-extrabold text-brand-navy text-sm mt-0.5">{navJob.location}</p>
+                <p className="text-brand-muted mt-1 font-medium">{navJob.distance} from your location</p>
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -466,14 +397,14 @@ export default function StaffJobs() {
                   )}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-[#1b3d8f] py-2.5 font-bold text-white shadow-xs hover:bg-[#142e6d]"
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-brand-blue py-2.5 font-bold text-white shadow-xs hover:bg-brand-navy"
                 >
                   <Navigation className="size-3.5" />
                   <span>Open Google Maps</span>
                 </a>
                 <a
                   href="/staff/map"
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2.5 font-bold text-slate-700 hover:bg-slate-50"
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-brand-line py-2.5 font-bold text-brand-ink hover:bg-brand-paper"
                 >
                   <Compass className="size-3.5" />
                   <span>View in Field Map</span>

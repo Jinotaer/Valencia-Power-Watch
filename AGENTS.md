@@ -19,14 +19,15 @@
 ## Routing (read before adding pages)
 
 - No React Router usage. `src/App.jsx` selects pages with exact `window.location.pathname` checks and navigation uses plain `<a href>`. Add a new page as a branch in `App.jsx` and link with an anchor; don't introduce `react-router-dom` (installed but unused) or `useNavigate`.
-- `/admin/*` falls through to `AdminDashboard`, so sidebar entries for `/admin/reports`, `/admin/response`, `/admin/analytics`, and `/admin/settings` render the dashboard. `/admin/map` has its own page. `/community` and `/staff` (outside `/login` and `/forgot-password`) render the marketing landing page.
+- `/admin/*` falls through to `AdminDashboard`, so sidebar entries for `/admin/response`, `/admin/analytics`, and `/admin/settings` render the dashboard. `/admin/map` and `/admin/reports` have their own pages. `/community` and `/staff` (outside `/login` and `/forgot-password`) render the marketing landing page.
 - No auth guard: `/admin` renders without a session, and login performs no role check.
 - 0-byte, unimported placeholders: `src/pages/resident/{home,map,profile,reports}.jsx`, `src/pages/auth/admin/register.jsx`, `src/pages/auth/resident-staff/register.jsx`.
 
 ## Data and auth
 
-- Admin pages (`users`, `schedules`, `barangay`, `map`) use hardcoded arrays in `useState`; there is no API, fetch, or persistence. Reload discards edits.
-- The only real backend integration is Supabase auth (`src/lib/supabase.js`). Create `client/.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; without both, `supabase` is `null` and auth pages return "not configured" errors. `.env.local` is gitignored.
+- Admin pages (`users`, `schedules`, `map`) use hardcoded arrays in `useState`; there is no API, fetch, or persistence. Reload discards edits. `barangay` is the exception: it reads and writes `public.barangays` through `src/lib/barangays.js`.
+- The only real backend integration is Supabase (`src/lib/supabase.js`). Create `client/.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; without both, `supabase` is `null` and auth pages return "not configured" errors. `.env.local` is gitignored.
+- Resident reports persist in Supabase: `src/lib/reports.js` writes to `public.reports` and uploads photo/video evidence to the private `report-evidence` Storage bucket. Admin barangays persist in `public.barangays`. Run `supabase/user.sql`, then `supabase/report.sql`, then `supabase/barangay.sql` in the Supabase SQL Editor once to create the tables, RLS policies, and bucket.
 - Password-reset emails redirect to `/{community|staff|admin}/reset-password`, but no reset-password route or page exists yet.
 
 ## Styling and UI

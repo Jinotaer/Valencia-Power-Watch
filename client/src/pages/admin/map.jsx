@@ -6,195 +6,30 @@ import {
   LocateFixed,
   Maximize2,
   Minimize2,
+  Share2,
+  Wrench,
   Zap,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
-import L from 'leaflet'
+import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import AdminNavbar from '../../components/admin/navbar'
 import AdminSidebar from '../../components/admin/sidebar'
 import {
+  VALENCIA_CENTER,
+  activeOutages,
+  barangayCenters,
+  feederLines,
+  icons,
+  openReports,
+  resolvedIncidents,
+  scheduledOutages,
+} from './mapData'
+import { FlyToControl, LayerToggle } from './mapControls'
+import {
   SidebarInset,
   SidebarProvider,
 } from '../../components/ui/sidebar'
-
-// Valencia City Center Coordinates
-const VALENCIA_CENTER = [7.9042, 125.0961]
-
-// Official 31 Barangays of Valencia City with coordinates
-const barangayCenters = [
-  { name: 'Poblacion', lat: 7.9095, lng: 125.0935, households: 8420 },
-  { name: 'Bagontapay', lat: 7.9210, lng: 125.1150, households: 3100 },
-  { name: 'Batangan', lat: 7.8755, lng: 125.0890, households: 2850 },
-  { name: 'Catumbalon', lat: 7.9305, lng: 125.0700, households: 2100 },
-  { name: 'Colonia', lat: 7.8980, lng: 125.0600, households: 1950 },
-  { name: 'Concepcion', lat: 7.9180, lng: 125.1050, households: 1800 },
-  { name: 'Dagat-Kidavao', lat: 7.9400, lng: 125.0800, households: 1650 },
-  { name: 'Guinoyuran', lat: 7.8900, lng: 125.0550, households: 2900 },
-  { name: 'Laligan', lat: 7.9250, lng: 125.1200, households: 2200 },
-  { name: 'Lilingayon', lat: 7.8700, lng: 125.0950, households: 2450 },
-  { name: 'Lourdes', lat: 7.9150, lng: 125.0880, households: 3600 },
-  { name: 'Lumbayao', lat: 7.9200, lng: 125.1100, households: 3100 },
-  { name: 'Mailag', lat: 7.9350, lng: 125.0750, households: 2750 },
-  { name: 'San Carlos', lat: 7.8950, lng: 125.0650, households: 2300 },
-  { name: 'Sugod', lat: 7.9000, lng: 125.0920, households: 3200 },
-  { name: 'Tongantongan', lat: 7.9060, lng: 125.0980, households: 2950 },
-  { name: 'Bantuanon', lat: 7.8800, lng: 125.0850, households: 1500 },
-  { name: 'Barobo', lat: 7.8850, lng: 125.0600, households: 1400 },
-  { name: 'Datu Salumay', lat: 7.9380, lng: 125.0680, households: 1200 },
-  { name: 'Kahaponan', lat: 7.9300, lng: 125.0900, households: 2400 },
-  { name: 'Musuan', lat: 7.8705, lng: 125.0500, households: 1100 },
-  { name: 'Lumbo', lat: 7.9120, lng: 125.0800, households: 1800 },
-  { name: 'Tugaya', lat: 7.8930, lng: 125.1100, households: 1300 },
-  { name: 'Sinayawan', lat: 7.9450, lng: 125.1150, households: 1250 },
-  { name: 'Dampas', lat: 7.8680, lng: 125.0750, households: 980 },
-  { name: 'San Isidro', lat: 7.9500, lng: 125.1000, households: 1600 },
-  { name: 'Vintar', lat: 7.8600, lng: 125.0680, households: 850 },
-  { name: 'Mt. Nebo', lat: 7.8550, lng: 125.0800, households: 750 },
-  { name: 'Pinatilan', lat: 7.9130, lng: 125.1020, households: 2100 },
-  { name: 'Lurugan', lat: 7.8780, lng: 125.0980, households: 1050 },
-  { name: 'Mabuhay', lat: 7.9420, lng: 125.0920, households: 1350 },
-]
-
-const activeOutages = [
-  { id: 'OUT-001', lat: 7.9210, lng: 125.1150, barangay: 'Bagontapay', cause: 'Fallen tree on 13.2kV line', affected: 1250, since: '10:24 AM' },
-  { id: 'OUT-002', lat: 7.9150, lng: 125.0880, barangay: 'Lourdes', cause: 'Feeder FDR-03 fault', affected: 980, since: '11:02 AM' },
-]
-
-const scheduledOutages = [
-  { id: 'SCH-001', lat: 7.8900, lng: 125.0550, barangay: 'Guinoyuran', reason: 'Substation maintenance', date: 'Today, 2:00–5:00 PM' },
-]
-
-const openReports = [
-  { id: 'RPT-001', lat: 7.8980, lng: 125.0600, barangay: 'Colonia', type: 'Flickering lights', submitted: '9:45 AM' },
-  { id: 'RPT-002', lat: 7.9060, lng: 125.0980, barangay: 'Tongantongan', type: 'No power', submitted: '10:15 AM' },
-  { id: 'RPT-003', lat: 7.9305, lng: 125.0700, barangay: 'Catumbalon', type: 'Voltage fluctuation', submitted: '10:50 AM' },
-]
-
-const resolvedIncidents = [
-  { id: 'RES-001', lat: 7.9000, lng: 125.0920, barangay: 'Sugod', resolved: 'Yesterday, 4:30 PM' },
-  { id: 'RES-002', lat: 7.9350, lng: 125.0750, barangay: 'Mailag', resolved: 'Yesterday, 6:15 PM' },
-]
-
-// Feeder 13.2kV Primary Lines Network
-const feederLines = [
-  [
-    [7.9095, 125.0935],
-    [7.9210, 125.1150],
-    [7.9350, 125.0750],
-    [7.9305, 125.0700],
-    [7.9095, 125.0935],
-  ],
-  [
-    [7.9095, 125.0935],
-    [7.8900, 125.0550],
-    [7.8705, 125.0500],
-    [7.8755, 125.0890],
-    [7.9095, 125.0935],
-  ],
-  [
-    [7.9095, 125.0935],
-    [7.9150, 125.0880],
-    [7.8980, 125.0600],
-    [7.8850, 125.0600],
-    [7.8700, 125.0950],
-    [7.9060, 125.0980],
-    [7.9095, 125.0935],
-  ],
-]
-
-function makeDotIcon(color, size = 12) {
-  return L.divIcon({
-    className: '',
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.35);"></div>`,
-  })
-}
-
-const icons = {
-  activeOutage: makeDotIcon('#ef4444', 14),
-  scheduled: makeDotIcon('#3b82f6', 12),
-  openReport: makeDotIcon('#f59e0b', 12),
-  resolved: makeDotIcon('#22c55e', 10),
-  barangay: makeDotIcon('#334155', 8),
-}
-
-function FlyToControl({ target }) {
-  const map = useMap()
-  useEffect(() => {
-    if (target) {
-      map.flyTo([target.lat, target.lng], 14, { duration: 1.2 })
-    }
-  }, [target, map])
-  return null
-}
-
-function ScadaBar() {
-  return (
-    <div className="flex items-center gap-3 overflow-x-auto bg-[#0a1120] px-4 py-2 font-mono text-[11px] tracking-wide text-slate-300 scrollbar-none border-b border-slate-800">
-      <span className="flex items-center gap-1.5 shrink-0">
-        <span className="size-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.6)]" />
-        <span className="text-slate-400">SCADA GRID:</span>
-        <span className="font-semibold text-emerald-400">NOMINAL 100%</span>
-      </span>
-      <span className="text-slate-700">|</span>
-      <span className="shrink-0">
-        <span className="text-slate-400">LOAD:</span>{' '}
-        <span className="font-semibold text-sky-400">68.4 MW</span>
-        <span className="text-slate-500"> / 75.0 MW</span>
-      </span>
-      <span className="text-slate-700">|</span>
-      <span className="shrink-0">
-        <span className="text-slate-400">FREQ:</span>{' '}
-        <span className="font-semibold text-white">60.01 Hz</span>
-      </span>
-      <span className="text-slate-700">|</span>
-      <span className="shrink-0">
-        <span className="text-slate-400">FEEDERS:</span>{' '}
-        <span className="font-semibold text-sky-400">3/4 OK</span>
-        <span className="text-slate-600"> · </span>
-        <span className="font-semibold text-red-400">1 FAULT (FDR-03)</span>
-      </span>
-      <span className="text-slate-700">|</span>
-      <span className="shrink-0">
-        <span className="text-slate-400">NODES:</span>{' '}
-        <span className="font-semibold text-sky-400">31/31 BGRYS SYNCED</span>
-      </span>
-      <span className="text-slate-700">|</span>
-      <span className="shrink-0">
-        <span className="text-slate-400">AI ENGINE:</span>{' '}
-        <span className="font-semibold text-emerald-400">OPTIMAL (99.4%)</span>
-      </span>
-    </div>
-  )
-}
-
-function LayerToggle({ label, checked, onChange, icon, tag, tagColor, count }) {
-  return (
-    <label className="flex items-center gap-2.5 py-1.5 cursor-pointer group">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onChange}
-        className="size-4 rounded border-slate-300 text-brand-blue accent-brand-blue cursor-pointer"
-      />
-      {icon && <span className="text-sm">{icon}</span>}
-      <span className="flex-1 text-[13px] text-slate-700 group-hover:text-slate-900 font-medium">
-        {label}
-      </span>
-      {tag && (
-        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${tagColor || 'bg-slate-100 text-slate-500'}`}>
-          {tag}
-        </span>
-      )}
-      {count !== undefined && (
-        <span className="text-xs tabular-nums text-slate-400 font-medium">{count}</span>
-      )}
-    </label>
-  )
-}
 
 export default function AdminMap() {
   const [layers, setLayers] = useState({
@@ -265,34 +100,75 @@ export default function AdminMap() {
   return (
     <SidebarProvider>
       <AdminSidebar activePath="/admin/map" />
-      <SidebarInset className="bg-[#f8fafc] min-h-screen flex flex-col">
-        <AdminNavbar title="Operations" section="Incident Map" />
+      <SidebarInset className="bg-brand-paper min-h-screen flex flex-col">
+        <AdminNavbar title="OPERATIONS" section="Power Outage Map & GIS Hotspots" />
 
-        <main className="flex-1 flex flex-col overflow-hidden">
-          {/* Top Page Header */}
-          <div className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-200 bg-white">
+        <main className="flex-1 p-3 sm:p-5 flex flex-col gap-3 overflow-hidden">
+          {/* Header Title Bar */}
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[.16em] text-slate-400">OPERATIONS</p>
-              <h1 className="text-lg font-bold text-slate-900">Power Outage Map & GIS Hotspots</h1>
+              <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-brand-muted">
+                OPERATIONS
+              </p>
+              <h1 className="text-xl sm:text-2xl font-black text-brand-ink tracking-tight">
+                Power Outage Map & GIS Hotspots
+              </h1>
             </div>
 
             <button
               type="button"
               onClick={() => setShowMobileSidebar(!showMobileSidebar)}
-              className="lg:hidden flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              className="lg:hidden flex items-center gap-1.5 rounded-xl border border-brand-line bg-white px-3 py-1.5 text-xs font-bold text-brand-ink shadow-xs"
             >
               <Layers className="size-4" />
               <span>Layers</span>
             </button>
           </div>
 
-          {/* Dark SCADA Telemetry Bar */}
-          <ScadaBar />
+          {/* Floating Dark SCADA Telemetry Bar */}
+          <div className="flex items-center gap-3.5 overflow-x-auto rounded-xl bg-brand-navy px-4 py-2.5 font-mono text-[11px] tracking-wide text-brand-line shadow-md scrollbar-none border border-brand-navy shrink-0">
+            <span className="flex items-center gap-1.5 shrink-0">
+              <span className="size-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.8)]" />
+              <span className="text-brand-muted">SCADA GRID:</span>
+              <span className="font-extrabold text-emerald-400">NOMINAL 100%</span>
+            </span>
+            <span className="text-brand-ink">|</span>
+            <span className="shrink-0">
+              <span className="text-brand-muted">LOAD:</span>{' '}
+              <span className="font-extrabold text-brand-blue">68.4 MW</span>
+              <span className="text-brand-muted"> / 75.0 MW</span>
+            </span>
+            <span className="text-brand-ink">|</span>
+            <span className="shrink-0">
+              <span className="text-brand-muted">FREQ:</span>{' '}
+              <span className="font-extrabold text-white">60.01 Hz</span>
+            </span>
+            <span className="text-brand-ink">|</span>
+            <span className="shrink-0">
+              <span className="text-brand-muted">FEEDERS:</span>{' '}
+              <span className="font-extrabold text-brand-blue">3/4 OK</span>
+              <span className="text-brand-muted"> · </span>
+              <span className="font-extrabold text-red-400">1 FAULT (FDR-03)</span>
+            </span>
+            <span className="text-brand-ink">|</span>
+            <span className="shrink-0">
+              <span className="text-brand-muted">NODES:</span>{' '}
+              <span className="font-extrabold text-brand-blue">31/31 BGRYS SYNCED</span>
+            </span>
+            <span className="text-brand-ink">|</span>
+            <span className="shrink-0">
+              <span className="text-brand-muted">AI ENGINE:</span>{' '}
+              <span className="font-extrabold text-emerald-400">OPTIMAL (99.4%)</span>
+            </span>
+          </div>
 
-          {/* Main Map + Right Control Panel Layout */}
-          <div ref={mapContainerRef} className="flex-1 flex flex-col lg:flex-row relative overflow-hidden">
-            {/* Real Leaflet Map Container */}
-            <div className="flex-1 relative min-h-[450px]">
+          {/* Map + Sidebar Layout Card */}
+          <div
+            ref={mapContainerRef}
+            className="flex-1 flex flex-col lg:flex-row gap-3 min-h-[550px] relative overflow-hidden"
+          >
+            {/* Real Leaflet Map Container Card */}
+            <div className="flex-1 relative rounded-2xl border border-brand-line/90 bg-white overflow-hidden shadow-xs min-h-[450px]">
               <MapContainer
                 ref={mapRef}
                 center={VALENCIA_CENTER}
@@ -311,7 +187,7 @@ export default function AdminMap() {
                       key={idx}
                       positions={line}
                       pathOptions={{
-                        color: idx === 0 ? '#64748b' : idx === 1 ? '#475569' : '#334155',
+                        color: idx === 0 ? '#555b66' : idx === 1 ? '#172b68' : '#101114',
                         weight: 2.5,
                         dashArray: '6, 6',
                       }}
@@ -356,7 +232,7 @@ export default function AdminMap() {
                     <Marker key={s.id} position={[s.lat, s.lng]} icon={icons.scheduled}>
                       <Popup>
                         <div className="text-xs space-y-1">
-                          <strong className="text-blue-600 block">{s.id} — Scheduled Outage</strong>
+                          <strong className="text-brand-blue block">{s.id} — Scheduled Outage</strong>
                           <div><strong>Barangay:</strong> {s.barangay}</div>
                           <div><strong>Reason:</strong> {s.reason}</div>
                           <div><strong>Window:</strong> {s.date}</div>
@@ -400,7 +276,7 @@ export default function AdminMap() {
                     <Marker key={b.name} position={[b.lat, b.lng]} icon={icons.barangay}>
                       <Popup>
                         <div className="text-xs space-y-1">
-                          <strong className="text-slate-800 block">Brgy. {b.name}</strong>
+                          <strong className="text-brand-ink block">Brgy. {b.name}</strong>
                           <div><strong>Total households:</strong> {b.households.toLocaleString()}</div>
                         </div>
                       </Popup>
@@ -408,106 +284,133 @@ export default function AdminMap() {
                   ))}
               </MapContainer>
 
-              {/* Floating Action Buttons on Map Edge */}
+              {/* Floating Action Buttons on Map Right Edge (Matching Reference Screenshot) */}
               <div className="absolute bottom-6 right-4 z-[400] flex flex-col gap-2">
+                {/* 1. Compass / Reset View */}
                 <button
                   type="button"
                   onClick={resetView}
-                  className="flex size-10 items-center justify-center rounded-xl bg-slate-900/90 text-white hover:bg-slate-800 shadow-md transition-colors"
+                  className="flex size-10 items-center justify-center rounded-xl bg-white border border-brand-line text-brand-ink hover:bg-brand-paper shadow-md transition-all cursor-pointer"
                   title="Reset compass"
                 >
-                  <Compass className="size-4.5" />
+                  <Compass className="size-4.5 text-brand-muted" />
                 </button>
+
+                {/* 2. Locate My Location */}
                 <button
                   type="button"
                   onClick={locateMe}
-                  className="flex size-10 items-center justify-center rounded-xl bg-slate-900/90 text-white hover:bg-slate-800 shadow-md transition-colors"
-                  title="My location"
+                  className="flex size-10 items-center justify-center rounded-xl bg-white border border-brand-line text-brand-ink hover:bg-brand-paper shadow-md transition-all cursor-pointer"
+                  title="Locate"
                 >
-                  <LocateFixed className="size-4.5" />
+                  <LocateFixed className="size-4.5 text-brand-muted" />
                 </button>
+
+                {/* 3. Flame / Hotspots (Red) */}
                 <button
                   type="button"
                   onClick={() => toggleLayer('activeOutages')}
-                  className="flex size-10 items-center justify-center rounded-xl bg-red-500 text-white hover:bg-red-600 shadow-md transition-colors"
-                  title="Active outages"
+                  className="flex size-10 items-center justify-center rounded-xl bg-[#dc2626] text-white hover:bg-red-700 shadow-md transition-all cursor-pointer"
+                  title="Outage fire report"
                 >
                   <Flame className="size-4.5" />
                 </button>
+
+                {/* 4. Dispatch / Tools (Yellow/Amber) */}
+                <button
+                  type="button"
+                  onClick={() => window.open('/admin/response', '_self')}
+                  className="flex size-10 items-center justify-center rounded-xl bg-[#d97706] text-white hover:bg-amber-700 shadow-md transition-all cursor-pointer"
+                  title="Field dispatch"
+                >
+                  <Wrench className="size-4.5" />
+                </button>
+
+                {/* 5. Matrix / Feeder Layer (Blue) */}
+                <button
+                  type="button"
+                  onClick={() => toggleLayer('darkMatrix')}
+                  className="flex size-10 items-center justify-center rounded-xl bg-brand-blue text-white hover:bg-brand-navy shadow-md transition-all cursor-pointer"
+                  title="Matrix mode"
+                >
+                  <Share2 className="size-4.5" />
+                </button>
+
+                {/* 6. Active Feeders (Bright Red/Yellow) */}
                 <button
                   type="button"
                   onClick={() => toggleLayer('feeders')}
-                  className="flex size-10 items-center justify-center rounded-xl bg-amber-500 text-white hover:bg-amber-600 shadow-md transition-colors"
-                  title="Feeders network"
+                  className="flex size-10 items-center justify-center rounded-xl bg-[#b91c1c] text-white hover:bg-red-800 shadow-md transition-all cursor-pointer"
+                  title="13.2kV Feeders"
                 >
-                  <Zap className="size-4.5" />
+                  <Zap className="size-4.5 fill-current" />
                 </button>
               </div>
             </div>
 
-            {/* Right Control Sidebar (Desktop & Slide-over) */}
+            {/* Right Operations Sidebar Card */}
             <aside
-              className={`w-full lg:w-80 shrink-0 overflow-y-auto border-l border-slate-200 bg-white p-4 sm:p-5 space-y-5 ${
+              className={`w-full lg:w-80 shrink-0 overflow-y-auto rounded-2xl border border-brand-line/90 bg-white p-4 sm:p-5 space-y-5 shadow-xs ${
                 showMobileSidebar ? 'block' : 'hidden lg:block'
               }`}
             >
               {/* Legend Section */}
               <section>
-                <h2 className="text-sm font-extrabold text-slate-800 mb-2.5">Legend</h2>
+                <h2 className="text-sm font-extrabold text-brand-ink mb-2.5">Legend</h2>
                 <div className="space-y-2">
                   {[
                     { color: '#ef4444', label: 'Active Outage', count: activeOutages.length },
-                    { color: '#3b82f6', label: 'Scheduled Outage', count: scheduledOutages.length },
+                    { color: '#24449a', label: 'Scheduled Outage', count: scheduledOutages.length },
                     { color: '#f59e0b', label: 'Open Reports & Verification', count: openReports.length },
                     { color: '#22c55e', label: 'Resolved Incident', count: resolvedIncidents.length },
-                    { color: '#334155', label: 'Barangay Centers', count: 31 },
+                    { color: '#172b68', label: 'Barangay Centers', count: 31 },
                   ].map((item) => (
-                    <div key={item.label} className="flex items-center justify-between text-xs text-slate-600">
+                    <div key={item.label} className="flex items-center justify-between text-xs text-brand-muted">
                       <span className="flex items-center gap-2 font-medium">
                         <span className="size-2.5 rounded-full shrink-0" style={{ background: item.color }} />
                         {item.label}
                       </span>
-                      <span className="tabular-nums font-semibold text-slate-400">{item.count}</span>
+                      <span className="tabular-nums font-semibold text-brand-muted">{item.count}</span>
                     </div>
                   ))}
                 </div>
               </section>
 
               {/* Outage Density Heatmap Gradient Bar */}
-              <section className="border-t border-slate-100 pt-4">
-                <h2 className="text-sm font-extrabold text-slate-800 mb-2 flex items-center gap-1.5">
+              <section className="border-t border-brand-line pt-4">
+                <h2 className="text-sm font-extrabold text-brand-ink mb-2 flex items-center gap-1.5">
                   🔥 Outage Density Heatmap
                 </h2>
                 <div
                   className="h-2.5 w-full rounded-full shadow-inner"
-                  style={{ background: 'linear-gradient(to right, #3b82f6, #f59e0b, #ef4444)' }}
+                  style={{ background: 'linear-gradient(to right, #24449a, #f59e0b, #ef4444)' }}
                 />
-                <div className="flex justify-between mt-1 text-[10px] text-slate-400 font-semibold uppercase">
+                <div className="flex justify-between mt-1 text-[10px] text-brand-muted font-semibold uppercase">
                   <span>Low</span>
                   <span>Moderate</span>
                   <span>Critical Hotspot</span>
                 </div>
-                <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                <p className="mt-2 text-[11px] leading-relaxed text-brand-muted">
                   Current incidents and open unlinked reports only; scheduled and resolved outages are excluded.
                 </p>
               </section>
 
               {/* Map Controls */}
-              <section className="border-t border-slate-100 pt-4 space-y-3">
+              <section className="border-t border-brand-line pt-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-extrabold text-slate-800">Map Controls</h2>
+                  <h2 className="text-sm font-extrabold text-brand-ink">Map Controls</h2>
                   <button
                     type="button"
                     onClick={toggleFullscreen}
-                    className="flex items-center gap-1 text-xs font-bold text-brand-blue hover:text-brand-navy"
+                    className="flex items-center gap-1 text-xs font-bold text-brand-blue hover:text-brand-navy cursor-pointer"
                   >
                     {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-                    <span>{isFullscreen ? 'Exit' : 'Fullscreen'}</span>
+                    <span>Fullscreen</span>
                   </button>
                 </div>
 
                 <div>
-                  <label className="text-xs font-semibold text-slate-600 block mb-1">
+                  <label className="text-xs font-semibold text-brand-muted block mb-1">
                     🎯 Fly to Barangay:
                   </label>
                   <select
@@ -516,7 +419,7 @@ export default function AdminMap() {
                       const b = barangayCenters.find((bc) => bc.name === e.target.value)
                       setFlyTarget(b || null)
                     }}
-                    className="w-full h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue cursor-pointer"
+                    className="w-full h-9 rounded-lg border border-brand-line bg-white px-3 text-xs font-semibold text-brand-ink focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue cursor-pointer"
                   >
                     <option value="">Select a barangay to focus...</option>
                     {barangayCenters.map((b) => (
@@ -529,8 +432,8 @@ export default function AdminMap() {
               </section>
 
               {/* Layers & Smart Grid Checkboxes */}
-              <section className="border-t border-slate-100 pt-4">
-                <h2 className="text-sm font-extrabold text-slate-800 mb-2">Layers & Smart Grid</h2>
+              <section className="border-t border-brand-line pt-4">
+                <h2 className="text-sm font-extrabold text-brand-ink mb-2">Layers & Smart Grid</h2>
                 <div className="space-y-0.5">
                   <LayerToggle
                     label="13.2kV Feeders"
@@ -538,7 +441,7 @@ export default function AdminMap() {
                     checked={layers.feeders}
                     onChange={() => toggleLayer('feeders')}
                     tag="2030"
-                    tagColor="bg-slate-800 text-white"
+                    tagColor="bg-brand-navy text-white"
                   />
                   <LayerToggle
                     label="Cyber 2030 Dark Matrix"
@@ -546,7 +449,7 @@ export default function AdminMap() {
                     checked={layers.darkMatrix}
                     onChange={() => toggleLayer('darkMatrix')}
                     tag="Sci-Fi"
-                    tagColor="bg-violet-100 text-violet-700"
+                    tagColor="bg-[#e5e9f6] text-brand-blue"
                   />
                   <LayerToggle
                     label="Outage Density Heatmap"
@@ -554,9 +457,9 @@ export default function AdminMap() {
                     checked={layers.heatmap}
                     onChange={() => toggleLayer('heatmap')}
                     tag="Current"
-                    tagColor="bg-emerald-100 text-emerald-700"
+                    tagColor="bg-[#fff1a8] text-[#221506]"
                   />
-                  <div className="border-t border-slate-100 my-1.5" />
+                  <div className="border-t border-brand-line my-1.5" />
                   <LayerToggle
                     label="Active Outages"
                     checked={layers.activeOutages}
@@ -581,7 +484,7 @@ export default function AdminMap() {
                     onChange={() => toggleLayer('scheduled')}
                     count={scheduledOutages.length}
                   />
-                  <div className="border-t border-slate-100 my-1.5" />
+                  <div className="border-t border-brand-line my-1.5" />
                   <LayerToggle
                     label="Barangay Centers"
                     checked={layers.barangays}
@@ -589,22 +492,32 @@ export default function AdminMap() {
                     count={31}
                   />
                   <LayerToggle
+                    label="Roads"
+                    checked={layers.roads}
+                    onChange={() => toggleLayer('roads')}
+                  />
+                  <LayerToggle
+                    label="Street Map"
+                    checked={!layers.satellite}
+                    onChange={() => setLayers((prev) => ({ ...prev, satellite: false }))}
+                  />
+                  <LayerToggle
                     label="Satellite View"
                     checked={layers.satellite}
-                    onChange={() => toggleLayer('satellite')}
+                    onChange={() => setLayers((prev) => ({ ...prev, satellite: true }))}
                   />
                 </div>
               </section>
 
               {/* Help Information Note */}
-              <p className="text-[11px] leading-relaxed text-slate-400 border-t border-slate-100 pt-4">
-                Pins open individual outage or report details and dispatch actions. Heatmap shows current incidents and open unlinked reports. Satellite View adds aerial context for field response.
+              <p className="text-[11px] leading-relaxed text-brand-muted border-t border-brand-line pt-4">
+                Pins open individual outage or report details and dispatch actions. Heatmap shows current incidents and open unlinked reports only; scheduled and resolved outages are excluded. Street Map uses labeled roads and places, not 360-degree Street View; Satellite View adds aerial context for field response. Official barangay boundary polygons are not configured; barangay centers are shown instead.
               </p>
 
-              {/* Bottom Quick Link */}
+              {/* Bottom Quick Link Button */}
               <a
                 href="/admin/reports"
-                className="flex items-center justify-between border-t border-slate-100 pt-4 text-xs font-bold text-slate-700 hover:text-brand-blue transition-colors"
+                className="flex items-center justify-between rounded-xl border border-brand-line bg-white p-3 text-xs font-bold text-brand-ink hover:text-brand-blue hover:border-brand-blue/40 shadow-xs transition-all cursor-pointer"
               >
                 <span>Open outage monitoring</span>
                 <ArrowRight className="size-4" />

@@ -37,20 +37,20 @@ export function Pagination({
 
   return (
     <div
-      className={`flex flex-col gap-4 px-5 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between border-t border-slate-100 ${className}`}
+      className={`flex flex-col gap-4 px-5 py-4 text-xs text-brand-muted sm:flex-row sm:items-center sm:justify-between border-t border-brand-line ${className}`}
     >
       {/* Results Counter: "Showing 1 to 1 of 1 results" */}
-      <p className="text-xs text-slate-500">
-        Showing <strong className="font-semibold text-slate-800">{firstIndex}</strong> to{' '}
-        <strong className="font-semibold text-slate-800">{lastIndex}</strong> of{' '}
-        <strong className="font-semibold text-slate-800">{total}</strong> results
+      <p className="text-xs text-brand-muted">
+        Showing <strong className="font-semibold text-brand-ink">{firstIndex}</strong> to{' '}
+        <strong className="font-semibold text-brand-ink">{lastIndex}</strong> of{' '}
+        <strong className="font-semibold text-brand-ink">{total}</strong> results
       </p>
 
       {/* Controls Container */}
       <div className="flex flex-wrap items-center gap-4">
         {/* Page Size Selector: "Show [ 10 v ] per page" */}
         {onPageSizeChange && (
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-xs text-brand-muted">
             <span>Show</span>
             <Select
               value={String(pageSize)}
@@ -58,7 +58,7 @@ export function Pagination({
             >
               <SelectTrigger
                 size="sm"
-                className="h-8 min-w-[70px] rounded-lg border-slate-200 bg-white text-xs font-semibold text-slate-700 shadow-xs focus:ring-[#0e4d64]/20"
+                className="h-8 min-w-[70px] rounded-lg border-brand-line bg-white text-xs font-semibold text-brand-ink shadow-xs focus:ring-brand-navy/20"
               >
                 <SelectValue />
               </SelectTrigger>
@@ -79,7 +79,7 @@ export function Pagination({
           <Button
             variant="outline"
             size="icon-sm"
-            className="h-8 w-8 rounded-lg border-slate-200 text-slate-600 disabled:opacity-40 hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
+            className="h-8 w-8 rounded-lg border-brand-line text-brand-muted disabled:opacity-40 hover:bg-brand-paper hover:text-brand-ink cursor-pointer"
             onClick={() => onPageChange(page - 1)}
             disabled={page <= 1}
             aria-label="Previous page"
@@ -89,7 +89,7 @@ export function Pagination({
 
           {getPageNumbers().map((item, index) =>
             item === '...' ? (
-              <span key={`dots-${index}`} className="px-2 text-xs text-slate-400">
+              <span key={`dots-${index}`} className="px-2 text-xs text-brand-muted">
                 ...
               </span>
             ) : (
@@ -99,8 +99,8 @@ export function Pagination({
                 size="icon-sm"
                 className={`h-8 w-8 rounded-lg text-xs font-semibold cursor-pointer ${
                   item === page
-                    ? 'bg-[#0e4d64] text-white hover:bg-[#0a3a4b]'
-                    : 'text-slate-600 hover:bg-slate-100'
+                    ? 'bg-brand-navy text-white hover:bg-brand-navy'
+                    : 'text-brand-muted hover:bg-[#e5e9f6]'
                 }`}
                 onClick={() => onPageChange(Number(item))}
                 aria-label={`Go to page ${item}`}
@@ -114,7 +114,7 @@ export function Pagination({
           <Button
             variant="outline"
             size="icon-sm"
-            className="h-8 w-8 rounded-lg border-slate-200 text-slate-600 disabled:opacity-40 hover:bg-slate-50 hover:text-slate-900 cursor-pointer"
+            className="h-8 w-8 rounded-lg border-brand-line text-brand-muted disabled:opacity-40 hover:bg-brand-paper hover:text-brand-ink cursor-pointer"
             onClick={() => onPageChange(page + 1)}
             disabled={page >= pageCount}
             aria-label="Next page"
