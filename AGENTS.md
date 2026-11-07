@@ -19,22 +19,22 @@
 ## Routing (read before adding pages)
 
 - No React Router usage. `src/App.jsx` selects pages with exact `window.location.pathname` checks and navigation uses plain `<a href>`. Add a new page as a branch in `App.jsx` and link with an anchor; don't introduce `react-router-dom` (installed but unused) or `useNavigate`.
-- `/admin/*` falls through to `AdminDashboard`, so sidebar entries for `/admin/response`, `/admin/analytics`, and `/admin/settings` render the dashboard. `/admin/map` and `/admin/reports` have their own pages. `/community` and `/staff` (outside `/login` and `/forgot-password`) render the marketing landing page.
-- No auth guard: `/admin` renders without a session, and login performs no role check.
-- 0-byte, unimported placeholders: `src/pages/resident/{home,map,profile,reports}.jsx`, `src/pages/auth/admin/register.jsx`, `src/pages/auth/resident-staff/register.jsx`.
+- `/admin/*` falls through to `AdminDashboard`, so sidebar entries for `/admin/response`, `/admin/analytics`, and `/admin/settings` render the dashboard; `/admin/users`, `/admin/residents`, `/admin/schedules`, `/admin/barangay`, `/admin/map`, and `/admin/reports` have their own pages. `/community` renders `ResidentHome` and `/staff` renders `StaffHome`.
+- Section guard in `App.jsx`: signed-in users landing in another role's section are redirected to their own portal (`/admin`, `/staff`, or `/community`), and signed-out users to the section login. `/login`, `/community/login`, and `/staff/login` all render the same unified login (`src/pages/auth/resident-staff/login.jsx`), which routes each user by their role after sign-in.
+- `src/pages/auth/admin/register.jsx` is a 0-byte unimported placeholder.
 
 ## Data and auth
 
-- Admin pages (`users`, `schedules`, `map`) use hardcoded arrays in `useState`; there is no API, fetch, or persistence. Reload discards edits. `barangay` is the exception: it reads and writes `public.barangays` through `src/lib/barangays.js`.
+- Admin `map` uses a hardcoded array in `useState`; there is no API, fetch, or persistence. Reload discards edits. `barangay` reads and writes `public.barangays` through `src/lib/barangays.js`; `schedules` reads and writes `public.schedules` through `src/lib/schedules.js`; `users` shows staff + admin rows and creates staff via auth signup through `src/lib/supabase.js`, while `residents` shows resident rows only (role writes come from the `handle_new_user()` trigger — admins promote users with SQL, not from these pages).
 - The only real backend integration is Supabase (`src/lib/supabase.js`). Create `client/.env.local` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; without both, `supabase` is `null` and auth pages return "not configured" errors. `.env.local` is gitignored.
-- Resident reports persist in Supabase: `src/lib/reports.js` writes to `public.reports` and uploads photo/video evidence to the private `report-evidence` Storage bucket. Admin barangays persist in `public.barangays`. Run `supabase/user.sql`, then `supabase/report.sql`, then `supabase/barangay.sql` in the Supabase SQL Editor once to create the tables, RLS policies, and bucket.
+- Resident reports persist in Supabase: `src/lib/reports.js` writes to `public.reports` and uploads photo/video evidence to the private `report-evidence` Storage bucket. Admin barangays persist in `public.barangays`. Admin schedules persist in `public.schedules` (see `supabase/schedule.sql`). Run `supabase/user.sql`, then `supabase/report.sql`, then `supabase/barangay.sql`, then `supabase/schedule.sql` in the Supabase SQL Editor once to create the tables, RLS policies, and bucket.
 - Password-reset emails redirect to `/{community|staff|admin}/reset-password`, but no reset-password route or page exists yet.
 
 ## Styling and UI
 
 - Tailwind v4 via `@tailwindcss/vite`; there is no `tailwind.config.*`. Theme tokens live in `src/index.css` under `@theme` (`brand-blue`, `brand-navy`, `brand-yellow`, `brand-paper`, ...). Prefer those utilities; many existing pages also use arbitrary hex values.
 - shadcn config: `components.json` uses the `base-nova` style, JSX (not TSX), lucide icons, and `@base-ui/react` primitives. UI components are vendored in `src/components/ui/`; ESLint disables the react-refresh rule for that folder. `@` aliases `src/`.
-- PWA: `vite-plugin-pwa` generates the service worker (registered in `src/main.jsx`) and precaches the built shell. `App.jsx` swaps `public/community-manifest.webmanifest` and `public/staff-manifest.webmanifest` by path; both start at their login route. Test install/offline with `npm run build && npm run preview` on localhost — dev mode does not register the service worker. Icons live in `public/icons/`.
+- PWA: `vite-plugin-pwa` generates the service worker (registered in `src/main.jsx`) and precaches the built shell. One shared manifest: `App.jsx` injects `public/community-manifest.webmanifest` for both resident and staff portals (`id: /login`, `start_url: /login`, `scope: /`; `staff-manifest.webmanifest` and the role-picker page were removed). Test install/offline with `npm run build && npm run preview` on localhost — dev mode does not register the service worker. Icons live in `public/icons/`.
 
 ## Build and content
 

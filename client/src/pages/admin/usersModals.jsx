@@ -146,23 +146,6 @@ export function AdminUsersCreateDialog({
             </select>
           </div>
 
-          {/* Status */}
-          <div className="space-y-1">
-            <label htmlFor="user-status" className="text-xs font-semibold text-brand-muted">
-              Account Status
-            </label>
-            <select
-              id="user-status"
-              value={newUser.status || 'Active'}
-              onChange={(e) => setNewUser({ ...newUser, status: e.target.value })}
-              className="h-10 w-full rounded-xl border border-brand-line bg-white px-3 text-sm text-brand-ink outline-none focus:border-brand-navy focus:ring-1 focus:ring-brand-navy"
-            >
-              <option value="Active">Active</option>
-              <option value="Pending">Pending</option>
-              <option value="Disabled">Disabled</option>
-            </select>
-          </div>
-
           <DialogFooter className="pt-3 gap-2">
             <Button
               type="button"

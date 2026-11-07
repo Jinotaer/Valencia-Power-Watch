@@ -4,27 +4,11 @@ import { PortalAuthLayout } from '../../../components/auth/PortalAuthLayout'
 import { Input } from '../../../components/ui/input'
 import { supabase } from '../../../lib/supabase'
 
-const portalConfig = {
-  resident: {
-    title: 'Resident Login',
-    description: 'Sign in to report outages and follow your updates',
-    destination: '/community',
-    accountPrompt: 'New to PowerWatch?',
-    accountLink: 'Create an account',
-    registerPath: '/community/register',
-  },
-  staff: {
-    title: 'Staff Login',
-    description: 'Sign in to manage assigned field response work',
-    destination: '/staff',
-    accountPrompt: 'Need access?',
-    accountLink: 'Contact your system administrator',
-    registerPath: null,
-  },
-}
+// Staff and residents install the same PWA, so one login serves both:
+// after sign-in every account is sent to its own portal.
+const portalForRole = (role) => (role === 'staff' ? '/staff' : role === 'admin' ? '/admin' : '/community')
 
-function PortalLogin({ role = 'resident' }) {
-  const config = portalConfig[role]
+function PortalLogin() {
   const [form, setForm] = useState({ email: '', password: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [status, setStatus] = useState({ type: '', message: '' })
@@ -79,21 +63,9 @@ function PortalLogin({ role = 'resident' }) {
       return
     }
 
-    const userRole = data.user?.user_metadata?.role ||
-                     data.user?.app_metadata?.role ||
-                     (role === 'resident' ? 'resident' : null)
-    if (userRole !== role) {
-      await supabase.auth.signOut()
-      setStatus({
-        type: 'error',
-        message: role === 'resident'
-          ? 'This account is not a resident account.'
-          : 'This account is not a staff account.',
-      })
-      return
-    }
-
-    window.location.assign(config.destination)
+    // Residents land in the community portal, staff in theirs, admins in the
+    // console; section guards in App.jsx keep each portal role-exclusive.
+    window.location.assign(portalForRole(data.user?.user_metadata?.role || data.user?.app_metadata?.role))
   }
 
   return (
@@ -107,24 +79,26 @@ function PortalLogin({ role = 'resident' }) {
         </div>
 
         <div className="mb-6 text-center sm:mb-7">
-          <h1 className="text-2xl font-extrabold tracking-tight text-brand-navy sm:text-3xl">{config.title}</h1>
-          <p className="mt-1.5 text-xs leading-relaxed text-brand-muted sm:mt-2 sm:text-sm">{config.description}</p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-brand-navy sm:text-3xl">Sign in to PowerWatch</h1>
+          <p className="mt-1.5 text-xs leading-relaxed text-brand-muted sm:mt-2 sm:text-sm">
+            Residents report interruptions — field staff manage their assigned response work
+          </p>
         </div>
 
         <form className="space-y-4 sm:space-y-5" onSubmit={handleSubmit} noValidate>
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold uppercase tracking-wider text-brand-muted select-none" htmlFor={`${role}-email`}>EMAIL</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-brand-muted select-none" htmlFor="login-email">EMAIL</label>
             <div className="relative">
               <Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-brand-muted z-10" />
-              <Input className="h-11 w-full rounded-xl border border-brand-line bg-white pl-10 pr-4 text-sm text-brand-ink placeholder:text-brand-muted transition-colors focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/20 sm:h-12" id={`${role}-email`} name="email" type="email" autoComplete="email" placeholder="Enter your email" value={form.email} onChange={updateField} aria-invalid={status.type === 'error'} />
+              <Input className="h-11 w-full rounded-xl border border-brand-line bg-white pl-10 pr-4 text-sm text-brand-ink placeholder:text-brand-muted transition-colors focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/20 sm:h-12" id="login-email" name="email" type="email" autoComplete="email" placeholder="Enter your email" value={form.email} onChange={updateField} aria-invalid={status.type === 'error'} />
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-bold uppercase tracking-wider text-brand-muted select-none" htmlFor={`${role}-password`}>PASSWORD</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-brand-muted select-none" htmlFor="login-password">PASSWORD</label>
             <div className="relative">
               <Lock className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-brand-muted z-10" />
-              <Input className="h-11 w-full rounded-xl border border-brand-line bg-white pl-10 pr-11 text-sm text-brand-ink placeholder:text-brand-muted transition-colors focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/20 sm:h-12" id={`${role}-password`} name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" value={form.password} onChange={updateField} aria-invalid={status.type === 'error'} />
+              <Input className="h-11 w-full rounded-xl border border-brand-line bg-white pl-10 pr-11 text-sm text-brand-ink placeholder:text-brand-muted transition-colors focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/20 sm:h-12" id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Enter your password" value={form.password} onChange={updateField} aria-invalid={status.type === 'error'} />
               <button className="absolute right-3.5 top-1/2 -translate-y-1/2 cursor-pointer rounded p-1 text-brand-muted transition-colors hover:text-brand-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue z-10" type="button" onClick={() => setShowPassword((current) => !current)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
@@ -153,7 +127,7 @@ function PortalLogin({ role = 'resident' }) {
           )}
 
           <div className="flex justify-end pt-0.5">
-            <a href={`/${role === 'resident' ? 'community' : 'staff'}/forgot-password`} className="text-xs font-semibold text-brand-blue transition-colors hover:text-brand-navy hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue">Forgot password?</a>
+            <a href="/community/forgot-password" className="text-xs font-semibold text-brand-blue transition-colors hover:text-brand-navy hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue">Forgot password?</a>
           </div>
 
           <div className="pt-2">
@@ -163,17 +137,13 @@ function PortalLogin({ role = 'resident' }) {
           </div>
 
           <p className="pt-2 text-center text-xs text-brand-muted sm:pt-3">
-            {config.accountPrompt}{' '}
-            {config.registerPath ? (
-              <a
-                href={config.registerPath}
-                className="font-semibold text-brand-blue transition-colors hover:text-brand-navy hover:underline"
-              >
-                {config.accountLink}
-              </a>
-            ) : (
-              <span>{config.accountLink}</span>
-            )}
+            New to PowerWatch?{' '}
+            <a
+              href="/community/register"
+              className="font-semibold text-brand-blue transition-colors hover:text-brand-navy hover:underline"
+            >
+              Create an account
+            </a>
           </p>
         </form>
       </div>
@@ -181,10 +151,4 @@ function PortalLogin({ role = 'resident' }) {
   )
 }
 
-export function ResidentLogin() {
-  return <PortalLogin role="resident" />
-}
-
-export function StaffLogin() {
-  return <PortalLogin role="staff" />
-}
+export default PortalLogin

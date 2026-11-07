@@ -10,6 +10,7 @@ import {
   Map,
   Settings,
   Users,
+  UsersRound,
 } from 'lucide-react'
 import powerWatchLogo from '../../assets/logo.png'
 import { supabase } from '../../lib/supabase'
@@ -37,6 +38,7 @@ const primaryItems = [
 
 const administrationItems = [
   { label: 'Users', icon: Users, href: '/admin/users' },
+  { label: 'Residents', icon: UsersRound, href: '/admin/residents' },
   { label: 'Analytics', icon: BarChart3, href: '/admin/analytics' },
   { label: 'Settings', icon: Settings, href: '/admin/settings' },
 ]

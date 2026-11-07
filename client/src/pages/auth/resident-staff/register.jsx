@@ -8,6 +8,7 @@ import {
   Lock,
   Mail,
   MapPin,
+  Phone,
   User,
   Zap,
 } from 'lucide-react'
@@ -21,6 +22,7 @@ export default function ResidentRegister() {
     fullName: '',
     email: '',
     barangay: '',
+    contactNumber: '',
     password: '',
     confirmPassword: '',
   })
@@ -75,7 +77,7 @@ export default function ResidentRegister() {
     const cleanEmail = form.email.trim().toLowerCase()
     const cleanName = form.fullName.trim()
 
-    const { data, error } = await supabase.auth.signUp({
+    const { error } = await supabase.auth.signUp({
       email: cleanEmail,
       password: form.password,
       options: {
@@ -83,6 +85,7 @@ export default function ResidentRegister() {
           full_name: cleanName,
           barangay: form.barangay,
           address: form.barangay,
+          contact_number: form.contactNumber.trim() || null,
           role: 'resident',
         },
       },
@@ -94,23 +97,7 @@ export default function ResidentRegister() {
       return
     }
 
-    // Attempt direct insert/upsert into public.users if the DB trigger is not active
-    if (data?.user) {
-      try {
-        await supabase.from('users').upsert({
-          id: data.user.id,
-          id_number: `RES-${String(Date.now() % 10000).padStart(4, '0')}`,
-          email: cleanEmail,
-          full_name: cleanName,
-          role: 'resident',
-          address: form.barangay,
-        })
-      } catch (err) {
-        // Non-blocking: trigger or RLS might handle it
-        console.warn('Could not insert directly to public.users:', err)
-      }
-    }
-
+    // The handle_new_user() trigger creates the public.users row
     setLoading(false)
     setSuccess(true)
   }
@@ -208,6 +195,29 @@ export default function ResidentRegister() {
                 autoComplete="email"
                 placeholder="Enter your email"
                 value={form.email}
+                onChange={updateField}
+              />
+            </div>
+          </div>
+
+          {/* Contact Number */}
+          <div className="space-y-1.5">
+            <label
+              className="block text-xs font-bold uppercase tracking-wider text-brand-muted select-none"
+              htmlFor="reg-contact"
+            >
+              CONTACT NUMBER <span className="font-medium normal-case">(optional)</span>
+            </label>
+            <div className="relative">
+              <Phone className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-brand-muted z-10" />
+              <input
+                className="h-11 w-full rounded-xl border border-brand-line bg-white pl-10 pr-4 text-sm text-brand-ink placeholder:text-brand-muted transition-colors focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/20 sm:h-12"
+                id="reg-contact"
+                name="contactNumber"
+                type="tel"
+                autoComplete="tel"
+                placeholder="e.g. +63 917 123 4567"
+                value={form.contactNumber}
                 onChange={updateField}
               />
             </div>

@@ -74,6 +74,7 @@ export default function ResidentHome() {
           ))}
         </section>
 
+        {schedules.length > 0 && (
         <section aria-labelledby="scheduled-heading">
           <div className="mb-2 flex items-center justify-between sm:mb-3">
             <h2 id="scheduled-heading" className="text-sm font-extrabold tracking-[-.02em] text-brand-navy sm:text-base">Scheduled outages</h2>
@@ -83,6 +84,7 @@ export default function ResidentHome() {
             {schedules.slice(0, 3).map((schedule) => <ScheduleCard key={schedule.id} schedule={schedule} />)}
           </div>
         </section>
+        )}
       </main>
 
       <PortalMobileNav role="resident" />

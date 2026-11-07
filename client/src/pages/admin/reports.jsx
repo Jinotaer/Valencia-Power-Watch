@@ -54,7 +54,7 @@ function ReportEvidence({ report }) {
   }
 
   return (
-    <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+    <div className="mt-2.5 grid grid-cols-2 gap-2">
       {photos.map((photo, index) =>
         photo.kind === 'video' ? (
           <video
@@ -64,7 +64,7 @@ function ReportEvidence({ report }) {
             playsInline
             preload="metadata"
             aria-label={photo.label || `Report video ${index + 1}`}
-            className="col-span-2 aspect-video w-full rounded-lg border border-brand-line bg-black object-contain sm:col-span-3"
+            className="col-span-2 aspect-video w-full rounded-lg border border-brand-line bg-black object-contain"
           />
         ) : (
           <img
@@ -279,9 +279,9 @@ export default function AdminReports() {
                             {!access.signedIn ? (
                               <>You are not signed in, so Supabase hides every report. <a className="font-bold text-brand-blue underline underline-offset-4" href="/admin/login">Sign in as an administrator</a>.</>
                             ) : access.role !== 'admin' ? (
-                              <>Signed in as <strong>{access.email}</strong>, but this account's role is <strong>{access.role || 'missing'}</strong>. Promote it in the Supabase SQL Editor, then reload: <code className="rounded bg-[#e5e9f6] px-1">update public.users set role = 'admin' where email = '{access.email}';</code></>
+                              <>Signed in as <strong>{access.email}</strong>, but this account's role is <strong>{access.role || 'missing'}</strong>. Promote it in the Supabase SQL Editor, then reload: <code className="rounded bg-[#e5e9f6] px-1 break-all">update public.users set role = 'admin' where email = '{access.email}';</code></>
                             ) : (
-                              <>Signed in as <strong>{access.email}</strong> with the admin role, but the reports table returned no rows. Re-run <code className="rounded bg-[#e5e9f6] px-1">supabase/report.sql</code> so the “Admins can view all reports” policy exists.</>
+                              <>Signed in as <strong>{access.email}</strong> with the admin role, but the reports table returned no rows. Re-run <code className="rounded bg-[#e5e9f6] px-1 break-all">supabase/report.sql</code> so the “Admins can view all reports” policy exists.</>
                             )}
                           </p>
                         )}
@@ -325,8 +325,8 @@ export default function AdminReports() {
 
         {selectedReport && (
           <Dialog open onOpenChange={(open) => { if (!open) setSelectedReport(null) }}>
-            <DialogContent className="grid max-h-[90vh] w-[calc(100%-1.5rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-2xl bg-white p-0 sm:max-w-3xl">
-              <header className="flex items-start justify-between gap-4 border-b border-brand-line px-5 py-4 pr-12 sm:px-6">
+            <DialogContent className="flex max-h-[85vh] w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden rounded-2xl bg-white p-0 sm:max-w-2xl">
+              <header className="shrink-0 border-b border-brand-line px-5 py-4 pr-12 sm:px-6">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[11px] font-semibold tracking-wide text-brand-muted">{selectedReport.id}</span>
@@ -340,8 +340,7 @@ export default function AdminReports() {
                 </div>
               </header>
 
-              <div className="grid min-h-0 overflow-y-auto md:grid-cols-[minmax(0,1fr)_19rem] md:overflow-hidden">
-                <div className="min-h-0 space-y-5 px-5 py-4 sm:px-6 md:overflow-y-auto">
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
                   <section>
                     <h3 className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">Report details</h3>
                     <div className="mt-2.5"><ReportDetailsList report={selectedReport} /></div>
@@ -358,70 +357,69 @@ export default function AdminReports() {
                   </section>
                 </div>
 
-                <aside className="min-h-0 border-t border-brand-line bg-brand-paper/70 px-5 py-4 sm:px-6 md:overflow-y-auto md:border-l md:border-t-0">
-                  <section>
-                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">Status</h3>
-                    <div className="mt-2">
-                      {statusKey === 'pending' && (
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateStatus('verified')}
-                          disabled={isSubmitting}
-                          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-brand-blue px-4 text-xs font-bold text-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
-                          Mark as verified
-                        </button>
-                      )}
-                      {statusKey === 'verified' && (
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateStatus('resolved')}
-                          disabled={isSubmitting}
-                          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
-                          Mark as resolved
-                        </button>
-                      )}
-                      {statusKey === 'resolved' && (
-                        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Resolved — no further action needed.</p>
-                      )}
-                    </div>
-                  </section>
-
-                  <section className="mt-5 border-t border-brand-line pt-4">
+              <footer className="shrink-0 border-t border-brand-line bg-brand-paper/60 px-5 py-4 sm:px-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="flex-1">
                     <label htmlFor="assign-staff" className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">Assign staff</label>
-                    <select
-                      id="assign-staff"
-                      value={staffId}
-                      onChange={(event) => setStaffId(event.target.value)}
-                      className="mt-2 h-10 w-full rounded-lg border border-brand-line bg-white px-3 text-xs font-semibold text-brand-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue"
-                    >
-                      <option value="">Unassigned</option>
-                      {staff.map((member) => (
-                        <option key={member.id} value={member.id}>{member.full_name || member.email}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={handleAssignStaff}
-                      disabled={isSubmitting || staff.length === 0}
-                      className="mt-2 inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-brand-blue px-4 text-xs font-bold text-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <UsersIcon className="size-3.5" aria-hidden="true" />
-                      Assign staff
-                    </button>
+                    <div className="mt-2 flex gap-2">
+                      <select
+                        id="assign-staff"
+                        value={staffId}
+                        onChange={(event) => setStaffId(event.target.value)}
+                        className="h-10 flex-1 rounded-lg border border-brand-line bg-white px-3 text-xs font-semibold text-brand-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue"
+                      >
+                        <option value="">Unassigned</option>
+                        {staff.map((member) => (
+                          <option key={member.id} value={member.id}>{member.full_name || member.email}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleAssignStaff}
+                        disabled={isSubmitting || staff.length === 0}
+                        className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg bg-brand-blue px-4 text-xs font-bold text-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <UsersIcon className="size-3.5" aria-hidden="true" />
+                        Assign staff
+                      </button>
+                    </div>
                     <p className="mt-2 text-[11px] leading-4 text-brand-muted">
                       {staff.length === 0 ? 'No staff accounts yet — create one under Users first.' : 'Field staff pick this report up from their jobs list.'}
                     </p>
-                  </section>
+                  </div>
 
-                  {actionError && (
-                    <p role="alert" className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-[#b42318]">{actionError}</p>
-                  )}
-                </aside>
-              </div>
+                  <div className="flex flex-col gap-2 sm:w-56">
+                    {statusKey === 'pending' && (
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateStatus('verified')}
+                        disabled={isSubmitting}
+                        className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-brand-blue px-4 text-xs font-bold text-white transition-colors hover:bg-brand-navy disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
+                        Mark as verified
+                      </button>
+                    )}
+                    {statusKey === 'verified' && (
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateStatus('resolved')}
+                        disabled={isSubmitting}
+                        className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />
+                        Mark as resolved
+                      </button>
+                    )}
+                    {statusKey === 'resolved' && (
+                      <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Resolved — no further action needed.</p>
+                    )}
+                    {actionError && (
+                      <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-[#b42318]">{actionError}</p>
+                    )}
+                  </div>
+                </div>
+              </footer>
             </DialogContent>
           </Dialog>
         )}

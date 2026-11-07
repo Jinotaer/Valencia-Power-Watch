@@ -45,5 +45,6 @@ drop policy if exists "Admins can manage schedules" on public.schedules;
 create policy "Admins can manage schedules"
   on public.schedules
   for all
-  using (public.is_admin())
-  with check (public.is_admin());
+  to authenticated
+  using ((select public.is_admin()))
+  with check ((select public.is_admin()));

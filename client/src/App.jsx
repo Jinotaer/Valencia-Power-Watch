@@ -6,15 +6,15 @@ import AdminForgotPassword from './pages/auth/admin/forgotPassword'
 import AdminResetPassword from './pages/auth/admin/resetPassword'
 import AdminDashboard from './pages/admin/dashboard'
 import AdminUsers from './pages/admin/users'
+import AdminResidents from './pages/admin/residents'
 import AdminSchedules from './pages/admin/schedules'
 import AdminBarangay from './pages/admin/barangay'
 import AdminMap from './pages/admin/map'
 import AdminReports from './pages/admin/reports'
-import { ResidentLogin, StaffLogin } from './pages/auth/resident-staff/login'
+import PortalLogin from './pages/auth/resident-staff/login'
 import PortalForgotPassword from './pages/auth/resident-staff/forgotPassword'
 import { ResidentResetPassword, StaffResetPassword } from './pages/auth/resident-staff/resetPassword'
 import ResidentRegister from './pages/auth/resident-staff/register'
-import RoleSelect from './pages/auth/resident-staff/roleSelect'
 import ResidentHome from './pages/resident/home'
 import ResidentSchedules from './pages/resident/schedule'
 import ResidentReports from './pages/resident/reports'
@@ -112,12 +112,13 @@ function App() {
     robots.content = section ? 'noindex, nofollow' : 'index, follow'
 
     document.querySelector('link[rel="manifest"]')?.remove()
+    // One shared PWA for staff and residents (scope "/", starts at the login);
+    // signed-in users land in the portal matching their role. Injected on all
+    // non-admin pages so /login (the installed app's start_url) carries it too.
     const manifestPath =
-      section === 'community'
+      section !== 'admin'
         ? '/community-manifest.webmanifest'
-        : section === 'staff'
-          ? '/staff-manifest.webmanifest'
-          : null
+        : null
     if (manifestPath) {
       const link = document.createElement('link')
       link.rel = 'manifest'
@@ -189,14 +190,15 @@ function App() {
   // Don't flash the login form for a signed-in user who is about to be redirected
   if (isAuthRoute && !isResetRoute && session) return null
 
-  // Role picker (public): sends people to the resident or staff login
-  if (pathname === '/login') return <RoleSelect />
-
   // Auth pages
   if (pathname === '/admin/login') return <AdminLogin />
-  if (pathname === '/community/login') return <ResidentLogin />
+
+  // Login pages: one shared form for residents and staff (and admins); the
+  // component routes each signed-in user to their own portal.
+  if (pathname === '/login') return <PortalLogin />
+  if (pathname === '/community/login') return <PortalLogin />
   if (pathname === '/community/register') return <ResidentRegister />
-  if (pathname === '/staff/login') return <StaffLogin />
+  if (pathname === '/staff/login') return <PortalLogin />
   if (pathname === '/community/forgot-password') return <PortalForgotPassword role="resident" />
   if (pathname === '/staff/forgot-password') return <PortalForgotPassword role="staff" />
   if (pathname === '/admin/forgot-password') return <AdminForgotPassword />
@@ -228,6 +230,7 @@ function App() {
 
   // Admin
   if (pathname === '/admin/users') return <AdminUsers />
+  if (pathname === '/admin/residents') return <AdminResidents />
   if (pathname === '/admin/schedules') return <AdminSchedules />
   if (pathname === '/admin/barangay' || pathname === '/admin/barangays') return <AdminBarangay />
   if (pathname === '/admin/map') return <AdminMap />

@@ -5,19 +5,26 @@ function requireClient() {
   return supabase
 }
 
+function normalizeBarangayName(value) {
+  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
 function toBarangay(row) {
+  const hasCoordinates = row.latitude !== null && row.longitude !== null
   return {
     code: row.code,
     name: row.name,
-    zone: row.zone,
-    status: row.status,
-    activeReports: 0,
     affectedHouseholds: row.affected_households,
     totalHouseholds: row.total_households,
-    assignedCrew: row.assigned_crew,
-    restorationEta: row.restoration_eta,
     captain: row.captain,
     contactNumber: row.contact_number,
+    pinnedLocation: row.pinned_location ?? '',
+    // pin_x/pin_y mirror the legacy report columns; the real map position is in `coordinates`.
+    pin: { x: row.pin_x ?? 50, y: row.pin_y ?? 50 },
+    pinSource: row.pin_source ?? 'manual',
+    coordinates: hasCoordinates
+      ? { latitude: row.latitude, longitude: row.longitude, accuracy: row.accuracy ?? null }
+      : null,
     lastUpdated: row.updated_at,
   }
 }
@@ -49,35 +56,41 @@ export async function loadActiveReportCounts() {
 
 export async function createBarangay(input) {
   const client = requireClient()
+  const name = input.name.trim()
+  const coordinates = input.coordinates ?? null
+  if (!Number.isFinite(coordinates?.latitude) || !Number.isFinite(coordinates?.longitude)) {
+    throw new Error('Pin the barangay location on the map before registering.')
+  }
+
+  const { data: existing, error: lookupError } = await client
+    .from('barangays')
+    .select('code,name')
+    .ilike('name', name)
+    .limit(5)
+  if (lookupError) throw lookupError
+  if ((existing ?? []).some((row) => normalizeBarangayName(row.name) === normalizeBarangayName(name))) {
+    const error = new Error('A barangay with that name already exists.')
+    error.code = '23505'
+    throw error
+  }
+
   const { data, error } = await client
     .from('barangays')
     .insert({
-      name: input.name.trim(),
-      zone: input.zone,
+      name,
       captain: input.captain.trim() || 'Barangay Council',
       contact_number: input.contactNumber.trim() || '+63 917 000 0000',
       total_households: Number(input.totalHouseholds) || 0,
+      pinned_location:
+        input.pinnedLocation?.trim() ||
+        `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}`,
+      pin_x: 50,
+      pin_y: 50,
+      pin_source: input.pinSource ?? 'manual',
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
+      accuracy: coordinates.accuracy ?? null,
     })
-    .select('*')
-    .single()
-
-  if (error) throw error
-  return toBarangay(data)
-}
-
-export async function updateBarangayStatus(code, input) {
-  const client = requireClient()
-  const payload = {
-    status: input.status,
-    restoration_eta: input.status === 'Energized' ? 'Normal Grid Service' : input.restorationEta,
-    affected_households: input.status === 'Energized' ? 0 : Number(input.affectedHouseholds) || 0,
-  }
-  if (input.assignedCrew.trim()) payload.assigned_crew = input.assignedCrew.trim()
-
-  const { data, error } = await client
-    .from('barangays')
-    .update(payload)
-    .eq('code', code)
     .select('*')
     .single()
 

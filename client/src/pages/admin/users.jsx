@@ -2,7 +2,6 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  MoreVertical,
   Plus,
   Search,
   SlidersHorizontal,
@@ -27,148 +26,22 @@ import {
   TableHeader,
   TableRow,
 } from '../../components/ui/table'
-import {
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from '../../components/ui/tabs'
 import { createUnpersistedClient, supabase } from '../../lib/supabase'
 
-const barangayOptions = [
-  'All barangays',
-  'Poblacion',
-  'Guinoyuran',
-  'Bagontapay',
-  'Lourdes',
-  'Lumbayao',
-  'San Carlos',
-  'Tongantongan',
-  'Unassigned',
-]
-
-const initialUsers = [
-  {
-    idNumber: 'ADM-0001',
-    name: 'System Administrator',
-    email: 'admin@gmail.com',
-    role: 'Admin',
-    position: 'Operations Administrator',
-    barangay: '—',
-    status: 'Active',
-    lastLogin: 'Today, 08:30 AM',
-  },
-  {
-    idNumber: 'STF-102',
-    name: 'Maria Santos',
-    email: 'maria.santos@gmail.com',
-    role: 'Staff',
-    position: 'Line Crew 2 · Responder',
-    barangay: '—',
-    status: 'Active',
-    lastLogin: '11/3/2026, 09:18 PM',
-  },
-  {
-    idNumber: 'RES-201',
-    name: 'Juan Dela Cruz',
-    email: 'juan.delacruz@email.com',
-    role: 'Resident',
-    position: 'Community Resident',
-    barangay: 'Guinoyuran',
-    status: 'Active',
-    lastLogin: '11/4/2026, 10:15 AM',
-  },
-  {
-    idNumber: 'STF-103',
-    name: 'Joshua Cruz',
-    email: 'joshua.cruz@gmail.com',
-    role: 'Staff',
-    position: 'Substation Technician',
-    barangay: '—',
-    status: 'Pending',
-    lastLogin: 'Never',
-  },
-  {
-    idNumber: 'RES-202',
-    name: 'Ana Reyes',
-    email: 'ana.reyes@gmail.com',
-    role: 'Resident',
-    position: 'Purok 4 Leader',
-    barangay: 'Bagontapay',
-    status: 'Active',
-    lastLogin: '11/2/2026, 02:45 PM',
-  },
-  {
-    idNumber: 'ADM-104',
-    name: 'Liza Mercado',
-    email: 'liza.mercado@gmail.com',
-    role: 'Admin',
-    position: 'Utility Supervisor',
-    barangay: '—',
-    status: 'Active',
-    lastLogin: '11/2/2026, 04:06 PM',
-  },
-  {
-    idNumber: 'STF-105',
-    name: 'Anton Reyes',
-    email: 'anton.reyes@gmail.com',
-    role: 'Staff',
-    position: 'Grid Maintenance Specialist',
-    barangay: '—',
-    status: 'Disabled',
-    lastLogin: '10/20/2026, 10:11 AM',
-  },
-  {
-    idNumber: 'RES-203',
-    name: 'Pedro Santos',
-    email: 'pedro.santos@gmail.com',
-    role: 'Resident',
-    position: 'Barangay Kagawad',
-    barangay: 'Lumbayao',
-    status: 'Active',
-    lastLogin: '11/1/2026, 11:15 AM',
-  },
-  {
-    idNumber: 'STF-106',
-    name: 'Elena Rostova',
-    email: 'elena.rostova@gmail.com',
-    role: 'Staff',
-    position: 'Control Room Dispatcher',
-    barangay: '—',
-    status: 'Active',
-    lastLogin: '11/1/2026, 08:30 PM',
-  },
-  {
-    idNumber: 'RES-204',
-    name: 'Jino Resident',
-    email: 'jino@gmail.com',
-    role: 'Resident',
-    position: 'Community Resident',
-    barangay: 'Poblacion',
-    status: 'Active',
-    lastLogin: 'Recent',
-  },
-]
-
-function StatusPill({ status }) {
-  const styles = {
-    Active: 'border-emerald-200 bg-emerald-50/90 text-emerald-700',
-    Pending: 'border-amber-200 bg-amber-50/90 text-amber-700',
-    Disabled: 'border-brand-line bg-[#e5e9f6] text-brand-muted',
+// Map a public.users row to the shape used by the table (staff + admin only;
+// residents are displayed on /admin/residents)
+function toUser(u) {
+  const role = (u.role || 'resident').toLowerCase()
+  const capitalized = role.charAt(0).toUpperCase() + role.slice(1)
+  return {
+    id: u.id,
+    idNumber: u.id_number || '\u2014',
+    name: u.full_name || u.email?.split('@')[0] || 'User',
+    email: u.email,
+    role: capitalized,
+    contactNumber: u.contact_number || '\u2014',
+    joined: u.created_at ? new Date(u.created_at).toLocaleDateString() : '\u2014',
   }
-  const dotColors = {
-    Active: 'bg-emerald-500',
-    Pending: 'bg-amber-500',
-    Disabled: 'bg-brand-muted',
-  }
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${styles[status] || styles.Active}`}
-    >
-      <span className={`size-1.5 rounded-full ${dotColors[status] || dotColors.Active}`} />
-      {status}
-    </span>
-  )
 }
 
 function RoleBadge({ role }) {
@@ -198,28 +71,35 @@ function RoleBadge({ role }) {
 }
 
 function AdminUsers() {
-  const [usersList, setUsersList] = useState(initialUsers)
+  const [usersList, setUsersList] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
   const [query, setQuery] = useState('')
-  const [roleFilter, setRoleFilter] = useState('All') // 'All' | 'Resident' | 'Staff' | 'Admin'
-  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false)
-  const roleDropdownRef = useRef(null)
-  const [statusFilter, setStatusFilter] = useState('All')
+  const [roleFilter, setRoleFilter] = useState('All') // 'All' | 'Staff' | 'Admin'
+  const [openFilterMenu, setOpenFilterMenu] = useState(null) // 'role' | null
+  const filterMenuRef = useRef(null)
 
-  // Click outside listener for the role filter dropdown
+  const reload = () => {
+    setLoadError('')
+    setIsLoading(true)
+    setReloadKey((value) => value + 1)
+  }
+
+  // Close whichever filter dropdown is open when clicking outside of it
   useEffect(() => {
     function handleClickOutside(event) {
-      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target)) {
-        setIsRoleDropdownOpen(false)
+      if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
+        setOpenFilterMenu(null)
       }
     }
-    if (isRoleDropdownOpen) {
+    if (openFilterMenu) {
       document.addEventListener('mousedown', handleClickOutside)
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [isRoleDropdownOpen])
-  const [barangayFilter, setBarangayFilter] = useState('All barangays')
+  }, [openFilterMenu])
   const [sortField, setSortField] = useState('name')
   const [sortOrder, setSortOrder] = useState('asc')
   const [page, setPage] = useState(1)
@@ -236,63 +116,54 @@ function AdminUsers() {
     role: 'Staff',
     position: 'Line Crew / Responder',
     contactNumber: '',
-    status: 'Active',
     idNumber: 'STF-109',
   })
 
-  // Load registered users from Supabase public.users on mount
+  // Load registered users from Supabase public.users (admins see every row)
   useEffect(() => {
-    if (!supabase) return
-    async function loadUsers() {
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('*')
-          .order('created_at', { ascending: false })
+    let active = true
 
-        if (!error && data && data.length > 0) {
-          const dbUsers = data.map((u) => {
-            const rawRole = (u.role || 'resident').toLowerCase()
-            const capitalizedRole = rawRole.charAt(0).toUpperCase() + rawRole.slice(1)
-            return {
-              id: u.id,
-              idNumber: u.id_number || `U-${u.id ? u.id.slice(0, 6) : '001'}`,
-              name: u.full_name || u.email?.split('@')[0] || 'User',
-              email: u.email,
-              role: capitalizedRole,
-              position:
-                capitalizedRole === 'Staff'
-                  ? 'Field Staff'
-                  : capitalizedRole === 'Admin'
-                    ? 'Administrator'
-                    : 'Community Resident',
-              barangay: capitalizedRole === 'Staff' ? '—' : u.address || 'Unassigned',
-              contactNumber: u.contact_number || '',
-              status: 'Active',
-              lastLogin: u.created_at ? new Date(u.created_at).toLocaleDateString() : 'Recent',
-            }
-          })
-
-          setUsersList((prev) => {
-            const existingEmails = new Set(dbUsers.map((u) => u.email.toLowerCase()))
-            const remainingDefaults = prev.filter((u) => !existingEmails.has(u.email.toLowerCase()))
-            return [...dbUsers, ...remainingDefaults]
-          })
-        }
-      } catch (err) {
-        console.warn('Could not load from Supabase users:', err)
-      }
+    async function fetchUsers() {
+      if (!supabase) throw new Error('Authentication is not configured in this environment.')
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .neq('role', 'resident')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data || []
     }
-    loadUsers()
-  }, [])
+
+    fetchUsers()
+      .then((rows) => {
+        if (!active) return
+        setUsersList(rows.map(toUser))
+        setLoadError('')
+      })
+      .catch((err) => {
+        if (!active) return
+        setUsersList([])
+        setLoadError(
+          err?.message === 'Authentication is not configured in this environment.'
+            ? err.message
+            : 'We could not load users. Check your connection and try again.',
+        )
+      })
+      .finally(() => {
+        if (active) setIsLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [reloadKey])
 
   // Calculate counts per role for the filter chips
   const roleCounts = useMemo(() => {
-    const counts = { all: usersList.length, resident: 0, staff: 0, admin: 0 }
+    const counts = { all: usersList.length, staff: 0, admin: 0 }
     usersList.forEach((u) => {
       const r = (u.role || '').toLowerCase()
-      if (r === 'resident') counts.resident++
-      else if (r === 'staff') counts.staff++
+      if (r === 'staff') counts.staff++
       else if (r === 'admin') counts.admin++
     })
     return counts
@@ -315,20 +186,13 @@ function AdminUsers() {
       const matchesQuery =
         user.name.toLowerCase().includes(q) ||
         user.email.toLowerCase().includes(q) ||
-        user.idNumber.toLowerCase().includes(q) ||
-        (user.position || '').toLowerCase().includes(q)
+        user.idNumber.toLowerCase().includes(q)
 
       const matchesRole =
         roleFilter === 'All' ||
         (user.role || '').toLowerCase() === roleFilter.toLowerCase()
 
-      const matchesStatus = statusFilter === 'All' || user.status === statusFilter
-
-      const matchesBarangay =
-        barangayFilter === 'All barangays' ||
-        (user.role === 'Resident' && (user.barangay || 'Unassigned') === barangayFilter)
-
-      return matchesQuery && matchesRole && matchesStatus && matchesBarangay
+      return matchesQuery && matchesRole
     })
 
     result.sort((a, b) => {
@@ -340,7 +204,7 @@ function AdminUsers() {
     })
 
     return result
-  }, [usersList, query, roleFilter, statusFilter, barangayFilter, sortField, sortOrder])
+  }, [usersList, query, roleFilter, sortField, sortOrder])
 
   // Pagination slice
   const visibleUsers = useMemo(() => {
@@ -348,7 +212,6 @@ function AdminUsers() {
     return filteredUsers.slice(start, start + pageSize)
   }, [filteredUsers, page, pageSize])
 
-  // Handle Create Staff Account (Supabase Auth + Database + Local State)
   async function handleCreateUser(e) {
     e.preventDefault()
     if (!newUser.name.trim() || !newUser.email.trim()) {
@@ -363,77 +226,48 @@ function AdminUsers() {
     setIsSubmitting(true)
     setCreateError('')
 
-    const prefix = 'STF'
+    const tempAuthClient = createUnpersistedClient()
+    if (!tempAuthClient) {
+      setCreateError('Authentication is not configured in this environment.')
+      setIsSubmitting(false)
+      return
+    }
+
     const suffix = Date.now().toString().slice(-4)
-    const idNumber = newUser.idNumber || `${prefix}-${suffix}`
-    const normalizedRole = 'staff'
+    const idNumber = newUser.idNumber || `STF-${suffix}`
 
-    try {
-      // 1. Create in Supabase Auth using unpersisted client (does not disrupt admin login session)
-      const tempAuthClient = createUnpersistedClient()
-      if (tempAuthClient) {
-        const { error: authError } = await tempAuthClient.auth.signUp({
-          email: newUser.email.trim(),
-          password: newUser.password,
-          options: {
-            data: {
-              full_name: newUser.name.trim(),
-              role: normalizedRole,
-              id_number: idNumber,
-              position: newUser.position || 'Line Crew / Responder',
-              contact_number: newUser.contactNumber || null,
-            },
-          },
-        })
-        if (authError && !authError.message.toLowerCase().includes('already registered')) {
-          console.warn('Auth notice:', authError.message)
-        }
-      }
-
-      // 2. Insert or upsert directly into public.users table in Supabase
-      if (supabase) {
-        const { error: dbError } = await supabase.from('users').upsert(
-          {
-            id: crypto.randomUUID(),
-            id_number: idNumber,
-            email: newUser.email.trim(),
-            full_name: newUser.name.trim(),
-            role: normalizedRole,
-            contact_number: newUser.contactNumber || null,
-            address: null, // Staff is citywide / no specific barangay
-            created_at: new Date().toISOString(),
-          },
-          { onConflict: 'email' }
-        )
-        if (dbError) {
-          console.warn('Database upsert notice:', dbError.message)
-        }
-      }
-    } catch (err) {
-      console.warn('Error during staff registration sync:', err)
-    }
-
-    // 3. Immediately reflect in UI table
-    const created = {
-      idNumber,
-      name: newUser.name.trim(),
+    // Create the auth user with a throwaway client so the admin session is
+    // untouched; the handle_new_user() trigger inserts the public.users row.
+    const { error: authError } = await tempAuthClient.auth.signUp({
       email: newUser.email.trim(),
-      role: 'Staff',
-      position: newUser.position || 'Line Crew / Responder',
-      barangay: '—',
-      contactNumber: newUser.contactNumber || '',
-      status: newUser.status || 'Active',
-      lastLogin: 'Never',
+      password: newUser.password,
+      options: {
+        data: {
+          full_name: newUser.name.trim(),
+          role: 'staff',
+          id_number: idNumber,
+          position: newUser.position || 'Line Crew / Responder',
+          contact_number: newUser.contactNumber || null,
+        },
+      },
+    })
+    setIsSubmitting(false)
+
+    if (authError && !authError.message.toLowerCase().includes('already registered')) {
+      setCreateError(authError.message || 'Could not create the account. Try again.')
+      return
+    }
+    if (authError) {
+      // The auth user (and its public.users row from the trigger) already exists
+      setCreateError('An account with this email already exists.')
+      return
     }
 
-    setUsersList((prev) => [created, ...prev])
-    setIsSubmitting(false)
     setIsCreateOpen(false)
-
-    setToastMessage(`Staff account for ${created.name} created successfully!`)
+    reload()
+    setToastMessage(`Staff account for ${newUser.name.trim()} created successfully!`)
     setTimeout(() => setToastMessage(''), 4000)
 
-    // Reset form
     setNewUser({
       name: '',
       email: '',
@@ -441,8 +275,7 @@ function AdminUsers() {
       role: 'Staff',
       position: 'Line Crew / Responder',
       contactNumber: '',
-      status: 'Active',
-      idNumber: `STF-${(Date.now() % 1000).toString().padStart(3, '0')}`,
+      idNumber: `STF-${suffix}`,
     })
   }
 
@@ -470,7 +303,11 @@ function AdminUsers() {
                   <span>Users Directory</span>
                 </h1>
                 <p className="mt-1 text-xs sm:text-sm text-brand-muted">
-                  Manage resident accounts, field response staff, and system administrators.
+                  Field response staff and administrator accounts — resident accounts are on the{' '}
+                  <a href="/admin/residents" className="font-semibold text-brand-blue underline-offset-2 hover:underline">
+                    resident directory
+                  </a>
+                  .
                 </p>
               </div>
 
@@ -510,13 +347,7 @@ function AdminUsers() {
                   {roleFilter !== 'All' && (
                     <div className="inline-flex items-center gap-1.5 rounded-xl border border-brand-line bg-brand-paper px-2.5 py-1 text-xs font-bold text-brand-ink shadow-2xs animate-in fade-in">
                       <span
-                        className={`size-2 rounded-full ${
-                          roleFilter === 'Resident'
-                            ? 'bg-brand-blue'
-                            : roleFilter === 'Staff'
-                              ? 'bg-amber-500'
-                              : 'bg-brand-blue'
-                        }`}
+                        className={`size-2 rounded-full ${roleFilter === 'Staff' ? 'bg-amber-500' : 'bg-brand-blue'}`}
                       />
                       <span>Role: {roleFilter}</span>
                       <button
@@ -535,97 +366,34 @@ function AdminUsers() {
                   )}
                 </div>
 
-                {/* Status Filter Pills + Role Filter Dropdown Button */}
-                <div className="flex items-center gap-2 overflow-x-auto">
-                  <div className="flex items-center gap-1 rounded-xl bg-[#e5e9f6]/80 p-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter('All')
-                        setPage(1)
-                      }}
-                      className={`rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                        statusFilter === 'All'
-                          ? 'bg-white text-brand-ink shadow-xs'
-                          : 'text-brand-muted hover:text-brand-ink'
-                      }`}
-                    >
-                      All status
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter(statusFilter === 'Active' ? 'All' : 'Active')
-                        setPage(1)
-                      }}
-                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                        statusFilter === 'Active'
-                          ? 'bg-white text-brand-ink shadow-xs'
-                          : 'text-brand-muted hover:text-brand-ink'
-                      }`}
-                    >
-                      <span className="size-1.5 rounded-full bg-emerald-500" />
-                      Active
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter(statusFilter === 'Pending' ? 'All' : 'Pending')
-                        setPage(1)
-                      }}
-                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                        statusFilter === 'Pending'
-                          ? 'bg-white text-brand-ink shadow-xs'
-                          : 'text-brand-muted hover:text-brand-ink'
-                      }`}
-                    >
-                      <span className="size-1.5 rounded-full bg-amber-500" />
-                      Pending
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStatusFilter(statusFilter === 'Disabled' ? 'All' : 'Disabled')
-                        setPage(1)
-                      }}
-                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer ${
-                        statusFilter === 'Disabled'
-                          ? 'bg-white text-brand-ink shadow-xs'
-                          : 'text-brand-muted hover:text-brand-ink'
-                      }`}
-                    >
-                      <span className="size-1.5 rounded-full bg-brand-muted" />
-                      Disabled
-                    </button>
-                  </div>
-
-                  {/* Role Filter Dropdown Button */}
-                  <div className="relative" ref={roleDropdownRef}>
+                {/* Role + Barangay Filter Dropdowns */}
+                <div className="flex items-center gap-2" ref={filterMenuRef}>
+                  {/* Role Filter Dropdown */}
+                  <div className="relative">
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setIsRoleDropdownOpen((prev) => !prev)}
+                      onClick={() => setOpenFilterMenu((prev) => (prev === 'role' ? null : 'role'))}
                       className={`h-9 shrink-0 gap-2 rounded-xl border px-3 transition-all cursor-pointer ${
-                        roleFilter !== 'All' || isRoleDropdownOpen
+                        roleFilter !== 'All' || openFilterMenu === 'role'
                           ? 'border-brand-navy bg-brand-navy/10 text-brand-navy ring-2 ring-brand-navy/20'
                           : 'border-brand-line text-brand-muted hover:border-brand-line hover:bg-brand-paper'
                       }`}
                       title={`Filter by role (Current: ${roleFilter === 'All' ? 'All Roles' : roleFilter})`}
                       aria-label="Filter by role"
-                      aria-expanded={isRoleDropdownOpen}
+                      aria-expanded={openFilterMenu === 'role'}
                     >
                       <SlidersHorizontal className="size-4" />
                       <span className="text-xs font-semibold">
                         Role: {roleFilter === 'All' ? 'All' : roleFilter}
                       </span>
-                      <ChevronDown className={`size-3.5 transition-transform ${isRoleDropdownOpen ? 'rotate-180' : ''}`} />
+                      <ChevronDown className={`size-3.5 transition-transform ${openFilterMenu === 'role' ? 'rotate-180' : ''}`} />
                       {roleFilter !== 'All' && (
                         <span className="size-2 rounded-full bg-brand-navy" />
                       )}
                     </Button>
 
-                    {/* Floating Role Menu */}
-                    {isRoleDropdownOpen && (
+                    {openFilterMenu === 'role' && (
                       <div className="absolute right-0 top-full mt-2 z-50 w-56 rounded-2xl border border-brand-line bg-white p-2 shadow-xl animate-in fade-in zoom-in-95 duration-100">
                         <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-brand-line mb-1">
                           <span className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
@@ -648,7 +416,6 @@ function AdminUsers() {
                         <div className="space-y-0.5">
                           {[
                             { label: 'All Roles', value: 'All', count: roleCounts.all, dot: 'bg-brand-muted' },
-                            { label: 'Residents', value: 'Resident', count: roleCounts.resident, dot: 'bg-brand-blue' },
                             { label: 'Field Staff', value: 'Staff', count: roleCounts.staff, dot: 'bg-amber-500' },
                             { label: 'Administrators', value: 'Admin', count: roleCounts.admin, dot: 'bg-brand-blue' },
                           ].map((item) => {
@@ -660,7 +427,7 @@ function AdminUsers() {
                                 onClick={() => {
                                   setRoleFilter(item.value)
                                   setPage(1)
-                                  setIsRoleDropdownOpen(false)
+                                  setOpenFilterMenu(null)
                                 }}
                                 className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs font-semibold transition-colors cursor-pointer ${
                                   isSelected
@@ -688,38 +455,15 @@ function AdminUsers() {
                 </div>
               </div>
 
-              {/* Barangay Tabs */}
-              <div className="border-b border-brand-line px-4 pt-3">
-                <Tabs
-                  value={barangayFilter}
-                  onValueChange={(value) => {
-                    setBarangayFilter(value)
-                    setPage(1)
-                  }}
-                >
-                  <TabsList
-                    variant="line"
-                    aria-label="Filter users by barangay"
-                    className="max-w-full gap-0 overflow-x-auto rounded-none p-0"
-                  >
-                    {barangayOptions.map((barangay) => (
-                      <TabsTrigger
-                        key={barangay}
-                        value={barangay}
-                        className="min-h-11 shrink-0 rounded-none px-3 text-xs text-brand-muted data-active:font-semibold data-active:text-brand-navy after:bottom-0"
-                      >
-                        {barangay}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                </Tabs>
-              </div>
-
               {/* Data Table */}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader className="bg-brand-paper/60">
                     <TableRow className="border-b border-brand-line hover:bg-transparent">
+                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
+                        ID NUMBER
+                      </TableHead>
+
                       <TableHead
                         onClick={() => toggleSort('name')}
                         className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted cursor-pointer select-none hover:text-brand-ink"
@@ -756,10 +500,6 @@ function AdminUsers() {
                         </div>
                       </TableHead>
 
-                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                        ID NUMBER
-                      </TableHead>
-
                       <TableHead
                         onClick={() => toggleSort('role')}
                         className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted cursor-pointer select-none hover:text-brand-ink"
@@ -779,31 +519,26 @@ function AdminUsers() {
                       </TableHead>
 
                       <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                        POSITION / NOTE
+                        CONTACT
                       </TableHead>
 
                       <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                        BARANGAY
+                        JOINED
                       </TableHead>
-
-                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                        STATUS
-                      </TableHead>
-
-                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                        LAST ACTIVITY
-                      </TableHead>
-
-                      <TableHead className="h-11 w-10 px-3"></TableHead>
                     </TableRow>
                   </TableHeader>
 
                   <TableBody>
-                    {visibleUsers.map((user) => (
+                    {!isLoading && !loadError && visibleUsers.map((user) => (
                       <TableRow
                         key={user.idNumber + user.email}
                         className="border-b border-brand-line hover:bg-brand-paper/60 transition-colors"
                       >
+                        <TableCell className="px-5 py-4">
+                          <span className="rounded-md bg-brand-paper border border-brand-line/60 px-2.5 py-1 text-xs font-semibold text-brand-muted inline-block tracking-tight">
+                            {user.idNumber}
+                          </span>
+                        </TableCell>
                         <TableCell className="px-5 py-4 font-semibold text-brand-ink text-sm">
                           {user.name}
                         </TableCell>
@@ -811,42 +546,44 @@ function AdminUsers() {
                           {user.email}
                         </TableCell>
                         <TableCell className="px-5 py-4">
-                          <span className="rounded-md bg-brand-paper border border-brand-line/60 px-2.5 py-1 text-xs font-semibold text-brand-muted inline-block tracking-tight">
-                            {user.idNumber}
-                          </span>
-                        </TableCell>
-                        <TableCell className="px-5 py-4">
                           <RoleBadge role={user.role} />
                         </TableCell>
-                        <TableCell className="px-5 py-4 text-brand-muted text-xs sm:text-sm">
-                          {user.position}
-                        </TableCell>
-                        <TableCell className="px-5 py-4 text-brand-muted text-xs sm:text-sm">
-                          {user.barangay || 'Unassigned'}
-                        </TableCell>
-                        <TableCell className="px-5 py-4">
-                          <StatusPill status={user.status} />
+                        <TableCell className="px-5 py-4 text-brand-muted text-xs sm:text-sm whitespace-nowrap">
+                          {user.contactNumber}
                         </TableCell>
                         <TableCell className="px-5 py-4 text-xs text-brand-muted whitespace-nowrap">
-                          {user.lastLogin}
-                        </TableCell>
-                        <TableCell className="px-3 py-4 text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            className="h-8 w-8 text-brand-muted hover:text-brand-ink hover:bg-[#e5e9f6] rounded-md cursor-pointer"
-                            aria-label={`Actions for ${user.name}`}
-                          >
-                            <MoreVertical className="size-4" />
-                          </Button>
+                          {user.joined}
                         </TableCell>
                       </TableRow>
                     ))}
 
-                    {visibleUsers.length === 0 && (
+                    {isLoading && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-36 text-center text-sm font-semibold text-brand-muted">
+                          Loading users…
+                        </TableCell>
+                      </TableRow>
+                    )}
+
+                    {!isLoading && loadError && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-36 text-center">
+                          <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
+                          <button
+                            type="button"
+                            onClick={reload}
+                            className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4"
+                          >
+                            Try again
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    )}
+
+                    {!isLoading && !loadError && visibleUsers.length === 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={9}
+                          colSpan={6}
                           className="h-36 text-center text-sm text-brand-muted"
                         >
                           No users found matching this filter combination.
@@ -881,7 +618,6 @@ function AdminUsers() {
         newUser={newUser}
         setNewUser={setNewUser}
         onCreateUser={handleCreateUser}
-        barangayOptions={barangayOptions}
         isSubmitting={isSubmitting}
         errorMessage={createError}
       />

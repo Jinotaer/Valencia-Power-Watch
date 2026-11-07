@@ -41,6 +41,12 @@ create index if not exists reports_user_created_idx
 -- Migrations for databases created before the current type list / pinned location
 alter table public.reports add column if not exists pinned_location text;
 alter table public.reports add column if not exists assigned_staff_id uuid references auth.users(id) on delete set null;
+
+-- Index the FK (Postgres does not index it automatically); also speeds up the
+-- auth.users ON DELETE SET NULL cascade.
+create index if not exists reports_assigned_staff_idx
+  on public.reports (assigned_staff_id);
+
 alter table public.reports drop constraint if exists reports_outage_type_check;
 
 update public.reports set outage_type = 'power-supply-interruption' where outage_type = 'no-power';
@@ -87,12 +93,14 @@ drop policy if exists "Residents can create own reports" on public.reports;
 create policy "Residents can read own reports"
   on public.reports
   for select
-  using (auth.uid() = user_id);
+  to authenticated
+  using ((select auth.uid()) = user_id);
 
 create policy "Residents can create own reports"
   on public.reports
   for insert
-  with check (auth.uid() = user_id);
+  to authenticated
+  with check ((select auth.uid()) = user_id);
 
 -- Admins can review every resident report and assign a field staff member
 -- (defined here too so this file can be run on its own)
@@ -113,13 +121,15 @@ drop policy if exists "Admins can view all reports" on public.reports;
 create policy "Admins can view all reports"
   on public.reports
   for select
-  using (public.is_admin());
+  to authenticated
+  using ((select public.is_admin()));
 
 drop policy if exists "Admins can update reports" on public.reports;
 create policy "Admins can update reports"
   on public.reports
   for update
-  using (public.is_admin());
+  to authenticated
+  using ((select public.is_admin()));
 
 -- 3. Private evidence bucket, one folder per user
 insert into storage.buckets (id, name, public)
@@ -133,23 +143,26 @@ drop policy if exists "Residents can delete own report evidence" on storage.obje
 create policy "Residents can read own report evidence"
   on storage.objects
   for select
+  to authenticated
   using (
     bucket_id = 'report-evidence'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
 create policy "Residents can upload own report evidence"
   on storage.objects
   for insert
+  to authenticated
   with check (
     bucket_id = 'report-evidence'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
 
 create policy "Residents can delete own report evidence"
   on storage.objects
   for delete
+  to authenticated
   using (
     bucket_id = 'report-evidence'
-    and (storage.foldername(name))[1] = auth.uid()::text
+    and (storage.foldername(name))[1] = (select auth.uid())::text
   );
