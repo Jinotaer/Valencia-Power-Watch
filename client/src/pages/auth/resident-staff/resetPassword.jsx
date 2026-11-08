@@ -13,7 +13,7 @@ function PortalResetPassword({ role = 'resident' }) {
   const [status, setStatus] = useState({ type: '', message: '' })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
-  const loginPath = isResident ? '/community/login' : '/staff/login'
+  const loginPath = '/login'
 
   async function handleSubmit(event) {
     event.preventDefault()

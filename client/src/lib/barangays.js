@@ -97,3 +97,43 @@ export async function createBarangay(input) {
   if (error) throw error
   return toBarangay(data)
 }
+
+function barangayUpdateRow(input) {
+  const coordinates = input.coordinates ?? null
+  const payload = {
+    captain: (input.captain || '').trim() || 'Barangay Council',
+    contact_number: (input.contactNumber || '').trim() || '+63 917 000 0000',
+    total_households: Number(input.totalHouseholds) || 0,
+    affected_households: Number(input.affectedHouseholds) || 0,
+    pinned_location:
+      (input.pinnedLocation || '').trim() ||
+      (coordinates ? `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(5)}` : ''),
+    pin_x: 50,
+    pin_y: 50,
+    pin_source: input.pinSource ?? 'manual',
+    latitude: coordinates?.latitude ?? null,
+    longitude: coordinates?.longitude ?? null,
+    accuracy: coordinates?.accuracy ?? null,
+    updated_at: new Date().toISOString(),
+  }
+  return payload
+}
+
+export async function updateBarangay(code, input) {
+  const client = requireClient()
+  const { data, error } = await client
+    .from('barangays')
+    .update(barangayUpdateRow(input))
+    .eq('code', code)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return toBarangay(data)
+}
+
+export async function deleteBarangay(code) {
+  const client = requireClient()
+  const { error } = await client.from('barangays').delete().eq('code', code)
+  if (error) throw error
+}

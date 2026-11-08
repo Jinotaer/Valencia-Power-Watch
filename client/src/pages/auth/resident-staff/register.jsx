@@ -123,7 +123,7 @@ export default function ResidentRegister() {
               Check your inbox and click the link to activate your account.
             </p>
             <a
-              href="/community/login"
+              href="/login"
               className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-blue text-sm font-semibold text-white transition-all hover:bg-brand-navy active:bg-brand-navy sm:h-12"
             >
               Go to sign in <ArrowRight size={16} />
@@ -386,7 +386,7 @@ export default function ResidentRegister() {
           <p className="pt-1 text-center text-xs text-brand-muted sm:pt-2">
             Already have an account?{' '}
             <a
-              href="/community/login"
+              href="/login"
               className="font-semibold text-brand-blue transition-colors hover:text-brand-navy hover:underline"
             >
               Sign in

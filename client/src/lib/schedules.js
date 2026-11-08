@@ -27,17 +27,33 @@ function today() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
+function scheduleRow(form) {
+  const title = typeof form.title === 'string' ? form.title.trim() : ''
+  if (!title) throw new Error('Enter a title.')
+
+  return {
+    title,
+    barangay: typeof form.barangay === 'string' && form.barangay.trim() ? form.barangay.trim() : null,
+    date: form.date,
+    start_time: form.startTime,
+    end_time: form.endTime,
+    type: typeof form.type === 'string' && form.type.trim() ? form.type.trim() : 'Maintenance',
+    description: typeof form.description === 'string' && form.description.trim() ? form.description.trim() : null,
+  }
+}
+
 function toSchedule(row) {
   return {
     id: row.id,
-    location: row.location,
-    barangay: row.barangay,
+    title: row.title ?? '',
+    barangay: row.barangay ?? null,
     date: row.date,
     dateLabel: formatDate(row.date),
     startTime: row.start_time,
     endTime: row.end_time,
     timeLabel: `${formatTime(row.start_time)} – ${formatTime(row.end_time)}`,
     type: row.type,
+    description: row.description ?? '',
     status: row.status,
   }
 }
@@ -77,20 +93,31 @@ export async function createSchedule(form) {
 
   const { data, error } = await client
     .from('schedules')
-    .insert({
-      location: form.location.trim(),
-      barangay: form.barangay,
-      date: form.date,
-      start_time: form.startTime,
-      end_time: form.endTime,
-      type: form.type,
-      status: 'scheduled',
-    })
+    .insert({ ...scheduleRow(form), status: 'scheduled' })
     .select('*')
     .single()
 
   if (error) throw error
   return toSchedule(data)
+}
+
+export async function updateSchedule(id, form) {
+  const client = requireClient()
+
+  const { data, error } = await client
+    .from('schedules')
+    .update(scheduleRow(form))
+    .eq('id', id)
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return toSchedule(data)
+}
+
+export async function deleteSchedule(id) {
+  const { error } = await requireClient().from('schedules').delete().eq('id', id)
+  if (error) throw error
 }
 
 export async function setScheduleStatus(id, status) {

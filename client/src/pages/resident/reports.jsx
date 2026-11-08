@@ -1,6 +1,7 @@
-import { Bell, ChevronRight, ClipboardList, FilePlus2, MapPin, Search } from 'lucide-react'
+import { ChevronRight, ClipboardList, FilePlus2, MapPin, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { PortalMobileNav, PortalMark } from '../../components/layout/PortalMobileNav'
+import { BellLink } from '../../components/layout/BellLink'
 import { loadReports } from '../../lib/reports'
 import { ReportStatusBadge, ReportTimeline } from './reportView'
 
@@ -90,9 +91,7 @@ export default function ResidentReports() {
       <header className="sticky top-0 z-20 border-b border-brand-line bg-white/95 px-3 py-2.5 backdrop-blur-md sm:px-5 sm:py-3.5">
         <div className="mx-auto flex max-w-3xl items-center justify-between">
           <a href="/community" className="no-underline"><PortalMark role="resident" /></a>
-          <button type="button" className="grid size-9 place-items-center rounded-xl border border-brand-line bg-white text-brand-muted transition-colors hover:bg-brand-paper sm:size-10" aria-label="Notifications">
-            <Bell className="size-[17px] sm:size-[19px]" aria-hidden="true" />
-          </button>
+          <BellLink />
         </div>
       </header>
 

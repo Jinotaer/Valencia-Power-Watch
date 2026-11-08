@@ -2,21 +2,43 @@ import {
   AlertTriangle,
   Bell,
   Check,
-  Compass,
+  ExternalLink,
   MapPin,
   Navigation,
   X,
   Zap,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
-import { initialJobs, stageNames } from './jobsData'
+import { loadAssignedReports, priorityLabels, updateReportStatus } from '../../lib/reports'
+import { ResolutionEvidenceInput } from './evidenceInput'
+import { ReportPriorityBadge, ReportStatusBadge } from '../resident/reportView'
+
+// Staff milestones map onto the shared report statuses (see supabase/report.sql):
+// a pending assignment is still new, "verified" means work started, "resolved" is done.
+const TONE_TYPE = { pending: 'new', verified: 'active', resolved: 'done' }
+const TONE_STEP = { pending: 1, verified: 2, resolved: 3 }
+const TONE_LABEL = {
+  pending: 'Step 1 of 3 · Assigned — awaiting start',
+  verified: 'Step 2 of 3 · In progress',
+  resolved: 'Step 3 of 3 · Resolved',
+}
+const STATUS_OPTIONS = [{ key: 'verified', label: 'In progress' }, { key: 'resolved', label: 'Resolved' }]
+
+// The stages the staff page offers, keyed to report statuses.
+const stageKey = (tone) => (tone === 'resolved' ? 'resolved' : 'verified')
 
 export default function StaffJobs() {
-  const [jobs, setJobs] = useState(initialJobs)
+  const [reports, setReports] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
   const [filter, setFilter] = useState('all') // 'all' | 'new' | 'active' | 'done'
-  const [selectedJobForStatus, setSelectedJobForStatus] = useState(null)
+  const [reviewJob, setReviewJob] = useState(null)
+  const [statusJob, setStatusJob] = useState(null)
   const [navJob, setNavJob] = useState(null)
+  const [evidenceFile, setEvidenceFile] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
   const showToast = (msg) => {
@@ -24,63 +46,81 @@ export default function StaffJobs() {
     setTimeout(() => setToastMessage(''), 3000)
   }
 
-  // Count calculations
-  const counts = useMemo(() => {
-    const newCount = jobs.filter((j) => j.statusType === 'new').length
-    const activeCount = jobs.filter((j) => j.statusType === 'in-progress' || j.statusType === 'acknowledged').length
-    const doneCount = jobs.filter((j) => j.statusType === 'done').length
-    const allAssigned = jobs.filter((j) => j.statusType !== 'done').length
-    return { all: allAssigned, new: newCount, active: activeCount, done: doneCount }
-  }, [jobs])
-
-  // Filtered jobs list
-  const filteredJobs = useMemo(() => {
-    if (filter === 'all') return jobs.filter((j) => j.statusType !== 'done')
-    if (filter === 'new') return jobs.filter((j) => j.statusType === 'new')
-    if (filter === 'active') return jobs.filter((j) => j.statusType === 'in-progress' || j.statusType === 'acknowledged')
-    if (filter === 'done') return jobs.filter((j) => j.statusType === 'done')
-    return jobs
-  }, [jobs, filter])
-
-  // Acknowledge a new job
-  const handleAcknowledge = (jobId) => {
-    setJobs((prev) =>
-      prev.map((j) =>
-        j.id === jobId
-          ? {
-              ...j,
-              status: 'Acknowledged',
-              statusType: 'acknowledged',
-              step: 1,
-              stepLabel: 'Step 1 of 4 · Acknowledged',
-            }
-          : j
-      )
-    )
-    showToast('Job acknowledged! Ready to begin route.')
+  const reload = () => {
+    setLoadError('')
+    setIsLoading(true)
+    setReloadKey((value) => value + 1)
   }
 
-  // Update status stage
-  const handleSetStage = (jobId, stageId) => {
-    const stageObj = stageNames.find((s) => s.id === stageId)
-    setJobs((prev) =>
-      prev.map((j) => {
-        if (j.id === jobId) {
-          const isDone = stageId === 4
-          return {
-            ...j,
-            step: stageId,
-            status: isDone ? 'Done' : stageId === 1 ? 'Acknowledged' : 'In progress',
-            statusType: isDone ? 'done' : stageId === 1 ? 'acknowledged' : 'in-progress',
-            stepLabel: isDone ? 'Step 4 of 4 · Resolved' : `Step ${stageId} of 4 · ${stageObj?.label}`,
-          }
-        }
-        return j
+  useEffect(() => {
+    let active = true
+
+    loadAssignedReports()
+      .then((rows) => {
+        if (active) setReports(rows)
       })
-    )
-    setSelectedJobForStatus(null)
-    showToast(`Status updated to: ${stageObj?.label}`)
+      .catch(() => {
+        if (active) {
+          setReports([])
+          setLoadError('We could not load your assigned reports. Check your connection and try again.')
+        }
+      })
+      .finally(() => {
+        if (active) setIsLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [reloadKey])
+
+  const counts = useMemo(() => {
+    const newCount = reports.filter((r) => r.tone === 'pending').length
+    const activeCount = reports.filter((r) => r.tone === 'verified').length
+    const doneCount = reports.filter((r) => r.tone === 'resolved').length
+    return { all: newCount + activeCount, new: newCount, active: activeCount, done: doneCount }
+  }, [reports])
+
+  const filteredJobs = useMemo(() => {
+    const byFilter = {
+      all: reports.filter((r) => r.tone !== 'resolved'),
+      new: reports.filter((r) => r.tone === 'pending'),
+      active: reports.filter((r) => r.tone === 'verified'),
+      done: reports.filter((r) => r.tone === 'resolved'),
+    }
+    return byFilter[filter] ?? reports
+  }, [reports, filter])
+
+  const handleSetStatus = async (report, statusKey) => {
+    if (isSubmitting) return
+    setIsSubmitting(true)
+
+    try {
+      // Keep the job on this account (the RLS policy requires it anyway).
+      await updateReportStatus(
+        report.id,
+        statusKey,
+        report.assignedStaffId,
+        statusKey === 'resolved' && evidenceFile
+          ? [{ file: evidenceFile, label: 'Resolution evidence', type: evidenceFile.type }]
+          : [],
+      )
+      setEvidenceFile(null)
+      setStatusJob(null)
+      reload()
+      showToast(statusKey === 'resolved' ? 'Marked as resolved. Great work!' : 'Status updated: In progress.')
+    } catch {
+      showToast('We could not update this report. Check your connection and try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
+
+  const jobs = filteredJobs
+  const destination = (report) =>
+    report.coordinates
+      ? `${report.coordinates.latitude},${report.coordinates.longitude}`
+      : `Valencia City Bukidnon Brgy. ${report.barangay}`
 
   return (
     <div className="min-h-screen bg-brand-paper text-brand-navy flex flex-col justify-between">
@@ -132,184 +172,221 @@ export default function StaffJobs() {
 
         {/* Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-5 scrollbar-none">
-          <button
-            type="button"
-            onClick={() => setFilter('all')}
-            className={`rounded-full px-4 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
-              filter === 'all'
-                ? 'bg-brand-blue text-white'
-                : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
-            }`}
-          >
-            All {counts.all}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFilter('new')}
-            className={`rounded-full px-4 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
-              filter === 'new'
-                ? 'bg-brand-blue text-white'
-                : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
-            }`}
-          >
-            New {counts.new}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFilter('active')}
-            className={`rounded-full px-4 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
-              filter === 'active'
-                ? 'bg-brand-blue text-white'
-                : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
-            }`}
-          >
-            Active {counts.active}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFilter('done')}
-            className={`rounded-full px-4 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
-              filter === 'done'
-                ? 'bg-brand-blue text-white'
-                : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
-            }`}
-          >
-            Done {counts.done}
-          </button>
+          {[
+            { key: 'all', label: 'All', count: counts.all },
+            { key: 'new', label: 'New', count: counts.new },
+            { key: 'active', label: 'Active', count: counts.active },
+            { key: 'done', label: 'Done', count: counts.done },
+          ].map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setFilter(option.key)}
+              className={`rounded-full px-4 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
+                filter === option.key
+                  ? 'bg-brand-blue text-white'
+                  : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
+              }`}
+            >
+              {option.label} {option.count}
+            </button>
+          ))}
         </div>
 
         {/* JOBS LIST */}
         <div className="space-y-4">
-          {filteredJobs.map((job) => {
-            const isInProgress = job.statusType === 'in-progress'
-            const isNew = job.statusType === 'new'
-            const isAcknowledged = job.statusType === 'acknowledged'
-            const isDone = job.statusType === 'done'
+          {isLoading && (
+            <div className="rounded-3xl border border-brand-line bg-white p-8 text-center">
+              <p className="text-sm font-semibold text-brand-muted">Loading your assigned jobs…</p>
+            </div>
+          )}
+
+          {!isLoading && loadError && (
+            <div className="rounded-3xl border border-brand-line bg-white p-8 text-center">
+              <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
+              <button type="button" onClick={reload} className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4 cursor-pointer">
+                Try again
+              </button>
+            </div>
+          )}
+
+          {!isLoading && !loadError && jobs.map((report) => {
+            const statusType = TONE_TYPE[report.tone] ?? 'active'
+            const step = TONE_STEP[report.tone] ?? 1
+            const isDone = statusType === 'done'
 
             return (
               <article
-                key={job.id}
+                key={report.id}
                 className="rounded-3xl border border-brand-line bg-white p-4 sm:p-5 shadow-[0_4px_20px_rgba(23,43,104,0.04)]"
               >
-                {/* Header: Title + Status Badge */}
-                <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-base font-extrabold text-brand-navy leading-snug">
-                    {job.title}
+                {/* Header: Title + Priority + Status Badge */}
+                <div className="flex items-start justify-between gap-2">
+                  <h2 className="text-base font-extrabold leading-snug text-brand-navy">
+                    {report.outageType}
                   </h2>
-                  <span
-                    className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${
-                      isInProgress
-                        ? 'bg-[e5e9f6] text-brand-blue'
-                        : isNew
-                        ? 'bg-[fff1a8] text-[#9a6700]'
-                        : isAcknowledged
-                        ? 'bg-[e5e9f6] text-brand-blue'
-                        : 'bg-emerald-50 text-emerald-700'
-                    }`}
-                  >
-                    {job.status}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <ReportPriorityBadge priority={report.priority} />
+                    <ReportStatusBadge tone={report.tone} status={report.status} />
+                  </div>
                 </div>
 
                 {/* Location Line */}
                 <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-brand-muted">
-                  <MapPin className="size-3.5 text-brand-blue shrink-0" />
-                  <span>
-                    {job.location} · {job.distance}
+                  <MapPin className="size-3.5 shrink-0 text-brand-blue" />
+                  <span className="truncate">
+                    {report.barangay ? `Brgy. ${report.barangay}` : report.location}
+                    {report.pinnedLocation ? ` · ${report.pinnedLocation}` : report.landmark ? ` · ${report.landmark}` : ''}
                   </span>
                 </div>
 
-                {/* Order ID & Assignment Time + Optional Hazard Tag */}
-                <div className="mt-1 flex items-center justify-between text-xs font-medium text-brand-muted">
+                {/* Order ID & Report Time */}
+                <div className="mt-1 flex items-center text-xs font-medium text-brand-muted">
                   <span>
-                    {job.id} · Assigned {job.assignedTime}
+                    {report.id} · Noticed {report.startedTime || report.date}
                   </span>
-                  {job.hasHazard && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#fee2e2] px-2 py-0.5 text-[10px] font-extrabold text-[#b91c1c]">
-                      <AlertTriangle className="size-3" />
-                      <span>Hazard</span>
-                    </span>
-                  )}
                 </div>
 
-                {/* 4-Segment Progress Bar */}
+                {/* 3-Segment Progress Bar */}
                 <div className="mt-3 flex items-center gap-1.5">
-                  {[1, 2, 3, 4].map((seg) => (
+                  {[1, 2, 3].map((seg) => (
                     <div
                       key={seg}
                       className={`h-1.5 flex-1 rounded-full transition-colors ${
-                        job.step >= seg ? 'bg-brand-blue' : 'bg-brand-line'
+                        step >= seg ? 'bg-brand-blue' : 'bg-brand-line'
                       }`}
                     />
                   ))}
                 </div>
 
                 {/* Step Subtitle Caption */}
-                <p className="mt-1.5 text-[11px] font-semibold text-brand-muted">{job.stepLabel}</p>
+                <p className="mt-1.5 text-[11px] font-semibold text-brand-muted">{TONE_LABEL[report.tone]}</p>
 
                 {/* Action Buttons Row */}
-                <div className="mt-4">
-                  {/* If Job is NEW: Big Yellow "Acknowledge job" Button */}
-                  {isNew && (
+                {isDone ? (
+                  <button
+                    type="button"
+                    onClick={() => setReviewJob(report)}
+                    className="mt-4 flex h-10 w-full items-center justify-center rounded-xl border border-brand-line bg-white text-xs font-bold text-brand-muted hover:bg-brand-paper transition-all cursor-pointer"
+                  >
+                    View resolution summary
+                  </button>
+                ) : (
+                  <div className="mt-4 grid grid-cols-3 gap-2">
                     <button
                       type="button"
-                      onClick={() => handleAcknowledge(job.id)}
-                      className="flex h-11 w-full items-center justify-center rounded-2xl bg-brand-yellow text-xs sm:text-sm font-black text-brand-navy shadow-xs hover:bg-brand-yellow active:scale-[0.99] transition-all cursor-pointer"
+                      onClick={() => setReviewJob(report)}
+                      className="flex h-11 items-center justify-center rounded-2xl border border-brand-line bg-white text-xs font-bold text-brand-ink shadow-xs hover:bg-brand-paper active:scale-[0.98] transition-all cursor-pointer"
                     >
-                      Acknowledge job
+                      <span>Details</span>
                     </button>
-                  )}
-
-                  {/* If Job is IN PROGRESS or ACKNOWLEDGED: "Navigate" + "Update status" */}
-                  {(isInProgress || isAcknowledged) && (
-                    <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setNavJob(job)}
-                        className="flex h-11 items-center justify-center gap-1.5 rounded-2xl border border-brand-line bg-white text-xs sm:text-sm font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.98] transition-all cursor-pointer"
-                      >
-                        <Navigation className="size-4 rotate-45" />
-                        <span>Navigate</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setSelectedJobForStatus(job)}
-                        className="flex h-11 items-center justify-center rounded-2xl bg-brand-blue text-xs sm:text-sm font-bold text-white shadow-xs hover:bg-brand-navy active:scale-[0.98] transition-all cursor-pointer"
-                      >
-                        Update status
-                      </button>
-                    </div>
-                  )}
-
-                  {/* If Job is DONE: "View Summary" */}
-                  {isDone && (
                     <button
                       type="button"
-                      onClick={() => setSelectedJobForStatus(job)}
-                      className="flex h-10 w-full items-center justify-center rounded-xl border border-brand-line bg-white text-xs font-bold text-brand-muted hover:bg-brand-paper transition-all cursor-pointer"
+                      onClick={() => setNavJob(report)}
+                      className="flex h-11 items-center justify-center gap-1 rounded-2xl border border-brand-line bg-white text-xs font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.98] transition-all cursor-pointer"
                     >
-                      View resolution summary
+                      <Navigation className="size-3.5 rotate-45" />
+                      <span>Navigate</span>
                     </button>
-                  )}
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => setStatusJob(report)}
+                      className="flex h-11 items-center justify-center rounded-2xl bg-brand-blue text-xs font-bold text-white shadow-xs hover:bg-brand-navy active:scale-[0.98] transition-all cursor-pointer"
+                    >
+                      <span>Status</span>
+                    </button>
+                  </div>
+                )}
               </article>
             )
           })}
 
-          {filteredJobs.length === 0 && (
+          {!isLoading && !loadError && jobs.length === 0 && (
             <div className="rounded-3xl border border-dashed border-brand-line p-8 text-center text-xs text-brand-muted">
-              No jobs found under this filter.
+              {reports.length === 0
+                ? 'Nothing assigned to you yet. Reports appear here once an administrator assigns them.'
+                : 'No jobs found under this filter.'}
             </div>
           )}
         </div>
       </main>
 
+      {/* REVIEW / DETAILS MODAL */}
+      {reviewJob && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
+          <div
+            className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-brand-line bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
+            role="dialog"
+          >
+            <div className="flex items-start justify-between border-b border-brand-line pb-3">
+              <div className="min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+                  {reviewJob.id}
+                </span>
+                <h3 className="text-base font-extrabold text-brand-navy">{reviewJob.outageType}</h3>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <ReportPriorityBadge priority={reviewJob.priority} />
+                  <ReportStatusBadge tone={reviewJob.tone} status={reviewJob.status} />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewJob(null)}
+                className="grid size-8 shrink-0 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] cursor-pointer"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
+            <dl className="grid gap-3 pt-4 text-xs">
+              {[
+                ['Reported by', reviewJob.residentName || 'Unknown resident'],
+                ['Barangay', reviewJob.barangay ? `Brgy. ${reviewJob.barangay}` : '—'],
+                ['Landmark', reviewJob.landmark || '—'],
+                ['Pinned location', reviewJob.pinnedLocation || '—'],
+                ['Priority', priorityLabels[reviewJob.priority] ?? 'Medium'],
+                ['Noticed', reviewJob.startedTime || reviewJob.date || '—'],
+                ['Submitted', reviewJob.date || '—'],
+              ].map(([label, value]) => (
+                <div key={label} className="grid grid-cols-[110px_1fr] gap-2">
+                  <dt className="text-[10px] font-bold uppercase tracking-wider text-brand-muted pt-0.5">{label}</dt>
+                  <dd className="font-semibold text-brand-muted break-words">{value}</dd>
+                </div>
+              ))}
+            </dl>
+
+            <div className="mt-4 border-t border-brand-line pt-3">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">Resident notes</span>
+              <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-brand-muted">
+                {reviewJob.notes || 'No notes were added.'}
+              </p>
+            </div>
+
+            {!reviewJob.coordinates && (
+              <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-[#fff1a8] p-3 text-[11px] font-semibold text-[#9a6500]">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                No GPS pin was captured — navigate by the barangay and landmark.
+              </p>
+            )}
+
+            {reviewJob.tone !== 'resolved' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusJob(reviewJob)
+                  setReviewJob(null)
+                }}
+                className="mt-4 flex h-10 w-full items-center justify-center rounded-xl bg-brand-blue text-xs font-bold text-white hover:bg-brand-navy cursor-pointer"
+              >
+                Update status
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* UPDATE STATUS MODAL */}
-      {selectedJobForStatus && (
+      {statusJob && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
           <div
             className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-brand-line bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
@@ -318,48 +395,52 @@ export default function StaffJobs() {
             <div className="flex items-center justify-between border-b border-brand-line pb-3">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
-                  {selectedJobForStatus.id}
+                  {statusJob.id}
                 </span>
                 <h3 className="text-base font-extrabold text-brand-navy">Update Job Status</h3>
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedJobForStatus(null)}
-                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
+                onClick={() => { setStatusJob(null); setEvidenceFile(null) }}
+                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] cursor-pointer"
               >
                 <X className="size-4" />
               </button>
             </div>
 
             <div className="space-y-2 pt-4">
-              {stageNames.map((stg) => (
-                <button
-                  key={stg.id}
-                  type="button"
-                  onClick={() => handleSetStage(selectedJobForStatus.id, stg.id)}
-                  className={`flex w-full items-center justify-between rounded-xl p-3 text-xs font-bold transition-all cursor-pointer border ${
-                    selectedJobForStatus.step === stg.id
-                      ? 'border-brand-blue bg-[e5e9f6] text-brand-blue'
-                      : 'border-brand-line bg-white text-brand-ink hover:bg-brand-paper'
-                  }`}
-                >
-                  <span className="flex items-center gap-2.5">
-                    <span
-                      className={`grid size-6 place-items-center rounded-full text-[11px] font-extrabold ${
-                        selectedJobForStatus.step === stg.id
-                          ? 'bg-brand-blue text-white'
-                          : 'bg-[#e5e9f6] text-brand-muted'
-                      }`}
-                    >
-                      {stg.id}
+              {STATUS_OPTIONS.map((option) => {
+                const current = option.key === stageKey(statusJob.tone)
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => handleSetStatus(statusJob, option.key)}
+                    className={`flex w-full items-center justify-between rounded-xl p-3 text-xs font-bold transition-all cursor-pointer border disabled:opacity-60 ${
+                      current
+                        ? 'border-brand-blue bg-[#e5e9f6] text-brand-blue'
+                        : 'border-brand-line bg-white text-brand-ink hover:bg-brand-paper'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <span
+                        className={`grid size-6 place-items-center rounded-full text-[11px] font-extrabold ${
+                          current ? 'bg-brand-blue text-white' : 'bg-[#e5e9f6] text-brand-muted'
+                        }`}
+                      >
+                        {option.key === 'resolved' ? 3 : 2}
+                      </span>
+                      <span>{option.label}</span>
                     </span>
-                    <span>{stg.label}</span>
-                  </span>
-                  {selectedJobForStatus.step === stg.id && (
-                    <Check className="size-4 text-brand-blue" />
-                  )}
-                </button>
-              ))}
+                    {current && <Check className="size-4 text-brand-blue" />}
+                  </button>
+                )
+              })}
+              <ResolutionEvidenceInput file={evidenceFile} onChange={setEvidenceFile} disabled={isSubmitting} />
+              {isSubmitting && (
+                <p className="pt-1 text-center text-[11px] font-semibold text-brand-muted">Updating…</p>
+              )}
             </div>
           </div>
         </div>
@@ -377,7 +458,7 @@ export default function StaffJobs() {
               <button
                 type="button"
                 onClick={() => setNavJob(null)}
-                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
+                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] cursor-pointer"
               >
                 <X className="size-4" />
               </button>
@@ -386,28 +467,33 @@ export default function StaffJobs() {
             <div className="pt-4 space-y-3 text-xs">
               <div className="rounded-2xl border border-brand-line bg-brand-paper p-3.5">
                 <span className="text-[10px] font-bold uppercase text-brand-muted">Destination</span>
-                <p className="font-extrabold text-brand-navy text-sm mt-0.5">{navJob.location}</p>
-                <p className="text-brand-muted mt-1 font-medium">{navJob.distance} from your location</p>
+                <p className="font-extrabold text-brand-navy text-sm mt-0.5">
+                  {navJob.barangay ? `Brgy. ${navJob.barangay}` : navJob.location}
+                  {navJob.pinnedLocation ? ` · ${navJob.pinnedLocation}` : ''}
+                </p>
+                <p className="text-brand-muted mt-1 font-medium">
+                  {navJob.coordinates
+                    ? `Using the GPS pin the resident captured${navJob.coordinates.accuracy ? ` (±${Math.round(navJob.coordinates.accuracy)} m)` : ''}.`
+                    : 'No GPS pin — directions search the barangay name.'}
+                </p>
               </div>
 
               <div className="flex gap-2 pt-2">
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=Valencia+City+${encodeURIComponent(
-                    navJob.location
-                  )}`}
-                  target="_blank"
-                  rel="noreferrer"
+                  href={`/staff/map?job=${encodeURIComponent(navJob.id)}`}
                   className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-brand-blue py-2.5 font-bold text-white shadow-xs hover:bg-brand-navy"
                 >
                   <Navigation className="size-3.5" />
-                  <span>Open Google Maps</span>
+                  <span>Navigate in app</span>
                 </a>
                 <a
-                  href="/staff/map"
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination(navJob))}`}
+                  target="_blank"
+                  rel="noreferrer"
                   className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-brand-line py-2.5 font-bold text-brand-ink hover:bg-brand-paper"
                 >
-                  <Compass className="size-3.5" />
-                  <span>View in Field Map</span>
+                  <ExternalLink className="size-3.5" />
+                  <span>Google Maps</span>
                 </a>
               </div>
             </div>
@@ -420,4 +506,3 @@ export default function StaffJobs() {
     </div>
   )
 }
-

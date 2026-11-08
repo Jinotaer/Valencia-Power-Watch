@@ -1,28 +1,44 @@
 import {
-  AlertTriangle,
   Bell,
   Check,
   ClipboardList,
-  Compass,
+  ExternalLink,
   MapPin,
   Navigation,
   X,
   Zap,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
+import {
+  loadAssignedReports,
+  updateReportStatus,
+} from '../../lib/reports'
+import { supabase } from '../../lib/supabase'
+import { ReportPriorityBadge, ReportStatusBadge } from '../resident/reportView'
+import { ResolutionEvidenceInput } from './evidenceInput'
+
+// Real report statuses power the stepper (see supabase/report.sql):
+// pending = assigned and awaiting start, verified = work started, resolved = done.
+const TONE_STEP = { pending: 1, verified: 2, resolved: 3 }
+const STATUS_OPTIONS = [{ key: 'verified', label: 'In progress' }, { key: 'resolved', label: 'Resolved' }]
+const steps = [
+  { id: 1, label: 'Assigned' },
+  { id: 2, label: 'In progress' },
+  { id: 3, label: 'Resolved' },
+]
 
 export default function StaffHome() {
-  // Duty toggle state
+  const [reports, setReports] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
+  const [staffName, setStaffName] = useState('')
   const [isOnDuty, setIsOnDuty] = useState(true)
-
-  // Current active job status tracking (1: Acknowledged, 2: En route, 3: On site, 4: Resolved)
-  const [jobStage, setJobStage] = useState(2)
-
-  // Modals state
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [showNavModal, setShowNavModal] = useState(false)
-  const [selectedAssignedJob, setSelectedAssignedJob] = useState(null)
+  const [evidenceFile, setEvidenceFile] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
   const showToast = (msg) => {
@@ -30,52 +46,79 @@ export default function StaffHome() {
     setTimeout(() => setToastMessage(''), 3000)
   }
 
-  // Work stages definition
-  const stages = [
-    { id: 1, label: 'Acknowledged' },
-    { id: 2, label: 'En route' },
-    { id: 3, label: 'On site' },
-    { id: 4, label: 'Resolved' },
-  ]
-
-  const currentJob = {
-    orderNo: 'WO-2026-0418',
-    title: 'Power interruption near Guinyoran',
-    location: 'Brgy. Guinuyoran',
-    distance: '2.4 km away',
-    duration: 'about 8 min',
-    cause: 'Fallen acacia branch on secondary line',
-    assignedTo: 'Line Crew 2',
-    priority: 'High',
-    customerReports: 3,
+  const reload = () => {
+    setLoadError('')
+    setIsLoading(true)
+    setReloadKey((value) => value + 1)
   }
 
-  const assignedJobs = [
-    {
-      id: 'job-1',
-      title: 'Flickering lights',
-      location: 'Brgy. Lurogan',
-      time: 'Assigned 9:15 AM',
-      status: 'New',
-      statusColor: 'bg-[fff1a8] text-[#9a6700]',
-      icon: ClipboardList,
-    },
-    {
-      id: 'job-2',
-      title: 'Damaged line near chapel',
-      location: 'Brgy. Poblacion',
-      time: 'Assigned 8:50 AM',
-      status: 'Acknowledged',
-      statusColor: 'bg-[e5e9f6] text-brand-blue',
-      icon: AlertTriangle,
-    },
-  ]
+  useEffect(() => {
+    let active = true
 
-  const handleUpdateStage = (newStage) => {
-    setJobStage(newStage)
-    setShowStatusModal(false)
-    showToast(`Status updated to: ${stages.find((s) => s.id === newStage)?.label}`)
+    loadAssignedReports()
+      .then((rows) => {
+        if (active) setReports(rows)
+      })
+      .catch(() => {
+        if (active) {
+          setReports([])
+          setLoadError('We could not load your assigned reports. Check your connection and try again.')
+        }
+      })
+      .finally(() => {
+        if (active) setIsLoading(false)
+      })
+
+    if (supabase) {
+      supabase.auth.getUser().then(({ data }) => setStaffName(data?.user?.user_metadata?.full_name || ''))
+    }
+
+    return () => {
+      active = false
+    }
+  }, [reloadKey])
+
+  // Hero card: the first started job, else the newest assignment awaiting start.
+  const currentJob = useMemo(
+    () => reports.find((r) => r.tone === 'verified') ?? reports.find((r) => r.tone === 'pending') ?? null,
+    [reports],
+  )
+  const otherJobs = useMemo(
+    () => reports.filter((r) => r.id !== currentJob?.id),
+    [reports, currentJob],
+  )
+  const step = currentJob ? (TONE_STEP[currentJob.tone] ?? 1) : 0
+
+  const handleSetStatus = async (statusKey) => {
+    if (isSubmitting || !currentJob) return
+    setIsSubmitting(true)
+
+    try {
+      // Keep the job on this account (the RLS policy requires it anyway).
+      await updateReportStatus(
+        currentJob.id,
+        statusKey,
+        currentJob.assignedStaffId,
+        statusKey === 'resolved' && evidenceFile
+          ? [{ file: evidenceFile, label: 'Resolution evidence', type: evidenceFile.type }]
+          : [],
+      )
+      setEvidenceFile(null)
+      setShowStatusModal(false)
+      reload()
+      showToast(statusKey === 'resolved' ? 'Marked as resolved. Great work!' : 'Status updated: In progress.')
+    } catch {
+      showToast('We could not update this report. Check your connection and try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
+
+  const currentDestination = currentJob
+    ? currentJob.coordinates
+      ? `${currentJob.coordinates.latitude},${currentJob.coordinates.longitude}`
+      : `Valencia City Bukidnon Brgy. ${currentJob.barangay}`
+    : ''
 
   return (
     <div className="min-h-screen bg-brand-paper text-brand-navy flex flex-col justify-between">
@@ -121,8 +164,10 @@ export default function StaffHome() {
       <main className="mx-auto w-full max-w-md px-4 pb-32 pt-5 flex-1">
         {/* USER GREETING */}
         <section className="mb-4">
-          <h1 className="text-3xl font-black tracking-tight text-brand-navy">Hello, Ramon</h1>
-          <p className="text-xs font-semibold text-brand-muted mt-0.5">Line Crew 2 · Valencia City</p>
+          <h1 className="text-3xl font-black tracking-tight text-brand-navy">
+            Hello, {staffName || 'Crew'}
+          </h1>
+          <p className="text-xs font-semibold text-brand-muted mt-0.5">Valencia City</p>
         </section>
 
         {/* ON DUTY STATUS CARD */}
@@ -168,143 +213,182 @@ export default function StaffHome() {
         </section>
 
         {/* CURRENT JOB HERO CARD */}
-        <section className="relative mb-6 overflow-hidden rounded-3xl bg-brand-blue p-5 text-white shadow-[0_10px_25px_rgba(27,61,143,0.25)]">
-          {/* Subtle Decorative Curves */}
-          <div className="pointer-events-none absolute -right-10 -top-10 size-48 rounded-full border border-white/10" />
-          <div className="pointer-events-none absolute -right-4 -top-4 size-32 rounded-full border border-white/10" />
+        {isLoading && (
+          <section className="mb-6 rounded-3xl border border-brand-line bg-white p-8 text-center">
+            <p className="text-sm font-semibold text-brand-muted">Loading your current job…</p>
+          </section>
+        )}
 
-          {/* Top Badge & WO Code */}
-          <div className="relative z-10 flex items-center justify-between">
-            <span className="inline-flex items-center gap-1 rounded-full bg-brand-yellow px-2.5 py-1 text-xs font-black text-brand-navy shadow-xs">
-              <Zap className="size-3 fill-current" />
-              <span>Current job</span>
-            </span>
-            <span className="font-mono text-xs font-bold text-brand-line tracking-wide">
-              {currentJob.orderNo}
-            </span>
-          </div>
+        {!isLoading && loadError && (
+          <section className="mb-6 rounded-3xl border border-brand-line bg-white p-8 text-center">
+            <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
+            <button type="button" onClick={reload} className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4 cursor-pointer">
+              Try again
+            </button>
+          </section>
+        )}
 
-          {/* Job Title */}
-          <h2 className="relative z-10 mt-3 text-xl font-black leading-snug tracking-tight text-white max-w-[20ch]">
-            {currentJob.title}
-          </h2>
+        {!isLoading && !loadError && currentJob && (
+          <section className="relative mb-6 overflow-hidden rounded-3xl bg-brand-blue p-5 text-white shadow-[0_10px_25px_rgba(27,61,143,0.25)]">
+            {/* Subtle Decorative Curves */}
+            <div className="pointer-events-none absolute -right-10 -top-10 size-48 rounded-full border border-white/10" />
+            <div className="pointer-events-none absolute -right-4 -top-4 size-32 rounded-full border border-white/10" />
 
-          {/* Location line */}
-          <div className="relative z-10 mt-2 flex items-center gap-1.5 text-xs font-medium text-[e5e9f6]">
-            <MapPin className="size-3.5 text-brand-yellow shrink-0" />
-            <span>
-              {currentJob.location} · {currentJob.distance} · {currentJob.duration}
-            </span>
-          </div>
-
-          {/* 4-Stage Progress Tracker */}
-          <div className="relative z-10 mt-5 pt-1">
-            <div className="relative flex items-center justify-between">
-              {/* Background Line */}
-              <div className="absolute left-3 right-3 top-3.5 h-[2px] bg-white/20 -z-0" />
-              {/* Active Progress Line */}
-              <div
-                className="absolute left-3 top-3.5 h-[2px] bg-brand-yellow transition-all duration-300 -z-0"
-                style={{ width: `${((jobStage - 1) / 3) * 100}%` }}
-              />
-
-              {stages.map((stg) => {
-                const isPassed = jobStage > stg.id
-                const isCurrent = jobStage === stg.id
-
-                return (
-                  <div key={stg.id} className="relative z-10 flex flex-col items-center">
-                    <div
-                      className={`grid size-7 place-items-center rounded-full text-xs font-black transition-all ${
-                        isPassed
-                          ? 'bg-brand-yellow text-brand-navy'
-                          : isCurrent
-                          ? 'bg-white text-brand-navy ring-2 ring-brand-yellow shadow-sm'
-                          : 'bg-brand-blue border border-white/40 text-white/70'
-                      }`}
-                    >
-                      {isPassed ? <Check className="size-3.5 stroke-[3]" /> : stg.id}
-                    </div>
-                    <span
-                      className={`mt-1.5 text-[10px] font-extrabold whitespace-nowrap ${
-                        isCurrent ? 'text-white' : isPassed ? 'text-brand-yellow' : 'text-white/60'
-                      }`}
-                    >
-                      {stg.label}
-                    </span>
-                  </div>
-                )
-              })}
+            {/* Top Badge & Reference Code */}
+            <div className="relative z-10 flex items-center justify-between">
+              <span className="inline-flex items-center gap-1 rounded-full bg-brand-yellow px-2.5 py-1 text-xs font-black text-brand-navy shadow-xs">
+                <Zap className="size-3 fill-current" />
+                <span>Current job</span>
+              </span>
+              <span className="font-mono text-xs font-bold text-brand-line tracking-wide">
+                {currentJob.id}
+              </span>
             </div>
-          </div>
 
-          {/* Action Buttons Row */}
-          <div className="relative z-10 mt-6 grid grid-cols-2 gap-3">
-            {/* Navigate Button */}
-            <button
-              type="button"
-              onClick={() => setShowNavModal(true)}
-              className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-white text-xs sm:text-sm font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.98] transition-all cursor-pointer"
-            >
-              <Navigation className="size-4 rotate-45" />
-              <span>Navigate</span>
-            </button>
+            {/* Job Title */}
+            <h2 className="relative z-10 mt-3 text-xl font-black leading-snug tracking-tight text-white max-w-[20ch]">
+              {currentJob.outageType}
+            </h2>
 
-            {/* Update Status Button */}
-            <button
-              type="button"
-              onClick={() => setShowStatusModal(true)}
-              className="flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-brand-yellow text-xs sm:text-sm font-black text-brand-navy shadow-xs hover:bg-brand-yellow active:scale-[0.98] transition-all cursor-pointer"
-            >
-              <span>Update status</span>
-            </button>
-          </div>
-        </section>
+            {/* Location line */}
+            <div className="relative z-10 mt-2 flex items-center gap-1.5 text-xs font-medium text-[#e5e9f6]">
+              <MapPin className="size-3.5 text-brand-yellow shrink-0" />
+              <span className="truncate">
+                {currentJob.barangay ? `Brgy. ${currentJob.barangay}` : currentJob.location}
+                {currentJob.pinnedLocation ? ` · ${currentJob.pinnedLocation}` : currentJob.landmark ? ` · ${currentJob.landmark}` : ''}
+              </span>
+            </div>
+
+            {/* Priority + Status badges */}
+            <div className="relative z-10 mt-3 flex items-center gap-1.5">
+              <ReportPriorityBadge priority={currentJob.priority} />
+              <ReportStatusBadge tone={currentJob.tone} status={currentJob.status} />
+            </div>
+
+            {/* 3-Stage Progress Tracker */}
+            <div className="relative z-10 mt-5 pt-1">
+              <div className="relative flex items-center justify-between">
+                {/* Background Line */}
+                <div className="absolute left-3 right-3 top-3.5 h-[2px] bg-white/20 -z-0" />
+                {/* Active Progress Line */}
+                <div
+                  className="absolute left-3 top-3.5 h-[2px] bg-brand-yellow transition-all duration-300 -z-0"
+                  style={{ width: `${((step - 1) / (steps.length - 1)) * 100}%` }}
+                />
+
+                {steps.map((stg) => {
+                  const isPassed = step > stg.id
+                  const isCurrent = step === stg.id
+
+                  return (
+                    <div key={stg.id} className="relative z-10 flex flex-col items-center">
+                      <div
+                        className={`grid size-7 place-items-center rounded-full text-xs font-black transition-all ${
+                          isPassed
+                            ? 'bg-brand-yellow text-brand-navy'
+                            : isCurrent
+                            ? 'bg-white text-brand-navy ring-2 ring-brand-yellow shadow-sm'
+                            : 'bg-brand-blue border border-white/40 text-white/70'
+                        }`}
+                      >
+                        {isPassed ? <Check className="size-3.5 stroke-[3]" /> : stg.id}
+                      </div>
+                      <span
+                        className={`mt-1.5 text-[10px] font-extrabold whitespace-nowrap ${
+                          isCurrent ? 'text-white' : isPassed ? 'text-brand-yellow' : 'text-white/60'
+                        }`}
+                      >
+                        {stg.label}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Action Buttons Row */}
+            <div className="relative z-10 mt-6 grid grid-cols-2 gap-3">
+              {/* Navigate Button */}
+              <button
+                type="button"
+                onClick={() => setShowNavModal(true)}
+                className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-white text-xs sm:text-sm font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <Navigation className="size-4 rotate-45" />
+                <span>Navigate</span>
+              </button>
+
+              {/* Update Status Button */}
+              <button
+                type="button"
+                onClick={() => setShowStatusModal(true)}
+                className="flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-brand-yellow text-xs sm:text-sm font-black text-brand-navy shadow-xs hover:bg-brand-yellow active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <span>Update status</span>
+              </button>
+            </div>
+          </section>
+        )}
+
+        {!isLoading && !loadError && !currentJob && (
+          <section className="mb-6 rounded-3xl border border-dashed border-brand-line bg-white p-8 text-center">
+            <p className="text-sm font-bold text-brand-navy">No active job right now</p>
+            <p className="mt-1 text-xs text-brand-muted">
+              Assignments appear here the moment an administrator assigns a report to you.
+            </p>
+          </section>
+        )}
 
         {/* ASSIGNED TO YOU SECTION */}
         <section>
           <div className="mb-2.5 flex items-center justify-between px-1">
             <h2 className="text-base font-black text-brand-navy">Assigned to you</h2>
-            <span className="text-xs font-bold text-brand-muted">{assignedJobs.length + 1} jobs</span>
+            <span className="text-xs font-bold text-brand-muted">{reports.length} jobs</span>
           </div>
 
           <div className="space-y-3">
-            {assignedJobs.map((job) => {
-              const Icon = job.icon
-              return (
-                <div
-                  key={job.id}
-                  onClick={() => setSelectedAssignedJob(job)}
-                  className="flex items-center justify-between rounded-2xl border border-brand-line bg-white p-3.5 shadow-xs hover:border-brand-line active:scale-[0.99] transition-all cursor-pointer"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[e5e9f6] text-brand-blue">
-                      <Icon className="size-5" />
-                    </span>
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-extrabold text-brand-navy truncate leading-tight">
-                        {job.title}
-                      </h3>
-                      <p className="text-xs text-brand-muted font-medium truncate mt-0.5">
-                        {job.location} · {job.time}
-                      </p>
-                    </div>
-                  </div>
-
-                  <span
-                    className={`ml-2 shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${job.statusColor}`}
-                  >
-                    {job.status}
+            {otherJobs.map((report) => (
+              <a
+                key={report.id}
+                href="/staff/jobs"
+                className="flex items-center justify-between rounded-2xl border border-brand-line bg-white p-3.5 shadow-xs hover:border-brand-line active:scale-[0.99] transition-all no-underline"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#e5e9f6] text-brand-blue">
+                    <ClipboardList className="size-5" />
                   </span>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-extrabold text-brand-navy truncate leading-tight">
+                      {report.outageType}
+                    </h3>
+                    <p className="text-xs text-brand-muted font-medium truncate mt-0.5">
+                      {report.barangay ? `Brgy. ${report.barangay}` : report.location} · Noticed {report.startedTime || report.date}
+                    </p>
+                  </div>
                 </div>
-              )
-            })}
+
+                <div className="ml-2 flex shrink-0 items-center gap-1.5">
+                  <ReportPriorityBadge priority={report.priority} />
+                  <ReportStatusBadge tone={report.tone} status={report.status} />
+                </div>
+              </a>
+            ))}
+
+            {!isLoading && !loadError && otherJobs.length === 0 && reports.length > 0 && (
+              <p className="px-1 text-xs text-brand-muted">That's everything — your current job is the only one assigned to you.</p>
+            )}
+
+            {!isLoading && !loadError && reports.length === 0 && (
+              <div className="rounded-3xl border border-dashed border-brand-line p-6 text-center text-xs text-brand-muted">
+                No jobs assigned to you yet.
+              </div>
+            )}
           </div>
         </section>
       </main>
 
       {/* UPDATE STATUS MODAL */}
-      {showStatusModal && (
+      {showStatusModal && currentJob && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
           <div
             className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-brand-line bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
@@ -313,51 +397,59 @@ export default function StaffHome() {
             <div className="flex items-center justify-between border-b border-brand-line pb-3">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
-                  {currentJob.orderNo}
+                  {currentJob.id}
                 </span>
                 <h3 className="text-base font-extrabold text-brand-navy">Update Job Status</h3>
               </div>
               <button
                 type="button"
-                onClick={() => setShowStatusModal(false)}
-                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
+                onClick={() => { setShowStatusModal(false); setEvidenceFile(null) }}
+                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] cursor-pointer"
               >
                 <X className="size-4" />
               </button>
             </div>
 
             <div className="space-y-2 pt-4">
-              {stages.map((stg) => (
-                <button
-                  key={stg.id}
-                  type="button"
-                  onClick={() => handleUpdateStage(stg.id)}
-                  className={`flex w-full items-center justify-between rounded-xl p-3 text-xs font-bold transition-all cursor-pointer border ${
-                    jobStage === stg.id
-                      ? 'border-brand-blue bg-[e5e9f6] text-brand-blue'
-                      : 'border-brand-line bg-white text-brand-ink hover:bg-brand-paper'
-                  }`}
-                >
-                  <span className="flex items-center gap-2.5">
-                    <span
-                      className={`grid size-6 place-items-center rounded-full text-[11px] font-extrabold ${
-                        jobStage === stg.id ? 'bg-brand-blue text-white' : 'bg-[#e5e9f6] text-brand-muted'
-                      }`}
-                    >
-                      {stg.id}
+              {STATUS_OPTIONS.map((option) => {
+                const current = currentJob.tone === option.key
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={() => handleSetStatus(option.key)}
+                    className={`flex w-full items-center justify-between rounded-xl p-3 text-xs font-bold transition-all cursor-pointer border disabled:opacity-60 ${
+                      current
+                        ? 'border-brand-blue bg-[#e5e9f6] text-brand-blue'
+                        : 'border-brand-line bg-white text-brand-ink hover:bg-brand-paper'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <span
+                        className={`grid size-6 place-items-center rounded-full text-[11px] font-extrabold ${
+                          current ? 'bg-brand-blue text-white' : 'bg-[#e5e9f6] text-brand-muted'
+                        }`}
+                      >
+                        {option.key === 'resolved' ? 3 : 2}
+                      </span>
+                      <span>{option.label}</span>
                     </span>
-                    <span>{stg.label}</span>
-                  </span>
-                  {jobStage === stg.id && <Check className="size-4 text-brand-blue" />}
-                </button>
-              ))}
+                    {current && <Check className="size-4 text-brand-blue" />}
+                  </button>
+                )
+              })}
+              <ResolutionEvidenceInput file={evidenceFile} onChange={setEvidenceFile} disabled={isSubmitting} />
+              {isSubmitting && (
+                <p className="pt-1 text-center text-[11px] font-semibold text-brand-muted">Updating…</p>
+              )}
             </div>
           </div>
         </div>
       )}
 
       {/* NAVIGATION MODAL */}
-      {showNavModal && (
+      {showNavModal && currentJob && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
           <div
             className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-brand-line bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
@@ -368,7 +460,7 @@ export default function StaffHome() {
               <button
                 type="button"
                 onClick={() => setShowNavModal(false)}
-                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
+                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] cursor-pointer"
               >
                 <X className="size-4" />
               </button>
@@ -377,76 +469,34 @@ export default function StaffHome() {
             <div className="pt-4 space-y-3 text-xs">
               <div className="rounded-2xl border border-brand-line bg-brand-paper p-3.5">
                 <span className="text-[10px] font-bold uppercase text-brand-muted">Destination</span>
-                <p className="font-extrabold text-brand-navy text-sm mt-0.5">{currentJob.location}</p>
+                <p className="font-extrabold text-brand-navy text-sm mt-0.5">
+                  {currentJob.barangay ? `Brgy. ${currentJob.barangay}` : currentJob.location}
+                  {currentJob.pinnedLocation ? ` · ${currentJob.pinnedLocation}` : ''}
+                </p>
                 <p className="text-brand-muted mt-1 font-medium">
-                  {currentJob.distance} · Estimated arrival: {currentJob.duration}
+                  {currentJob.coordinates
+                    ? `Using the GPS pin the resident captured${currentJob.coordinates.accuracy ? ` (±${Math.round(currentJob.coordinates.accuracy)} m)` : ''}.`
+                    : 'No GPS pin — directions search the barangay name.'}
                 </p>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className="grid grid-cols-2 gap-2">
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=Valencia+City+Guinoyuran`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-brand-blue py-2.5 font-bold text-white shadow-xs hover:bg-brand-navy"
+                  href={`/staff/map?job=${encodeURIComponent(currentJob.id)}`}
+                  className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-brand-blue font-bold text-white shadow-xs hover:bg-brand-navy"
                 >
                   <Navigation className="size-3.5" />
-                  <span>Open Google Maps</span>
+                  <span>Navigate in app</span>
                 </a>
                 <a
-                  href="/staff/map"
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-brand-line py-2.5 font-bold text-brand-ink hover:bg-brand-paper"
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentDestination)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-brand-line font-bold text-brand-ink hover:bg-brand-paper"
                 >
-                  <Compass className="size-3.5" />
-                  <span>View in Field Map</span>
+                  <ExternalLink className="size-3.5" />
+                  <span>Google Maps</span>
                 </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ASSIGNED JOB QUICK VIEW MODAL */}
-      {selectedAssignedJob && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
-          <div
-            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-brand-line bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6"
-            role="dialog"
-          >
-            <div className="flex items-center justify-between border-b border-brand-line pb-3">
-              <h3 className="text-base font-extrabold text-brand-navy">
-                {selectedAssignedJob.title}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setSelectedAssignedJob(null)}
-                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-
-            <div className="pt-4 space-y-3 text-xs">
-              <div className="flex justify-between items-center rounded-xl bg-brand-paper p-3 border border-brand-line">
-                <span className="text-brand-muted font-medium">Location</span>
-                <strong className="text-brand-navy">{selectedAssignedJob.location}</strong>
-              </div>
-              <div className="flex justify-between items-center rounded-xl bg-brand-paper p-3 border border-brand-line">
-                <span className="text-brand-muted font-medium">Assignment time</span>
-                <strong className="text-brand-navy">{selectedAssignedJob.time}</strong>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    showToast('Set as active work order')
-                    setSelectedAssignedJob(null)
-                  }}
-                  className="flex-1 rounded-xl bg-brand-blue py-2.5 font-bold text-white shadow-xs hover:bg-brand-navy"
-                >
-                  Switch to this job
-                </button>
               </div>
             </div>
           </div>

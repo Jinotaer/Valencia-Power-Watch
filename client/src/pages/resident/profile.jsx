@@ -1,5 +1,4 @@
 import {
-  Bell,
   Calendar,
   Check,
   ChevronRight,
@@ -7,14 +6,22 @@ import {
   Lock,
   LogOut,
   MapPin,
+  Megaphone,
   Pencil,
+  Send,
   UserRound,
   Zap,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import ResidentProfileModals from './profileModals'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
+import { BellLink } from '../../components/layout/BellLink'
 import { supabase } from '../../lib/supabase'
+import {
+  defaultNotificationPreferences,
+  loadNotificationPreferences,
+  saveNotificationPreferences,
+} from '../../lib/notifications'
 
 export default function ResidentProfile() {
   const [user, setUser] = useState({
@@ -40,10 +47,28 @@ export default function ResidentProfile() {
     })
   }, [])
 
-  // Notification toggle states matching reference image
-  const [outageAlerts, setOutageAlerts] = useState(true)
-  const [reportStatusUpdates, setReportStatusUpdates] = useState(true)
-  const [scheduledOutageReminders, setScheduledOutageReminders] = useState(false)
+  // Notification preferences, persisted on the public.users row.
+  const [prefs, setPrefs] = useState(defaultNotificationPreferences)
+
+  useEffect(() => {
+    let active = true
+    loadNotificationPreferences()
+      .then((saved) => {
+        if (active) setPrefs(saved)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const togglePref = (key, label) => {
+    const next = { ...prefs, [key]: !prefs[key] }
+    setPrefs(next)
+    saveNotificationPreferences(next)
+      .then(() => showToast(`${label} ${next[key] ? 'enabled' : 'disabled'}`))
+      .catch(() => showToast('Could not save that setting. Try again.'))
+  }
 
   // Interactive Modals
   const [activeModal, setActiveModal] = useState(null) // 'personal' | 'barangay' | 'password' | 'signout'
@@ -59,36 +84,63 @@ export default function ResidentProfile() {
 
   const handleSavePersonal = async (e) => {
     e.preventDefault()
+    let emailChanged = false
+
     if (supabase) {
-      const { error } = await supabase.auth.updateUser({
+      const { data } = await supabase.auth.getUser()
+      const updates = {
         data: {
           full_name: personalForm.name,
           contact_number: personalForm.phone,
         },
-      })
+      }
+      const email = personalForm.email.trim()
+      if (email && email !== data?.user?.email) {
+        updates.email = email
+        emailChanged = true
+      }
+
+      const { error } = await supabase.auth.updateUser(updates)
       if (error) {
         showToast('Failed to save: ' + error.message)
         return
       }
+
+      // Keep the public profile row in sync (RLS allows own-row edits).
+      if (data?.user) {
+        await supabase
+          .from('users')
+          .update({ full_name: personalForm.name, contact_number: personalForm.phone || null })
+          .eq('id', data.user.id)
+      }
     }
+
     setUser((prev) => ({
       ...prev,
       name: personalForm.name,
+      email: emailChanged ? personalForm.email.trim() : prev.email,
       phone: personalForm.phone,
     }))
     setActiveModal(null)
-    showToast('Personal information updated')
+    showToast(emailChanged ? 'Check your inbox to confirm the new email' : 'Personal information updated')
   }
 
   const handleSaveBarangay = async (e) => {
     e.preventDefault()
     if (supabase) {
+      const { data } = await supabase.auth.getUser()
       const { error } = await supabase.auth.updateUser({
         data: { barangay: selectedBarangay, address: selectedBarangay },
       })
       if (error) {
         showToast('Failed to save: ' + error.message)
         return
+      }
+      if (data?.user) {
+        await supabase
+          .from('users')
+          .update({ address: selectedBarangay })
+          .eq('id', data.user.id)
       }
     }
     setUser((prev) => ({ ...prev, barangay: selectedBarangay }))
@@ -120,7 +172,7 @@ export default function ResidentProfile() {
 
   const handleSignOut = async () => {
     if (supabase) await supabase.auth.signOut()
-    window.location.href = '/community/login'
+    window.location.href = '/login'
   }
 
   return (
@@ -152,14 +204,7 @@ export default function ResidentProfile() {
           </a>
 
           {/* Notification Button */}
-          <button
-            type="button"
-            className="relative grid size-10 place-items-center rounded-2xl border border-brand-line bg-white text-brand-navy shadow-xs transition-colors hover:bg-brand-paper"
-            aria-label="Notifications"
-          >
-            <Bell className="size-5 text-brand-blue" />
-            <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-brand-yellow ring-2 ring-white" />
-          </button>
+          <BellLink />
         </div>
       </header>
 
@@ -288,19 +333,15 @@ export default function ResidentProfile() {
               <button
                 type="button"
                 role="switch"
-                aria-checked={outageAlerts}
-                onClick={() => {
-                  const next = !outageAlerts
-                  setOutageAlerts(next)
-                  showToast(next ? 'Outage alerts enabled' : 'Outage alerts disabled')
-                }}
+                aria-checked={prefs.outageAlerts}
+                onClick={() => togglePref('outageAlerts', 'Outage alerts')}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  outageAlerts ? 'bg-brand-blue' : 'bg-brand-line'
+                  prefs.outageAlerts ? 'bg-brand-blue' : 'bg-brand-line'
                 }`}
               >
                 <span
                   className={`pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                    outageAlerts ? 'translate-x-5' : 'translate-x-0'
+                    prefs.outageAlerts ? 'translate-x-5' : 'translate-x-0'
                   }`}
                 />
               </button>
@@ -317,19 +358,15 @@ export default function ResidentProfile() {
               <button
                 type="button"
                 role="switch"
-                aria-checked={reportStatusUpdates}
-                onClick={() => {
-                  const next = !reportStatusUpdates
-                  setReportStatusUpdates(next)
-                  showToast(next ? 'Status updates enabled' : 'Status updates disabled')
-                }}
+                aria-checked={prefs.reportStatusUpdates}
+                onClick={() => togglePref('reportStatusUpdates', 'Status updates')}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  reportStatusUpdates ? 'bg-brand-blue' : 'bg-brand-line'
+                  prefs.reportStatusUpdates ? 'bg-brand-blue' : 'bg-brand-line'
                 }`}
               >
                 <span
                   className={`pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                    reportStatusUpdates ? 'translate-x-5' : 'translate-x-0'
+                    prefs.reportStatusUpdates ? 'translate-x-5' : 'translate-x-0'
                   }`}
                 />
               </button>
@@ -346,23 +383,53 @@ export default function ResidentProfile() {
               <button
                 type="button"
                 role="switch"
-                aria-checked={scheduledOutageReminders}
-                onClick={() => {
-                  const next = !scheduledOutageReminders
-                  setScheduledOutageReminders(next)
-                  showToast(next ? 'Scheduled reminders enabled' : 'Scheduled reminders disabled')
-                }}
+                aria-checked={prefs.scheduledReminders}
+                onClick={() => togglePref('scheduledReminders', 'Scheduled reminders')}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  scheduledOutageReminders ? 'bg-brand-blue' : 'bg-brand-line'
+                  prefs.scheduledReminders ? 'bg-brand-blue' : 'bg-brand-line'
                 }`}
               >
                 <span
                   className={`pointer-events-none inline-block size-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                    scheduledOutageReminders ? 'translate-x-5' : 'translate-x-0'
+                    prefs.scheduledReminders ? 'translate-x-5' : 'translate-x-0'
                   }`}
                 />
               </button>
             </div>
+          </div>
+        </section>
+
+        {/* COMMUNITY SECTION */}
+        <section className="mt-6">
+          <h2 className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-brand-muted">
+            Community
+          </h2>
+          <div className="overflow-hidden rounded-2xl border border-brand-line bg-white shadow-[0_4px_20px_rgba(23,43,104,0.04)] divide-y divide-brand-paper">
+            <a
+              href="/community/announcements"
+              className="flex w-full items-center justify-between p-3.5 text-left transition-colors hover:bg-brand-paper no-underline"
+            >
+              <div className="flex items-center gap-3">
+                <span className="grid size-9 place-items-center rounded-xl bg-[e5e9f6] text-brand-blue">
+                  <Megaphone className="size-4.5" />
+                </span>
+                <span className="text-sm font-bold text-brand-navy">Advisories</span>
+              </div>
+              <ChevronRight className="size-4 text-brand-muted" />
+            </a>
+
+            <a
+              href="/community/feedback"
+              className="flex w-full items-center justify-between p-3.5 text-left transition-colors hover:bg-brand-paper no-underline"
+            >
+              <div className="flex items-center gap-3">
+                <span className="grid size-9 place-items-center rounded-xl bg-[e5e9f6] text-brand-blue">
+                  <Send className="size-4.5" />
+                </span>
+                <span className="text-sm font-bold text-brand-navy">Send feedback</span>
+              </div>
+              <ChevronRight className="size-4 text-brand-muted" />
+            </a>
           </div>
         </section>
 

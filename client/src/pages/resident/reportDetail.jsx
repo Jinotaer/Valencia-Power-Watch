@@ -2,7 +2,7 @@ import { ChevronLeft, Image as ImageIcon, MapPin, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { loadReport } from '../../lib/reports'
-import { ReportStatusBadge, ReportTimeline } from './reportView'
+import { ReportPriorityBadge, ReportStatusBadge, ReportTimeline } from './reportView'
 
 function submittedAt(report) {
   if (report.createdAt) {
@@ -102,7 +102,10 @@ export default function ResidentReportDetail({ reportId }) {
                     <span>{report.date}</span>
                   </div>
                 </div>
-                <ReportStatusBadge tone={report.tone} status={report.status} />
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <ReportPriorityBadge priority={report.priority} />
+                  <ReportStatusBadge tone={report.tone} status={report.status} />
+                </div>
               </div>
               <p className="mt-3 max-w-[60ch] text-[11px] leading-4 text-brand-muted sm:text-sm sm:leading-6">{report.description}</p>
               <ReportTimeline progress={report.progress ?? 0} />
@@ -163,6 +166,12 @@ export default function ResidentReportDetail({ reportId }) {
             <a href="/community/reports/new" className="flex min-h-11 items-center justify-center rounded-xl bg-brand-blue px-4 text-xs font-bold text-white no-underline shadow-[0_7px_16px_rgba(36,68,154,0.2)] transition-transform hover:-translate-y-0.5">
               Report another interruption
             </a>
+
+            {report.status === 'Resolved' && (
+              <a href={`/community/feedback?report=${encodeURIComponent(report.id)}`} className="flex min-h-11 items-center justify-center rounded-xl bg-brand-yellow px-4 text-xs font-black text-brand-navy no-underline shadow-[0_7px_16px_rgba(36,68,154,0.2)] transition-transform hover:-translate-y-0.5">
+                Rate this response
+              </a>
+            )}
           </div>
         )}
       </main>

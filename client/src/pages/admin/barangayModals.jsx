@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from '../../components/ui/dialog'
 import { valenciaBarangays } from '../auth/resident-staff/registerData'
-import { VALENCIA_CENTER } from './mapData'
+import { VALENCIA_CENTER } from '../../lib/geo'
 
 // OSM sometimes spells these differently from the barangay list.
 const barangayAliases = {
@@ -329,6 +329,70 @@ export function BarangayCreateDialog({
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+export function BarangayEditDialog({
+  open,
+  onOpenChange,
+  form,
+  setForm,
+  actionError,
+  isSubmitting,
+  onSave,
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold text-brand-ink">Edit Barangay</DialogTitle>
+          <DialogDescription className="text-xs text-brand-muted">
+            Update liaison details.
+          </DialogDescription>
+        </DialogHeader>
+
+        {actionError && (
+          <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-semibold text-[#b42318]">
+            {actionError}
+          </p>
+        )}
+
+        <form onSubmit={onSave} className="space-y-4 py-2">
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-brand-muted">Barangay Captain / Liaison</label>
+            <Input value={form.captain} onChange={(e) => setForm({ ...form, captain: e.target.value })} className="h-10 text-sm" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-brand-muted">Contact Hotline</label>
+              <Input value={form.contactNumber} onChange={(e) => setForm({ ...form, contactNumber: e.target.value })} className="h-10 text-sm" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-brand-muted">Total Households</label>
+              <Input type="number" min="0" value={form.totalHouseholds} onChange={(e) => setForm({ ...form, totalHouseholds: e.target.value })} className="h-10 text-sm" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-brand-muted">Affected Households</label>
+              <Input type="number" min="0" value={form.affectedHouseholds} onChange={(e) => setForm({ ...form, affectedHouseholds: e.target.value })} className="h-10 text-sm" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-brand-muted">Pinned Location</label>
+            <Input value={form.pinnedLocation} onChange={(e) => setForm({ ...form, pinnedLocation: e.target.value })} className="h-10 text-sm" />
+          </div>
+          <DialogFooter className="pt-3">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting} className="rounded-lg text-xs font-semibold">
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting} className="bg-brand-blue hover:bg-brand-navy text-white rounded-lg text-xs font-semibold">
+              {isSubmitting ? 'Saving…' : 'Save changes'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 

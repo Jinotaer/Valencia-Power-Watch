@@ -1,27 +1,19 @@
-import {
-  Bell,
-  Calendar,
-  Check,
-  Clock,
-  Layers,
-  LocateFixed,
-  MapPin,
-  Minus,
-  Plus,
-  Search,
-  Share2,
-  Users,
-  Wrench,
-  X,
-  Zap,
-} from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Calendar, Check, Clock, Layers, LocateFixed, MapPin, Minus, Plus, Search, Zap } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Circle, MapContainer, Marker, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
-import { VALENCIA_CENTER, icons, incidentsData } from './mapData'
+import { VALENCIA_CENTER, barangayCenters } from '../../lib/geo'
+import { loadPublicOutages } from '../../lib/reports'
+import { loadActiveSchedules } from '../../lib/schedules'
+import { icons } from './mapData'
 
-// Map Controller for Flying to Coordinates
+const VALENCIA_FALLBACK = VALENCIA_CENTER
+
+function normalizeName(value) {
+  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
 function MapController({ targetCoord, zoom }) {
   const map = useMap()
   useEffect(() => {
@@ -33,16 +25,19 @@ function MapController({ targetCoord, zoom }) {
 }
 
 export default function ResidentMap() {
+  const [outages, setOutages] = useState([])
+  const [schedules, setSchedules] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [filter, setFilter] = useState('active') // 'active' | 'scheduled' | 'resolved' | 'all'
-  const [selectedIncident, setSelectedIncident] = useState(incidentsData[0])
   const [searchQuery, setSearchQuery] = useState('')
+  const [selected, setSelected] = useState(null)
   const [targetCoord, setTargetCoord] = useState(null)
   const [targetZoom, setTargetZoom] = useState(13)
-  const [isSubscribed, setIsSubscribed] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
-  const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [showLayerMenu, setShowLayerMenu] = useState(false)
-  const [basemap, setBasemap] = useState('street') // 'street' | 'satellite'
+  const [basemap, setBasemap] = useState('street')
+  const [reloadKey, setReloadKey] = useState(0)
 
   const mapRef = useRef(null)
 
@@ -51,64 +46,155 @@ export default function ResidentMap() {
     setTimeout(() => setToastMessage(''), 3000)
   }
 
-  // Filter incidents based on pill selector and search
-  const visibleIncidents = useMemo(() => {
-    return incidentsData.filter((inc) => {
-      const matchesFilter =
-        filter === 'all'
-          ? true
-          : filter === 'active'
-          ? inc.type === 'active'
-          : filter === 'scheduled'
-          ? inc.type === 'scheduled'
-          : filter === 'resolved'
-          ? inc.type === 'resolved'
-          : true
+  useEffect(() => {
+    let active = true
 
-      const matchesSearch =
-        searchQuery.trim() === '' ||
-        inc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        inc.location.toLowerCase().includes(searchQuery.toLowerCase())
+    Promise.all([loadPublicOutages(), loadActiveSchedules()])
+      .then(([nextOutages, nextSchedules]) => {
+        if (active) {
+          setOutages(nextOutages)
+          setSchedules(nextSchedules)
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setLoadError('We could not load the outage map. Check your connection and try again.')
+        }
+      })
+      .finally(() => {
+        if (active) setIsLoading(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [reloadKey])
+
+  const retryLoad = () => {
+    setLoadError('')
+    setIsLoading(true)
+    setReloadKey((value) => value + 1)
+  }
+
+  const centerByBarangay = useMemo(() => {
+    const entries = Object.fromEntries(barangayCenters.map((barangay) => [normalizeName(barangay.name), barangay]))
+    entries.guinyoran = entries.guinoyuran
+    entries.lurogan = entries.lurugan
+    return entries
+  }, [])
+
+  // Public outages (reports) + published schedules, both pinned to their real
+  // coordinates or the barangay center when no pin exists.
+  const items = useMemo(() => {
+    const list = []
+
+    outages.forEach((outage) => {
+      const position = outage.coordinates
+        ? [outage.coordinates.latitude, outage.coordinates.longitude]
+        : centerByBarangay[normalizeName(outage.barangay)]
+          ? [centerByBarangay[normalizeName(outage.barangay)].lat, centerByBarangay[normalizeName(outage.barangay)].lng]
+          : null
+      if (position) {
+        list.push({
+          kind: 'outage',
+          id: outage.id,
+          title: outage.outageType,
+          name: outage.barangay,
+          location: outage.barangay ? `Brgy. ${outage.barangay}` : 'Valencia City',
+          status: outage.status,
+          tone: outage.tone,
+          date: outage.updatedAt ?? outage.createdAt,
+          position,
+          approximate: !outage.coordinates,
+          outage,
+        })
+      }
+    })
+
+    schedules.forEach((schedule) => {
+      const center = schedule.barangay ? centerByBarangay[normalizeName(schedule.barangay)] : null
+      if (!center) return
+      list.push({
+        kind: 'schedule',
+        id: schedule.id,
+        title: schedule.title || 'Scheduled outage',
+        name: schedule.barangay ?? 'Multiple barangays',
+        location: schedule.barangay ? `Brgy. ${schedule.barangay}` : 'Multiple barangays',
+        status: 'Scheduled',
+        tone: 'scheduled',
+        date: schedule.date,
+        position: [center.lat, center.lng],
+        approximate: true,
+        schedule,
+      })
+    })
+
+    return list
+  }, [outages, schedules, centerByBarangay])
+
+  const visibleItems = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    return items.filter((item) => {
+      const matchesFilter = filter === 'all'
+        ? true
+        : filter === 'active'
+          ? item.tone === 'pending' || item.tone === 'verified'
+          : filter === 'scheduled'
+            ? item.kind === 'schedule'
+            : item.tone === 'resolved'
+
+      const matchesSearch = !query
+        || item.name.toLowerCase().includes(query)
+        || item.title.toLowerCase().includes(query)
+        || item.location.toLowerCase().includes(query)
 
       return matchesFilter && matchesSearch
     })
-  }, [filter, searchQuery])
+  }, [items, filter, searchQuery])
 
-  // Map Controls
-  const handleZoomIn = () => {
-    mapRef.current?.zoomIn()
-  }
+  const selectedItem = selected ?? visibleItems[0] ?? null
 
-  const handleZoomOut = () => {
-    mapRef.current?.zoomOut()
-  }
+  const handleSelectItem = useCallback((item) => {
+    setSelected(item)
+    setTargetCoord(item.position)
+    setTargetZoom(14)
+  }, [])
 
   const handleLocateMe = () => {
-    setTargetCoord([7.8900, 125.0550])
-    setTargetZoom(14)
-    setSelectedIncident(incidentsData[0])
-    showToast('Centered on your home area (Brgy. Guinuyoran)')
+    if (!('geolocation' in navigator)) {
+      showToast('Location is not available on this device.')
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setTargetCoord([coords.latitude, coords.longitude])
+        setTargetZoom(15)
+        showToast('Centered on your location')
+      },
+      () => showToast('Could not access GPS — check location permission.'),
+      { enableHighAccuracy: true, timeout: 8000 },
+    )
   }
 
-  const handleSelectIncident = (incident) => {
-    setSelectedIncident(incident)
-    setTargetCoord([incident.lat, incident.lng])
-    setTargetZoom(14)
-  }
+  const handleZoomIn = () => mapRef.current?.zoomIn()
+  const handleZoomOut = () => mapRef.current?.zoomOut()
 
-  const handleToggleUpdates = () => {
-    const next = !isSubscribed
-    setIsSubscribed(next)
-    showToast(next ? `Subscribed to alerts for ${selectedIncident.location}` : 'Unsubscribed from updates')
-  }
+  const activeCount = items.filter((item) => item.tone === 'pending' || item.tone === 'verified').length
+  const scheduledCount = items.filter((item) => item.kind === 'schedule').length
+  const resolvedCount = items.filter((item) => item.tone === 'resolved').length
 
-  // Tile Providers
   const streetTiles = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
   const satelliteTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 
+  const statusMeta = {
+    pending: { label: 'Pending', badge: 'bg-[#fff1a8] text-[#9a6500]', icon: Clock },
+    verified: { label: 'Verified', badge: 'bg-[#d9f9e8] text-[#137a48]', icon: Check },
+    resolved: { label: 'Resolved', badge: 'bg-[#e5e9f6] text-brand-ink', icon: Check },
+    scheduled: { label: 'Scheduled', badge: 'bg-[#e5e9f6] text-brand-blue', icon: Calendar },
+  }
+
   return (
     <div className="relative h-screen w-full overflow-hidden bg-[e5e9f6] text-brand-navy select-none">
-      {/* Toast Notice */}
       {toastMessage && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-top-2">
           <Check className="size-4 text-brand-yellow" />
@@ -116,11 +202,10 @@ export default function ResidentMap() {
         </div>
       )}
 
-      {/* FULLSCREEN LEAFLET MAP (absolute inset-0) */}
       <div className="absolute inset-0 z-0 h-full w-full">
         <MapContainer
           ref={mapRef}
-          center={VALENCIA_CENTER}
+          center={VALENCIA_FALLBACK}
           zoom={13}
           zoomControl={false}
           attributionControl={false}
@@ -130,76 +215,48 @@ export default function ResidentMap() {
             url={basemap === 'satellite' ? satelliteTiles : streetTiles}
             attribution="&copy; OpenStreetMap"
           />
-
           <MapController targetCoord={targetCoord} zoom={targetZoom} />
 
-          {/* User Location Beacon */}
-          <Marker position={[7.8920, 125.0580]} icon={icons.userLocation} />
-
-          {/* Outage Circles & Markers */}
-          {visibleIncidents.map((inc) => (
-            <div key={inc.id}>
-              {/* Hotspot Radius Glow Circle */}
-              {inc.type === 'active' && (
-                <Circle
-                  center={[inc.lat, inc.lng]}
-                  radius={inc.radiusMeters}
-                  pathOptions={{
-                    fillColor: '#ffd500',
-                    fillOpacity: 0.35,
-                    color: '#f0b400',
-                    weight: 2,
-                    dashArray: '4, 4',
-                  }}
-                  eventHandlers={{
-                    click: () => handleSelectIncident(inc),
-                  }}
+          {visibleItems.map((item) => {
+            const isActive = item.tone === 'pending' || item.tone === 'verified'
+            const icon = item.kind === 'schedule' || item.tone === 'resolved'
+              ? icons.scheduled
+              : isActive
+                ? icons.activeMedium
+                : icons.scheduled
+            const radius = item.tone === 'verified' ? 450 : 300
+            return (
+              <span key={`${item.kind}-${item.id}`}>
+                {isActive && (
+                  <Circle
+                    center={item.position}
+                    radius={radius}
+                    pathOptions={{ fillColor: '#ffd500', fillOpacity: 0.3, color: '#f0b400', weight: 2, dashArray: '4, 4' }}
+                    eventHandlers={{ click: () => handleSelectItem(item) }}
+                  />
+                )}
+                <Marker
+                  position={item.position}
+                  icon={icon}
+                  eventHandlers={{ click: () => handleSelectItem(item) }}
                 />
-              )}
-
-              {/* Marker Icon */}
-              <Marker
-                position={[inc.lat, inc.lng]}
-                icon={
-                  inc.id === 'inc-1'
-                    ? icons.activeLarge
-                    : inc.type === 'active'
-                    ? icons.activeMedium
-                    : icons.scheduled
-                }
-                eventHandlers={{
-                  click: () => handleSelectIncident(inc),
-                }}
-              />
-            </div>
-          ))}
+              </span>
+            )
+          })}
         </MapContainer>
       </div>
 
-      {/* TOP FLOATING SEARCH & FILTER BAR (floats above map) */}
       <header className="absolute top-0 inset-x-0 z-[500] p-3 sm:p-4 pointer-events-none">
         <div className="mx-auto max-w-md space-y-2 pointer-events-auto">
-          {/* Search Bar */}
           <div className="relative flex items-center rounded-2xl bg-white px-3.5 py-2 shadow-[0_6px_20px_rgba(23,43,104,0.12)] border border-brand-line">
             <Search className="size-4.5 text-brand-muted shrink-0 mr-2.5" />
             <input
               type="text"
               placeholder="Search barangay or place"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(event) => setSearchQuery(event.target.value)}
               className="w-full bg-transparent text-sm font-medium text-brand-navy placeholder:text-brand-muted focus:outline-none"
             />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="p-1 text-brand-muted hover:text-brand-muted"
-              >
-                <X className="size-4" />
-              </button>
-            )}
-
-            {/* Layer button on right */}
             <button
               type="button"
               onClick={() => setShowLayerMenu(!showLayerMenu)}
@@ -208,284 +265,131 @@ export default function ResidentMap() {
             >
               <Layers className="size-4.5" />
             </button>
-
-            {/* Layers Dropdown Menu */}
             {showLayerMenu && (
               <div className="absolute top-full right-0 mt-2 w-48 rounded-2xl border border-brand-line bg-white p-2 shadow-xl z-50">
-                <span className="block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
-                  Basemap View
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBasemap('street')
-                    setShowLayerMenu(false)
-                  }}
-                  className={`w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg flex items-center justify-between ${
-                    basemap === 'street' ? 'bg-[e5e9f6] text-brand-blue' : 'hover:bg-brand-paper text-brand-ink'
-                  }`}
-                >
-                  Street Map
-                  {basemap === 'street' && <Check className="size-3.5" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBasemap('satellite')
-                    setShowLayerMenu(false)
-                  }}
-                  className={`w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg flex items-center justify-between ${
-                    basemap === 'satellite' ? 'bg-[e5e9f6] text-brand-blue' : 'hover:bg-brand-paper text-brand-ink'
-                  }`}
-                >
-                  Satellite View
-                  {basemap === 'satellite' && <Check className="size-3.5" />}
-                </button>
+                <span className="block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted">Basemap View</span>
+                {[
+                  ['street', 'Street Map'],
+                  ['satellite', 'Satellite View'],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      setBasemap(key)
+                      setShowLayerMenu(false)
+                    }}
+                    className={`w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg flex items-center justify-between ${basemap === key ? 'bg-[e5e9f6] text-brand-blue' : 'hover:bg-brand-paper text-brand-ink'}`}
+                  >
+                    {label}
+                    {basemap === key && <Check className="size-3.5" />}
+                  </button>
+                ))}
               </div>
             )}
           </div>
 
-          {/* Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {/* Active Outages Pill */}
             <button
               type="button"
               onClick={() => setFilter(filter === 'active' ? 'all' : 'active')}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
-                filter === 'active'
-                  ? 'bg-brand-blue text-white'
-                  : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
-              }`}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${filter === 'active' ? 'bg-brand-blue text-white' : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'}`}
             >
               <Zap className="size-3.5 fill-brand-yellow text-brand-yellow" />
-              <span>Active 2</span>
+              <span>Active {activeCount}</span>
             </button>
-
-            {/* Scheduled Outages Pill */}
             <button
               type="button"
               onClick={() => setFilter(filter === 'scheduled' ? 'all' : 'scheduled')}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
-                filter === 'scheduled'
-                  ? 'bg-brand-blue text-white'
-                  : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
-              }`}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${filter === 'scheduled' ? 'bg-brand-blue text-white' : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'}`}
             >
               <Calendar className="size-3.5 text-brand-blue" />
-              <span>Scheduled 1</span>
+              <span>Scheduled {scheduledCount}</span>
             </button>
-
-            {/* Resolved Incidents Pill */}
             <button
               type="button"
               onClick={() => setFilter(filter === 'resolved' ? 'all' : 'resolved')}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${
-                filter === 'resolved'
-                  ? 'bg-brand-blue text-white'
-                  : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
-              }`}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${filter === 'resolved' ? 'bg-brand-blue text-white' : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'}`}
             >
               <Check className="size-3.5 text-[#137a48]" />
-              <span>Resolved</span>
+              <span>Resolved {resolvedCount}</span>
             </button>
           </div>
         </div>
       </header>
 
-      {/* FLOATING MAP NAVIGATION BUTTONS (Right Edge) */}
       <div className="absolute right-4 top-[38%] -translate-y-1/2 z-[500] flex flex-col items-center gap-3">
-        {/* Zoom In & Out Pill */}
         <div className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-[0_6px_20px_rgba(23,43,104,0.14)] border border-brand-line">
-          <button
-            type="button"
-            onClick={handleZoomIn}
-            className="grid size-11 place-items-center text-brand-navy hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer"
-            aria-label="Zoom in"
-          >
+          <button type="button" onClick={handleZoomIn} className="grid size-11 place-items-center text-brand-navy hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer" aria-label="Zoom in">
             <Plus className="size-5" />
           </button>
           <div className="h-px w-full bg-brand-paper" />
-          <button
-            type="button"
-            onClick={handleZoomOut}
-            className="grid size-11 place-items-center text-brand-navy hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer"
-            aria-label="Zoom out"
-          >
+          <button type="button" onClick={handleZoomOut} className="grid size-11 place-items-center text-brand-navy hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer" aria-label="Zoom out">
             <Minus className="size-5" />
           </button>
         </div>
-
-        {/* Locate Me Button */}
-        <button
-          type="button"
-          onClick={handleLocateMe}
-          className="grid size-11 place-items-center rounded-2xl bg-white text-brand-blue shadow-[0_6px_20px_rgba(23,43,104,0.14)] border border-brand-line hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer"
-          aria-label="Center on my location"
-        >
+        <button type="button" onClick={handleLocateMe} className="grid size-11 place-items-center rounded-2xl bg-white text-brand-blue shadow-[0_6px_20px_rgba(23,43,104,0.14)] border border-brand-line hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer" aria-label="Center on my location">
           <LocateFixed className="size-5" />
         </button>
       </div>
 
-      {/* BOTTOM FLOATING CARD: Active Selected Outage Details */}
-      {selectedIncident && (
-        <aside
-          aria-label="Incident summary"
-          className="absolute bottom-[92px] sm:bottom-[100px] inset-x-0 z-[500] px-3 sm:px-4 pointer-events-none"
-        >
-          <div className="mx-auto w-full max-w-md pointer-events-auto">
-            <div className="rounded-3xl border border-brand-line bg-white p-4 sm:p-5 shadow-[0_8px_30px_rgba(23,43,104,0.16)] transition-all">
-              {/* Top Sheet Drag Handle */}
-              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-brand-line" />
+      {(isLoading || loadError) && (
+        <div className="absolute top-[120px] inset-x-0 z-[500] px-4 pointer-events-none">
+          <div className="mx-auto max-w-md rounded-2xl border border-brand-line bg-white p-4 text-center shadow-sm pointer-events-auto">
+            {isLoading
+              ? <p className="text-xs font-semibold text-brand-muted">Loading outage locations…</p>
+              : <><p className="text-xs font-bold text-[#b42318]">{loadError}</p><button type="button" onClick={retryLoad} className="mt-1.5 text-xs font-bold text-brand-blue underline underline-offset-4 cursor-pointer">Try again</button></>}
+          </div>
+        </div>
+      )}
 
-              {/* Header: Title + Status Badge */}
+      {!isLoading && !loadError && visibleItems.length === 0 && (
+        <div className="absolute top-[120px] inset-x-0 z-[500] px-4 pointer-events-none">
+          <div className="mx-auto max-w-md rounded-2xl border border-dashed border-brand-line bg-white p-6 text-center text-xs text-brand-muted shadow-sm pointer-events-auto">
+            {outages.length === 0 && schedules.length === 0
+              ? 'No outage markers yet. Resident reports and published schedules will appear here as they happen.'
+              : 'No locations match this filter or search.'}
+          </div>
+        </div>
+      )}
+
+      {!isLoading && !loadError && selectedItem && (
+        <aside aria-label="Incident summary" className="absolute bottom-[92px] sm:bottom-[100px] inset-x-0 z-[500] px-3 sm:px-4 pointer-events-none">
+          <div className="mx-auto w-full max-w-md pointer-events-auto">
+            <div className="rounded-3xl border border-brand-line bg-white p-4 sm:p-5 shadow-[0_8px_30px_rgba(23,43,104,0.16)]">
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-brand-line" />
               <div className="flex items-start justify-between gap-3">
-                <h2 className="text-base sm:text-lg font-black tracking-tight text-brand-navy leading-snug">
-                  {selectedIncident.title}
-                </h2>
-                <span
-                  className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${selectedIncident.statusColor}`}
-                >
-                  <selectedIncident.statusIcon className="size-3" />
-                  <span>{selectedIncident.status}</span>
+                <h2 className="text-base sm:text-lg font-black tracking-tight text-brand-navy leading-snug">{selectedItem.title}</h2>
+                <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold ${statusMeta[selectedItem.tone]?.badge ?? statusMeta.pending.badge}`}>
+                  <MapPin className="size-3" />
+                  <span>{selectedItem.status}</span>
                 </span>
               </div>
-
-              {/* Subtitle / Meta information */}
               <p className="mt-1 text-xs text-brand-muted leading-relaxed">
-                {selectedIncident.location} · {selectedIncident.time} ·{' '}
-                {selectedIncident.reportsCount > 0
-                  ? `${selectedIncident.reportsCount} related reports grouped`
-                  : 'Utility planned work'}
+                {selectedItem.location}
+                {selectedItem.kind === 'schedule'
+                  ? ` · ${selectedItem.schedule.dateLabel} · ${selectedItem.schedule.timeLabel}`
+                  : ` · ${new Date(selectedItem.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                {selectedItem.approximate ? ' · marker at barangay center' : ''}
               </p>
-
-              {/* Action Buttons Row */}
+              <p className="mt-1.5 text-[11px] font-semibold text-brand-muted">
+                {selectedItem.kind === 'schedule'
+                  ? (selectedItem.schedule.description ?? 'Scheduled maintenance published by the utility.')
+                  : 'A resident reported this outage. Status updates appear here as crews respond.'}
+              </p>
               <div className="mt-4 grid grid-cols-2 gap-2.5 sm:gap-3">
-                {/* Primary View Details Button */}
-                <button
-                  type="button"
-                  onClick={() => setShowDetailsModal(true)}
-                  className="flex h-11 items-center justify-center rounded-2xl bg-brand-blue px-4 text-xs sm:text-sm font-bold text-white shadow-xs transition-all hover:bg-brand-navy active:scale-[0.98] cursor-pointer"
-                >
-                  View details
-                </button>
-
-                {/* Secondary Get Updates Button */}
-                <button
-                  type="button"
-                  onClick={handleToggleUpdates}
-                  className={`flex h-11 items-center justify-center gap-1.5 rounded-2xl border px-3 text-xs sm:text-sm font-bold transition-all active:scale-[0.98] cursor-pointer ${
-                    isSubscribed
-                      ? 'border-brand-blue bg-[e5e9f6] text-brand-blue'
-                      : 'border-brand-line bg-white text-brand-navy hover:bg-brand-paper'
-                  }`}
-                >
-                  <Bell className={`size-4 ${isSubscribed ? 'fill-brand-blue' : ''}`} />
-                  <span>{isSubscribed ? 'Alerts on' : 'Get updates'}</span>
-                </button>
+                <a href="/community/reports/new" className="flex h-11 items-center justify-center rounded-2xl bg-brand-blue px-3 text-xs sm:text-sm font-bold text-white shadow-xs hover:bg-brand-navy transition-all">
+                  Report this outage
+                </a>
+                <a href="/community/notifications" className="flex h-11 items-center justify-center rounded-2xl bg-brand-yellow px-3 text-xs sm:text-sm font-black text-brand-navy shadow-xs hover:bg-brand-yellow active:scale-[0.98] transition-all">
+                  Get updates
+                </a>
               </div>
             </div>
           </div>
         </aside>
       )}
 
-      {/* FULL DETAILS MODAL */}
-      {showDetailsModal && selectedIncident && (
-        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4 backdrop-blur-xs animate-in fade-in">
-          <div
-            className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-brand-line bg-white p-5 shadow-2xl animate-in slide-in-from-bottom-6 max-h-[85vh] overflow-y-auto"
-            role="dialog"
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-brand-line pb-3">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
-                  Incident Report
-                </span>
-                <h3 className="text-base font-extrabold text-brand-navy">
-                  {selectedIncident.title}
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowDetailsModal(false)}
-                className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-
-            {/* Details Content */}
-            <div className="space-y-4 pt-4 text-xs">
-              {/* Location & Status Banner */}
-              <div className="flex items-center justify-between rounded-2xl bg-brand-paper p-3.5 border border-brand-line">
-                <div className="flex items-center gap-2">
-                  <MapPin className="size-4 text-brand-blue" />
-                  <span className="font-bold text-brand-navy">{selectedIncident.location}</span>
-                </div>
-                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold ${selectedIncident.statusColor}`}>
-                  {selectedIncident.status}
-                </span>
-              </div>
-
-              {/* Grid Metrics */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="rounded-xl border border-brand-line bg-white p-3 shadow-xs">
-                  <span className="text-[10px] font-bold uppercase text-brand-muted flex items-center gap-1">
-                    <Users className="size-3" /> Affected
-                  </span>
-                  <p className="mt-1 text-sm font-extrabold text-brand-navy">
-                    {selectedIncident.affectedHouseholds} households
-                  </p>
-                </div>
-                <div className="rounded-xl border border-brand-line bg-white p-3 shadow-xs">
-                  <span className="text-[10px] font-bold uppercase text-brand-muted flex items-center gap-1">
-                    <Clock className="size-3" /> Est. Restoration
-                  </span>
-                  <p className="mt-1 text-sm font-extrabold text-brand-navy">{selectedIncident.eta}</p>
-                </div>
-              </div>
-
-              {/* Cause & Response Team */}
-              <div className="space-y-2 rounded-2xl border border-brand-line p-3.5 bg-white">
-                <div>
-                  <span className="font-bold text-brand-muted uppercase text-[10px]">Identified Cause</span>
-                  <p className="mt-0.5 font-semibold text-brand-ink">{selectedIncident.cause}</p>
-                </div>
-                <div className="border-t border-brand-line pt-2">
-                  <span className="font-bold text-brand-muted uppercase text-[10px] flex items-center gap-1">
-                    <Wrench className="size-3" /> Assigned Field Response
-                  </span>
-                  <p className="mt-0.5 font-semibold text-brand-ink">{selectedIncident.crew}</p>
-                </div>
-              </div>
-
-              {/* Modal Actions */}
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard?.writeText(window.location.href)
-                    showToast('Share link copied to clipboard')
-                  }}
-                  className="flex items-center justify-center gap-1.5 flex-1 rounded-xl border border-brand-line py-2.5 font-bold text-brand-ink hover:bg-brand-paper"
-                >
-                  <Share2 className="size-3.5" />
-                  <span>Share report</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowDetailsModal(false)}
-                  className="flex-1 rounded-xl bg-brand-blue py-2.5 font-bold text-white shadow-xs hover:bg-brand-navy"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* PERSISTENT BOTTOM NAVIGATION */}
       <PortalMobileNav role="resident" />
     </div>
   )

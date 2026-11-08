@@ -3,17 +3,15 @@ import {
   BarChart3,
   Building2,
   CalendarClock,
-  ClipboardCheck,
   FileText,
+  FileSearch,
   LayoutDashboard,
-  LogOut,
   Map,
-  Settings,
+  Megaphone,
   Users,
   UsersRound,
 } from 'lucide-react'
 import powerWatchLogo from '../../assets/logo.png'
-import { supabase } from '../../lib/supabase'
 import {
   Sidebar,
   SidebarContent,
@@ -28,27 +26,24 @@ import {
 } from '../ui/sidebar'
 
 const primaryItems = [
+  // Sign-out is handled from the admin navbar profile dropdown.
   { label: 'Dashboard', icon: LayoutDashboard, href: '/admin' },
-  { label: 'Barangays', icon: Building2, href: '/admin/barangay' },
   { label: 'Outage reports', icon: FileText, href: '/admin/reports' },
-  { label: 'Scheduled outages', icon: CalendarClock, href: '/admin/schedules' },
   { label: 'Incident map', icon: Map, href: '/admin/map' },
-  { label: 'Field response', icon: ClipboardCheck, href: '/admin/response' },
+  { label: 'Scheduled outages', icon: CalendarClock, href: '/admin/schedules' },
+  { label: 'Barangays', icon: Building2, href: '/admin/barangay' },
+  { label: 'Announcements', icon: Megaphone, href: '/admin/announcements' },
+  
 ]
 
 const administrationItems = [
-  { label: 'Users', icon: Users, href: '/admin/users' },
-  { label: 'Residents', icon: UsersRound, href: '/admin/residents' },
   { label: 'Analytics', icon: BarChart3, href: '/admin/analytics' },
-  { label: 'Settings', icon: Settings, href: '/admin/settings' },
+  { label: 'Audit logs', icon: FileSearch, href: '/admin/audit-logs' },
+  { label: 'Residents', icon: UsersRound, href: '/admin/residents' },
+  { label: 'Users', icon: Users, href: '/admin/users' },
 ]
 
 function AdminSidebar({ activePath = '/admin' }) {
-  const handleSignOut = async () => {
-    if (supabase) await supabase.auth.signOut()
-    window.location.href = '/admin/login'
-  }
-
   const renderItems = (items) => items.map(({ label, icon: Icon, href }) => (
     <SidebarMenuItem key={href}>
       <SidebarMenuButton
@@ -84,18 +79,6 @@ function AdminSidebar({ activePath = '/admin' }) {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-t border-brand-line p-3">
-        <SidebarMenu className="gap-1">
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="Sign out"
-              onClick={handleSignOut}
-              className="h-10 rounded-lg px-3 text-sm text-brand-muted hover:bg-red-50 hover:text-red-700"
-            >
-              <LogOut />
-              <span>Sign out</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
         <div className="flex items-center gap-2 rounded-lg bg-brand-paper p-2 text-xs text-brand-muted group-data-[collapsible=icon]:justify-center">
           <Activity className="size-4 shrink-0 text-emerald-600" />
           <span className="truncate">System operational</span>

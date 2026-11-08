@@ -2,6 +2,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Pencil,
   Plus,
   Search,
   SlidersHorizontal,
@@ -9,7 +10,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
-import { AdminUsersCreateDialog } from './usersModals'
+import { AdminUsersCreateDialog, AdminUsersEditDialog } from './usersModals'
 import Pagination from '../../common/pagination'
 import AdminSidebar from '../../components/admin/sidebar'
 import { Button } from '../../components/ui/button'
@@ -27,6 +28,7 @@ import {
   TableRow,
 } from '../../components/ui/table'
 import { createUnpersistedClient, supabase } from '../../lib/supabase'
+import { sendStaffPasswordReset, setUserActive, updateAdminUser } from '../../lib/adminUsers'
 
 // Map a public.users row to the shape used by the table (staff + admin only;
 // residents are displayed on /admin/residents)
@@ -40,6 +42,10 @@ function toUser(u) {
     email: u.email,
     role: capitalized,
     contactNumber: u.contact_number || '\u2014',
+    position: u.position || '',
+    address: u.address || '',
+    isActive: u.is_active !== false,
+    rawId: u.id,
     joined: u.created_at ? new Date(u.created_at).toLocaleDateString() : '\u2014',
   }
 }
@@ -105,8 +111,13 @@ function AdminUsers() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editingUser, setEditingUser] = useState(null)
+  const [editForm, setEditForm] = useState({ fullName: '', idNumber: '', contactNumber: '', position: '', address: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isWorking, setIsWorking] = useState(false)
   const [createError, setCreateError] = useState('')
+  const [editError, setEditError] = useState('')
   const [toastMessage, setToastMessage] = useState('')
 
   const [newUser, setNewUser] = useState({
@@ -277,6 +288,73 @@ function AdminUsers() {
       contactNumber: '',
       idNumber: `STF-${suffix}`,
     })
+  }
+
+  const showToast = (message) => {
+    setToastMessage(message)
+    setTimeout(() => setToastMessage(''), 4000)
+  }
+
+  function openEdit(user) {
+    setEditingUser(user)
+    setEditForm({
+      fullName: user.name === '\u2014' ? '' : user.name,
+      idNumber: user.idNumber === '\u2014' ? '' : user.idNumber,
+      contactNumber: user.contactNumber === '\u2014' ? '' : user.contactNumber,
+      position: user.position || 'Line Crew / Responder',
+      address: user.address || '',
+    })
+    setEditError('')
+    setIsEditOpen(true)
+  }
+
+  async function handleSaveEdit(event) {
+    event.preventDefault()
+    if (!editingUser || isSubmitting) return
+
+    setIsSubmitting(true)
+    setEditError('')
+    try {
+      const updated = await updateAdminUser(editingUser.rawId, editForm)
+      setUsersList((current) => current.map((row) => (row.rawId === updated.id ? toUser(updated.raw) : row)))
+      setIsEditOpen(false)
+      showToast('Staff account updated.')
+    } catch (error) {
+      setEditError(error.message || 'Could not update this account.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleToggleActive() {
+    if (!editingUser || isWorking) return
+    setIsWorking(true)
+    setEditError('')
+    try {
+      const nextActive = editingUser.isActive === false
+      await setUserActive(editingUser.rawId, nextActive)
+      setUsersList((current) => current.map((row) => (row.rawId === editingUser.rawId ? { ...row, isActive: nextActive } : row)))
+      setEditingUser((current) => current ? { ...current, isActive: nextActive } : current)
+      showToast(nextActive ? 'Account reactivated.' : 'Account deactivated.')
+    } catch (error) {
+      setEditError(error.message || 'Could not change account status.')
+    } finally {
+      setIsWorking(false)
+    }
+  }
+
+  async function handleResetAccess() {
+    if (!editingUser || isWorking) return
+    setIsWorking(true)
+    setEditError('')
+    try {
+      await sendStaffPasswordReset(editingUser.email)
+      showToast('Password reset link sent.')
+    } catch (error) {
+      setEditError(error.message || 'Could not send the reset link.')
+    } finally {
+      setIsWorking(false)
+    }
   }
 
   return (
@@ -521,6 +599,15 @@ function AdminUsers() {
                       <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
                         CONTACT
                       </TableHead>
+                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
+                        STATUS
+                      </TableHead>
+                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
+                        POSITION
+                      </TableHead>
+                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted text-right">
+                        ACTIONS
+                      </TableHead>
 
                       <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
                         JOINED
@@ -551,6 +638,22 @@ function AdminUsers() {
                         <TableCell className="px-5 py-4 text-brand-muted text-xs sm:text-sm whitespace-nowrap">
                           {user.contactNumber}
                         </TableCell>
+                        <TableCell className="px-5 py-4">
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-bold ${user.isActive === false ? 'border-red-200 bg-red-50 text-[#b42318]' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+                            <span className={`size-1.5 rounded-full ${user.isActive === false ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                            {user.isActive === false ? 'Deactivated' : 'Active'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="px-5 py-4 text-xs font-medium text-brand-muted whitespace-nowrap">
+                          {user.position || '\u2014'}
+                        </TableCell>
+                        <TableCell className="px-5 py-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button type="button" onClick={() => openEdit(user)} aria-label={`Edit ${user.name}`} title="Edit" className="grid size-9 place-items-center rounded-lg border border-brand-line bg-white text-brand-muted hover:bg-brand-paper hover:text-brand-navy">
+                              <Pencil className="size-4" />
+                            </button>
+                          </div>
+                        </TableCell>
                         <TableCell className="px-5 py-4 text-xs text-brand-muted whitespace-nowrap">
                           {user.joined}
                         </TableCell>
@@ -559,7 +662,7 @@ function AdminUsers() {
 
                     {isLoading && (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-36 text-center text-sm font-semibold text-brand-muted">
+                        <TableCell colSpan={9} className="h-36 text-center text-sm font-semibold text-brand-muted">
                           Loading users…
                         </TableCell>
                       </TableRow>
@@ -567,7 +670,7 @@ function AdminUsers() {
 
                     {!isLoading && loadError && (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-36 text-center">
+                        <TableCell colSpan={9} className="h-36 text-center">
                           <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
                           <button
                             type="button"
@@ -583,7 +686,7 @@ function AdminUsers() {
                     {!isLoading && !loadError && visibleUsers.length === 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={6}
+                          colSpan={9}
                           className="h-36 text-center text-sm text-brand-muted"
                         >
                           No users found matching this filter combination.
@@ -620,6 +723,19 @@ function AdminUsers() {
         onCreateUser={handleCreateUser}
         isSubmitting={isSubmitting}
         errorMessage={createError}
+      />
+      <AdminUsersEditDialog
+        open={isEditOpen}
+        onOpenChange={setIsEditOpen}
+        form={editForm}
+        setForm={setEditForm}
+        onSave={handleSaveEdit}
+        onToggleActive={handleToggleActive}
+        onResetAccess={handleResetAccess}
+        isSubmitting={isSubmitting}
+        isWorking={isWorking}
+        errorMessage={editError}
+        user={editingUser}
       />
     </SidebarProvider>
   )

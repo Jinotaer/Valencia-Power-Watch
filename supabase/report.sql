@@ -31,12 +31,18 @@ create table if not exists public.reports (
   accuracy double precision,
   photos jsonb not null default '[]'::jsonb,
   status text not null default 'pending'
-    check (status in ('pending', 'verified', 'resolved')),
+    check (status in ('pending', 'verified', 'resolved', 'rejected')),
+  priority text not null default 'medium'
+    check (priority in ('low', 'medium', 'high')),
   created_at timestamptz not null default now()
 );
 
 create index if not exists reports_user_created_idx
   on public.reports (user_id, created_at desc);
+
+-- Admin map and report queue list every report newest-first.
+create index if not exists reports_created_idx
+  on public.reports (created_at desc);
 
 -- Migrations for databases created before the current type list / pinned location
 alter table public.reports add column if not exists pinned_location text;
@@ -64,6 +70,22 @@ alter table public.reports add constraint reports_outage_type_check
     'unknown',
     'other'
   ));
+
+-- Priority chosen by the resident in the submit form
+alter table public.reports add column if not exists priority text not null default 'medium';
+alter table public.reports drop constraint if exists reports_priority_check;
+alter table public.reports add constraint reports_priority_check
+  check (priority in ('low', 'medium', 'high'));
+
+-- Rejected is a terminal admin state
+alter table public.reports drop constraint if exists reports_status_check;
+alter table public.reports add constraint reports_status_check
+  check (status in ('pending', 'verified', 'resolved', 'rejected'));
+
+-- Admins reject invalid reports; staff never set this status.
+alter table public.reports drop constraint if exists reports_status_check;
+alter table public.reports add constraint reports_status_check
+  check (status in ('pending', 'verified', 'resolved', 'rejected'));
 
 -- Sequential public reference: PW-YYYY-####
 create sequence if not exists public.report_reference_seq;
@@ -131,6 +153,32 @@ create policy "Admins can update reports"
   to authenticated
   using ((select public.is_admin()));
 
+-- Field staff read and progress the reports assigned to them. Their own
+-- update must keep the job assigned to them (with check).
+drop policy if exists "Staff can view assigned reports" on public.reports;
+create policy "Staff can view assigned reports"
+  on public.reports
+  for select
+  to authenticated
+  using (assigned_staff_id = (select auth.uid()));
+
+drop policy if exists "Staff can update assigned reports" on public.reports;
+create policy "Staff can update assigned reports"
+  on public.reports
+  for update
+  to authenticated
+  using (assigned_staff_id = (select auth.uid()))
+  with check (
+    assigned_staff_id = (select auth.uid())
+    and status in ('verified', 'resolved')
+  );
+
+-- PostgREST needs column-level privileges: staff move status and append
+-- resolution evidence to photos; admins also reassign; reassignment on a
+-- staff row is still blocked by RLS with check.
+revoke update on public.reports from authenticated;
+grant update (status, assigned_staff_id, photos) on public.reports to authenticated;
+
 -- 3. Private evidence bucket, one folder per user
 insert into storage.buckets (id, name, public)
 values ('report-evidence', 'report-evidence', false)
@@ -165,4 +213,16 @@ create policy "Residents can delete own report evidence"
   using (
     bucket_id = 'report-evidence'
     and (storage.foldername(name))[1] = (select auth.uid())::text
+  );
+
+-- Admins must create signed URLs to review resident evidence
+drop policy if exists "Admins can read report evidence" on storage.objects;
+
+create policy "Admins can read report evidence"
+  on storage.objects
+  for select
+  to authenticated
+  using (
+    bucket_id = 'report-evidence'
+    and (select public.is_admin())
   );

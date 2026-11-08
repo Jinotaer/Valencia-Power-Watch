@@ -1,9 +1,11 @@
 import { Check } from 'lucide-react'
+import { priorityLabels } from '../../lib/reports'
 
 const toneClasses = {
   verified: 'bg-[#d9f9e8] text-[#137a48]',
-  pending: 'bg-[fff1a8] text-[#9a6500]',
-  resolved: 'bg-[e5e9f6] text-brand-blue',
+  pending: 'bg-[#fff1a8] text-[#9a6500]',
+  resolved: 'bg-[#e5e9f6] text-brand-blue',
+  rejected: 'bg-red-50 text-[#b42318]',
 }
 
 export function ReportStatusBadge({ tone, status }) {
@@ -11,6 +13,21 @@ export function ReportStatusBadge({ tone, status }) {
     <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${toneClasses[tone] ?? 'bg-[#e5e9f6] text-brand-muted'}`}>
       {tone === 'verified' && <Check className="mr-0.5 inline size-3" strokeWidth={3} aria-hidden="true" />}
       {status}
+    </span>
+  )
+}
+
+const priorityClasses = {
+  high: 'bg-red-50 text-[#b42318]',
+  medium: 'bg-[#fff1a8] text-[#9a6500]',
+  low: 'bg-[#e5e9f6] text-brand-muted',
+}
+
+export function ReportPriorityBadge({ priority = 'medium' }) {
+  const key = String(priority).toLowerCase()
+  return (
+    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${priorityClasses[key] ?? priorityClasses.medium}`}>
+      {priorityLabels[key] ?? key}
     </span>
   )
 }

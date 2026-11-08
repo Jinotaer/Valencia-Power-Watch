@@ -25,10 +25,15 @@ const videoExtensions = {
   'video/3gpp': '3gp',
 }
 
+export const priorityLabels = { low: 'Low', medium: 'Medium', high: 'High' }
+
+export const reportPriorities = ['low', 'medium', 'high']
+
 const statusMeta = {
   pending: { label: 'Pending', tone: 'pending', progress: 1, summary: 'Waiting for verification.' },
   verified: { label: 'Verified', tone: 'verified', progress: 2, summary: 'The report was verified and is being coordinated.' },
   resolved: { label: 'Resolved', tone: 'resolved', progress: 4, summary: 'This report has been resolved.' },
+  rejected: { label: 'Rejected', tone: 'rejected', progress: 0, summary: 'An administrator rejected this report.' },
 }
 
 function requireClient() {
@@ -79,6 +84,8 @@ function toReport(row, urls) {
       year: 'numeric',
     }),
     createdAt: row.created_at,
+    updatedAt: row.updated_at ?? row.created_at,
+    isDuplicate: Boolean(row.is_duplicate),
     status: meta.label,
     tone: meta.tone,
     progress: meta.progress,
@@ -101,6 +108,7 @@ function toReport(row, urls) {
       kind: photo.kind ?? 'image',
       dataUrl: urls[photo.path],
     })),
+    priority: row.priority ?? 'medium',
   }
 }
 
@@ -122,6 +130,37 @@ export async function loadReports() {
   return rows.map((row) => toReport(row, urls))
 }
 
+// Resident map + home hero: every non-rejected report, newest first, with
+// only the fields a neighbor needs (no user_id, notes or evidence).
+export async function loadPublicOutages() {
+  if (!supabase) return []
+
+  const { data, error } = await supabase
+    .from('public_outage_map')
+    .select('id, reference, barangay, outage_type, status, created_at, updated_at, latitude, longitude')
+    .order('updated_at', { ascending: false })
+
+  if (error) throw error
+
+  return (data ?? []).map((row) => {
+    const meta = statusMeta[row.status] ?? statusMeta.pending
+    const hasCoordinates = row.latitude !== null && row.longitude !== null
+    return {
+      id: row.reference,
+      reference: row.reference,
+      barangay: row.barangay,
+      outageType: outageLabels[row.outage_type] ?? 'Power interruption',
+      status: meta.label,
+      tone: meta.tone,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      coordinates: hasCoordinates
+        ? { latitude: row.latitude, longitude: row.longitude }
+        : null,
+    }
+  })
+}
+
 // Admin: every resident report, newest first.
 export async function loadAllReports() {
   if (!supabase) return []
@@ -136,17 +175,40 @@ export async function loadAllReports() {
   const rows = data ?? []
   const urls = await signedUrls(photoPaths(rows))
 
-  // Resident names live in public.users; the report FK points at auth.users, so collect them separately.
-  const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))]
-  const residentNames = {}
-  if (userIds.length > 0) {
-    const { data: users } = await supabase.from('users').select('id, full_name, email').in('id', userIds)
-    for (const user of users ?? []) {
-      residentNames[user.id] = user.full_name || user.email || ''
-    }
-  }
+  const names = await residentNames(rows)
+  return rows.map((row) => ({ ...toReport(row, urls), residentName: names[row.user_id] ?? '' }))
+}
 
-  return rows.map((row) => ({ ...toReport(row, urls), residentName: residentNames[row.user_id] ?? '' }))
+// Collect display names for the report authors, keyed by auth user id.
+async function residentNames(rows) {
+  const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))]
+  if (userIds.length === 0) return {}
+  const { data: users } = await supabase.from('users').select('id, full_name, email').in('id', userIds)
+  return Object.fromEntries((users ?? []).map((user) => [user.id, user.full_name || user.email || '']))
+}
+
+// Staff: the reports assigned to this account, newest first. Resident evidence
+// is not signed here (staff cannot read it); files in the staff member's own
+// folder can be, so their resolution evidence shows back to them.
+export async function loadAssignedReports() {
+  if (!supabase) return []
+  const userId = await currentUserId()
+  if (!userId) return []
+
+  const { data, error } = await supabase
+    .from('reports')
+    .select('*')
+    .eq('assigned_staff_id', userId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+
+  const rows = data ?? []
+    // Rejected reports never reach the field crew.
+  const assigned = rows.filter((row) => row.status !== 'rejected')
+  const names = await residentNames(assigned)
+  const urls = await signedUrls(photoPaths(assigned))
+  return assigned.map((row) => ({ ...toReport(row, urls), residentName: names[row.user_id] ?? '' }))
 }
 
 export async function loadReport(reference) {
@@ -208,6 +270,7 @@ export async function addReport(data) {
     barangay: data.barangay,
     landmark: data.landmark || null,
     pinned_location: data.pinnedLocation || null,
+    priority: data.priority ?? 'medium',
     pin_x: data.pin.x,
     pin_y: data.pin.y,
     pin_source: data.pinSource,
@@ -250,25 +313,54 @@ export async function loadStaff() {
   if (!supabase) return []
 
   const client = requireClient()
-  const { data, error } = await client.from('users').select('id, full_name, email, role').order('created_at', { ascending: false })
+  const { data, error } = await client.from('users').select('id, full_name, email, role, position, is_active').order('created_at', { ascending: false })
   if (error) return []
 
   return (data ?? []).filter((user) => (user.role || '').toLowerCase() === 'staff')
 }
 
-export async function updateReportStatus(reference, status, assignedStaffId) {
+export async function updateReportStatus(reference, status, assignedStaffId, resolutionFiles = []) {
   const client = requireClient()
+  const userId = await currentUserId()
+  const uploaded = await uploadEvidence(userId, resolutionFiles)
+
+  let photos
+  if (uploaded.length > 0) {
+    const { data: current } = await client
+      .from('reports')
+      .select('photos')
+      .eq('reference', reference)
+      .single()
+    photos = [...(Array.isArray(current?.photos) ? current.photos : []), ...uploaded]
+  }
+
   const { data, error } = await client
     .from('reports')
     .update({
       status,
       assigned_staff_id: assignedStaffId ?? null,
+      ...(photos ? { photos } : {}),
     })
     .eq('reference', reference)
     .select('*')
     .single()
 
-  if (error) throw error
+  if (error) {
+    if (uploaded.length > 0) {
+      await client.storage.from(EVIDENCE_BUCKET).remove(uploaded.map((photo) => photo.path))
+    }
+    throw error
+  }
+
   const urls = await signedUrls(photoPaths([data]))
   return toReport(data, urls)
+}
+
+export async function setReportDuplicateFlag(reportId, flagged) {
+  const client = requireClient()
+  const { error } = await client.rpc('set_report_duplicate_flag', {
+    p_report_id: reportId,
+    p_flagged: Boolean(flagged),
+  })
+  if (error) throw error
 }

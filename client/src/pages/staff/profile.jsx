@@ -80,7 +80,7 @@ export default function StaffProfile() {
 
   const handleSignOut = async () => {
     if (supabase) await supabase.auth.signOut()
-    window.location.href = '/staff/login'
+    window.location.href = '/login'
   }
 
   return (

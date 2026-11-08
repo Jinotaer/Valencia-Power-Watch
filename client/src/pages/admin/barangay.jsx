@@ -5,15 +5,17 @@ import {
   ChevronUp,
   LayoutGrid,
   Phone,
+  Pencil,
   Plus,
   Search,
+  Trash2,
   Table as TableIcon,
   AlertTriangle,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
-import { BarangayCreateDialog } from './barangayModals'
-import { createBarangay, loadActiveReportCounts, loadBarangays } from '../../lib/barangays'
+import { BarangayCreateDialog, BarangayEditDialog } from './barangayModals'
+import { createBarangay, deleteBarangay, loadActiveReportCounts, loadBarangays, updateBarangay } from '../../lib/barangays'
 import Pagination from '../../common/pagination'
 import AdminSidebar from '../../components/admin/sidebar'
 import { Button } from '../../components/ui/button'
@@ -63,6 +65,10 @@ function AdminBarangay() {
 
   // Create barangay modal state
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editingBarangay, setEditingBarangay] = useState(null)
+  const [deletingBarangay, setDeletingBarangay] = useState(null)
+  const [editForm, setEditForm] = useState(null)
   const [newBarangay, setNewBarangay] = useState(emptyNewBarangay)
 
   const reload = () => {
@@ -137,6 +143,60 @@ function AdminBarangay() {
     const start = (page - 1) * pageSize
     return filteredBarangays.slice(start, start + pageSize)
   }, [filteredBarangays, page, pageSize])
+
+  function openEdit(barangay) {
+    setEditingBarangay(barangay)
+    setEditForm({
+      captain: barangay.captain ?? '',
+      contactNumber: barangay.contactNumber ?? '',
+      totalHouseholds: barangay.totalHouseholds ?? 0,
+      affectedHouseholds: barangay.affectedHouseholds ?? 0,
+      pinnedLocation: barangay.pinnedLocation ?? '',
+      coordinates: barangay.coordinates ?? null,
+      pinSource: barangay.pinSource ?? 'manual',
+    })
+    setActionError('')
+    setIsEditOpen(true)
+  }
+
+  async function handleSaveEdit(event) {
+    event.preventDefault()
+    if (!editingBarangay || !editForm || isSubmitting) return
+
+    setIsSubmitting(true)
+    setActionError('')
+    try {
+      const updated = await updateBarangay(editingBarangay.code, editForm)
+      setBarangays((previous) => previous.map((barangay) => (
+        barangay.code === updated.code ? { ...updated, activeReports: barangay.activeReports ?? 0 } : barangay
+      )))
+      setIsEditOpen(false)
+      setEditingBarangay(null)
+      showToast(`${updated.name} updated.`)
+    } catch (error) {
+      setActionError(error.message || 'We could not update this barangay.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!deletingBarangay || isSubmitting) return
+
+    setIsSubmitting(true)
+    setActionError('')
+    try {
+      await deleteBarangay(deletingBarangay.code)
+      setBarangays((previous) => previous.filter((barangay) => barangay.code !== deletingBarangay.code))
+      setDeletingBarangay(null)
+      showToast(`${deletingBarangay.name} deleted.`)
+    } catch (error) {
+      setActionError(error.message || 'We could not delete this barangay.')
+      setDeletingBarangay(null)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   // Add new barangay
   async function handleCreateBarangay(e) {
@@ -301,13 +361,16 @@ function AdminBarangay() {
                         <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
                           CONTACT
                         </TableHead>
+                        <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted text-right">
+                          ACTIONS
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
 
                     <TableBody>
                       {isLoading && (
                         <TableRow className="hover:bg-transparent">
-                          <TableCell colSpan={4} className="h-36 text-center text-sm font-semibold text-brand-muted">
+                          <TableCell colSpan={5} className="h-36 text-center text-sm font-semibold text-brand-muted">
                             Loading barangays…
                           </TableCell>
                         </TableRow>
@@ -315,7 +378,7 @@ function AdminBarangay() {
 
                       {!isLoading && loadError && (
                         <TableRow className="hover:bg-transparent">
-                          <TableCell colSpan={4} className="h-36 text-center">
+                          <TableCell colSpan={5} className="h-36 text-center">
                             <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
                             <button
                               type="button"
@@ -364,12 +427,22 @@ function AdminBarangay() {
                               <span>{b.contactNumber}</span>
                             </div>
                           </TableCell>
+                          <TableCell className="px-5 py-4">
+                            <div className="flex justify-end gap-2">
+                              <button type="button" onClick={() => openEdit(b)} aria-label={`Edit ${b.name}`} title="Edit" className="grid size-9 place-items-center rounded-lg border border-brand-line bg-white text-brand-muted hover:bg-brand-paper hover:text-brand-navy">
+                                <Pencil className="size-4" />
+                              </button>
+                              <button type="button" onClick={() => setDeletingBarangay(b)} aria-label={`Delete ${b.name}`} title="Delete" className="grid size-9 place-items-center rounded-lg border border-[#f3c7c3] bg-white text-[#b42318] hover:bg-red-50">
+                                <Trash2 className="size-4" />
+                              </button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))}
 
                       {!isLoading && !loadError && visibleBarangays.length === 0 && (
                         <TableRow className="hover:bg-transparent">
-                          <TableCell colSpan={4} className="h-36 text-center text-sm text-brand-muted">
+                          <TableCell colSpan={5} className="h-36 text-center text-sm text-brand-muted">
                             No barangays found matching your search criteria.
                           </TableCell>
                         </TableRow>
@@ -474,6 +547,31 @@ function AdminBarangay() {
           isSubmitting={isSubmitting}
           actionError={actionError}
         />
+        <BarangayEditDialog
+          open={isEditOpen}
+          onOpenChange={setIsEditOpen}
+          form={editForm ?? {}}
+          setForm={setEditForm}
+          onSave={handleSaveEdit}
+          isSubmitting={isSubmitting}
+          actionError={actionError}
+        />
+        {deletingBarangay && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-label="Delete barangay">
+              <h2 className="text-lg font-bold text-brand-navy">Delete {deletingBarangay.name}?</h2>
+              <p className="mt-2 text-sm text-brand-muted">This permanently removes the barangay record. Reports that reference this name will keep their text value, but this barangay will no longer appear in the directory.</p>
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" onClick={() => setDeletingBarangay(null)} disabled={isSubmitting} className="h-10 rounded-lg border border-brand-line px-4 text-sm font-semibold text-brand-muted hover:bg-brand-paper">
+                  Cancel
+                </button>
+                <button type="button" onClick={handleDelete} disabled={isSubmitting} className="h-10 rounded-lg bg-[#b42318] px-4 text-sm font-semibold text-white hover:bg-[#912018]">
+                  {isSubmitting ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </SidebarProvider>
     )
 }

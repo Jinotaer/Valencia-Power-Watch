@@ -4,16 +4,32 @@
 -- 1. Planned outage notices created by admins
 create table if not exists public.schedules (
   id uuid primary key default gen_random_uuid(),
-  location text not null,
-  barangay text not null,
+  title text not null,
+  barangay text,
   date date not null,
   start_time text not null,
   end_time text not null,
   type text not null default 'Maintenance',
+  description text,
   status text not null default 'scheduled'
     check (status in ('scheduled', 'published', 'cancelled')),
   created_at timestamptz not null default now()
 );
+
+-- Existing installs: schedules now have a title, and a barangay only applies
+-- to outages limited to one barangay (empty = multiple barangays).
+alter table public.schedules
+  add column if not exists title text;
+
+alter table public.schedules
+  add column if not exists description text;
+
+alter table public.schedules
+  alter column barangay drop not null;
+
+-- Location is no longer part of a schedule; drop it from existing installs.
+alter table public.schedules
+  drop column if exists location;
 
 create index if not exists schedules_status_date_idx
   on public.schedules (status, date);

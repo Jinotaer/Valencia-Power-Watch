@@ -3,6 +3,18 @@
   "name": "Valencia PowerWatch",
   "short_name": "PowerWatch",
   "description": "Report interruptions, follow outage information and manage field response work in Valencia City.",
+  "shortcuts": [
+    {
+      "name": "Report an outage",
+      "url": "/community/submit-report",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Field response jobs",
+      "url": "/staff/jobs",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ],
   "start_url": "/login",
   "scope": "/",
   "display": "standalone",

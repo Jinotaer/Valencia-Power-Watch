@@ -1,69 +1,181 @@
 import {
-  ArrowRight,
   Compass,
-  Flame,
-  Layers,
+  Focus,
   LocateFixed,
+  MapPin,
   Maximize2,
   Minimize2,
-  Share2,
-  Wrench,
-  Zap,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet'
+import L from 'leaflet'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import AdminNavbar from '../../components/admin/navbar'
 import AdminSidebar from '../../components/admin/sidebar'
 import {
-  VALENCIA_CENTER,
-  activeOutages,
-  barangayCenters,
-  feederLines,
-  icons,
-  openReports,
-  resolvedIncidents,
-  scheduledOutages,
-} from './mapData'
-import { FlyToControl, LayerToggle } from './mapControls'
-import {
   SidebarInset,
   SidebarProvider,
 } from '../../components/ui/sidebar'
+import { loadAllReports } from '../../lib/reports'
+import { VALENCIA_CENTER, barangayCenters } from '../../lib/geo'
+import { icons } from './mapData'
+import { FlyToControl } from './mapControls'
+
+const STATUS_ORDER = ['pending', 'verified', 'resolved', 'rejected']
+
+const statusMeta = {
+  pending: { label: 'Pending', color: '#d97706', badge: 'bg-[#fff1a8] text-[#9a6500]' },
+  verified: { label: 'Verified', color: '#2563eb', badge: 'bg-[#e5e9f6] text-brand-blue' },
+  resolved: { label: 'Resolved', color: '#16a34a', badge: 'bg-[#d9f9e8] text-[#137a48]' },
+  rejected: { label: 'Rejected', color: '#dc2626', badge: 'bg-red-50 text-[#b42318]' },
+}
+
+function normalizeName(value) {
+  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function makeReportIcon(color) {
+  return L.divIcon({
+    className: '',
+    iconSize: [16, 16],
+    iconAnchor: [8, 8],
+    popupAnchor: [0, -8],
+    html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 1px 5px rgba(15,23,42,.35);"></div>`,
+  })
+}
+
+const reportIcons = Object.fromEntries(
+  STATUS_ORDER.map((status) => [status, makeReportIcon(statusMeta[status].color)]),
+)
+
+function ReportPopup({ report }) {
+  const meta = statusMeta[report.tone] ?? statusMeta.pending
+
+  return (
+    <div className="min-w-[190px] space-y-1 text-xs text-brand-ink">
+      <div className="flex items-center justify-between gap-3">
+        <strong className="text-brand-navy">{report.id}</strong>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${meta.badge}`}>{meta.label}</span>
+      </div>
+      <p className="font-bold text-brand-ink">{report.outageType}</p>
+      <p className="text-brand-muted">{report.barangay ? `Brgy. ${report.barangay}` : 'Barangay not provided'}</p>
+      <p className="text-brand-muted">Reported by {report.residentName || 'Unknown resident'}</p>
+      <p className="text-brand-muted">{report.pinnedLocation || report.landmark || 'No landmark provided'}</p>
+      {report.approximate && (
+        <p className="font-semibold text-[#9a6500]">
+          No pin captured — plotted at the barangay center.
+        </p>
+      )}
+      <a href="/admin/reports" className="inline-block pt-1 font-bold text-brand-blue underline underline-offset-2">
+        Review report
+      </a>
+    </div>
+  )
+}
 
 export default function AdminMap() {
-  const [layers, setLayers] = useState({
-    feeders: true,
-    darkMatrix: false,
-    heatmap: true,
-    activeOutages: true,
-    openReports: true,
-    resolved: true,
-    scheduled: true,
-    barangays: false,
-    roads: true,
-    satellite: false,
-  })
+  const [reports, setReports] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
+  const [statusFilter, setStatusFilter] = useState(() =>
+    Object.fromEntries(STATUS_ORDER.map((status) => [status, true])),
+  )
+  const [basemap, setBasemap] = useState('street')
+  const [showBarangays, setShowBarangays] = useState(false)
   const [flyTarget, setFlyTarget] = useState(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [showMobileSidebar, setShowMobileSidebar] = useState(false)
 
   const mapRef = useRef(null)
   const mapContainerRef = useRef(null)
 
-  const toggleLayer = (key) => {
-    setLayers((prev) => ({ ...prev, [key]: !prev[key] }))
+  const reload = () => {
+    setLoadError('')
+    setIsLoading(true)
+    setReloadKey((value) => value + 1)
   }
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement && mapContainerRef.current) {
-      mapContainerRef.current.requestFullscreen()
-      setIsFullscreen(true)
-    } else if (document.fullscreenElement) {
-      document.exitFullscreen()
-      setIsFullscreen(false)
+  useEffect(() => {
+    let active = true
+
+    loadAllReports()
+      .then((rows) => {
+        if (active) setReports(rows)
+      })
+      .catch(() => {
+        if (active) {
+          setReports([])
+          setLoadError('We could not load report locations. Check your connection and try again.')
+        }
+      })
+      .finally(() => {
+        if (active) setIsLoading(false)
+      })
+
+    return () => {
+      active = false
     }
-  }
+  }, [reloadKey])
+
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [])
+
+  useEffect(() => {
+    if (!isFullscreen) return undefined
+    const timer = setTimeout(() => mapRef.current?.invalidateSize(), 150)
+    return () => clearTimeout(timer)
+  }, [isFullscreen])
+
+  const centerByBarangay = useMemo(
+    () => Object.fromEntries(barangayCenters.map((barangay) => [normalizeName(barangay.name), barangay])),
+    [],
+  )
+
+  // Every report gets a pin: its captured coordinates, or its barangay center when no pin exists.
+  const mappedReports = useMemo(
+    () =>
+      reports.flatMap((report) => {
+        if (report.coordinates) {
+          return [{
+            ...report,
+            position: [report.coordinates.latitude, report.coordinates.longitude],
+            approximate: false,
+          }]
+        }
+
+        const center = centerByBarangay[normalizeName(report.barangay)]
+        if (!center) return []
+        return [{ ...report, position: [center.lat, center.lng], approximate: true }]
+      }),
+    [centerByBarangay, reports],
+  )
+
+  const counts = useMemo(() => {
+    const byStatus = Object.fromEntries(STATUS_ORDER.map((status) => [status, 0]))
+    reports.forEach((report) => {
+      if (byStatus[report.tone] !== undefined) byStatus[report.tone] += 1
+    })
+    return byStatus
+  }, [reports])
+
+  const visibleReports = useMemo(
+    () => mappedReports.filter((report) => statusFilter[report.tone] !== false),
+    [mappedReports, statusFilter],
+  )
+
+  const approximateCount = visibleReports.filter((report) => report.approximate).length
+  const unmappedCount = reports.length - mappedReports.length
+
+  useEffect(() => {
+    if (mappedReports.length === 0) return
+    mapRef.current?.fitBounds(
+      mappedReports.map((report) => report.position),
+      { padding: [48, 48], maxZoom: 13 },
+    )
+  }, [mappedReports])
 
   const resetView = useCallback(() => {
     mapRef.current?.flyTo(VALENCIA_CENTER, 12, { duration: 0.8 })
@@ -71,458 +183,292 @@ export default function AdminMap() {
   }, [])
 
   const locateMe = useCallback(() => {
-    mapRef.current?.locate({ setView: true, maxZoom: 14 })
+    mapRef.current?.locate({ setView: true, maxZoom: 15 })
   }, [])
 
-  useEffect(() => {
-    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement)
-    document.addEventListener('fullscreenchange', onFsChange)
-    return () => document.removeEventListener('fullscreenchange', onFsChange)
-  }, [])
+  const fitReports = useCallback(() => {
+    if (visibleReports.length === 0) {
+      resetView()
+      return
+    }
+    mapRef.current?.fitBounds(
+      visibleReports.map((report) => report.position),
+      { padding: [48, 48], maxZoom: 14 },
+    )
+  }, [resetView, visibleReports])
 
-  // Basemap Tile Providers
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      mapContainerRef.current?.requestFullscreen()
+    } else {
+      document.exitFullscreen()
+    }
+  }
+
   const streetTiles = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
   const satelliteTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-  const darkTiles = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-
-  const tileUrl = layers.darkMatrix
-    ? darkTiles
-    : layers.satellite
-    ? satelliteTiles
-    : streetTiles
-
-  const tileAttribution = layers.satellite
-    ? 'Tiles &copy; Esri'
-    : layers.darkMatrix
-    ? '&copy; CARTO'
-    : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  const tileUrl = basemap === 'satellite' ? satelliteTiles : streetTiles
+  const tileAttribution =
+    basemap === 'satellite'
+      ? 'Tiles &copy; Esri'
+      : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 
   return (
     <SidebarProvider>
       <AdminSidebar activePath="/admin/map" />
-      <SidebarInset className="bg-brand-paper min-h-screen flex flex-col">
-        <AdminNavbar title="OPERATIONS" section="Power Outage Map & GIS Hotspots" />
+      <SidebarInset className="flex h-screen flex-col overflow-hidden bg-brand-paper">
+        <AdminNavbar title="Operations" section="Report location map" />
 
-        <main className="flex-1 p-3 sm:p-5 flex flex-col gap-3 overflow-hidden">
-          {/* Header Title Bar */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-brand-muted">
-                OPERATIONS
-              </p>
-              <h1 className="text-xl sm:text-2xl font-black text-brand-ink tracking-tight">
-                Power Outage Map & GIS Hotspots
-              </h1>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowMobileSidebar(!showMobileSidebar)}
-              className="lg:hidden flex items-center gap-1.5 rounded-xl border border-brand-line bg-white px-3 py-1.5 text-xs font-bold text-brand-ink shadow-xs"
-            >
-              <Layers className="size-4" />
-              <span>Layers</span>
-            </button>
-          </div>
-
-          {/* Floating Dark SCADA Telemetry Bar */}
-          <div className="flex items-center gap-3.5 overflow-x-auto rounded-xl bg-brand-navy px-4 py-2.5 font-mono text-[11px] tracking-wide text-brand-line shadow-md scrollbar-none border border-brand-navy shrink-0">
-            <span className="flex items-center gap-1.5 shrink-0">
-              <span className="size-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,.8)]" />
-              <span className="text-brand-muted">SCADA GRID:</span>
-              <span className="font-extrabold text-emerald-400">NOMINAL 100%</span>
-            </span>
-            <span className="text-brand-ink">|</span>
-            <span className="shrink-0">
-              <span className="text-brand-muted">LOAD:</span>{' '}
-              <span className="font-extrabold text-brand-blue">68.4 MW</span>
-              <span className="text-brand-muted"> / 75.0 MW</span>
-            </span>
-            <span className="text-brand-ink">|</span>
-            <span className="shrink-0">
-              <span className="text-brand-muted">FREQ:</span>{' '}
-              <span className="font-extrabold text-white">60.01 Hz</span>
-            </span>
-            <span className="text-brand-ink">|</span>
-            <span className="shrink-0">
-              <span className="text-brand-muted">FEEDERS:</span>{' '}
-              <span className="font-extrabold text-brand-blue">3/4 OK</span>
-              <span className="text-brand-muted"> · </span>
-              <span className="font-extrabold text-red-400">1 FAULT (FDR-03)</span>
-            </span>
-            <span className="text-brand-ink">|</span>
-            <span className="shrink-0">
-              <span className="text-brand-muted">NODES:</span>{' '}
-              <span className="font-extrabold text-brand-blue">31/31 BGRYS SYNCED</span>
-            </span>
-            <span className="text-brand-ink">|</span>
-            <span className="shrink-0">
-              <span className="text-brand-muted">AI ENGINE:</span>{' '}
-              <span className="font-extrabold text-emerald-400">OPTIMAL (99.4%)</span>
-            </span>
-          </div>
-
-          {/* Map + Sidebar Layout Card */}
-          <div
-            ref={mapContainerRef}
-            className="flex-1 flex flex-col lg:flex-row gap-3 min-h-[550px] relative overflow-hidden"
-          >
-            {/* Real Leaflet Map Container Card */}
-            <div className="flex-1 relative rounded-2xl border border-brand-line/90 bg-white overflow-hidden shadow-xs min-h-[450px]">
-              <MapContainer
-                ref={mapRef}
-                center={VALENCIA_CENTER}
-                zoom={12}
-                className="h-full w-full"
-                zoomControl={true}
-                attributionControl={true}
-              >
-                <TileLayer url={tileUrl} attribution={tileAttribution} />
-                <FlyToControl target={flyTarget} />
-
-                {/* 13.2kV Feeders Polylines */}
-                {layers.feeders &&
-                  feederLines.map((line, idx) => (
-                    <Polyline
-                      key={idx}
-                      positions={line}
-                      pathOptions={{
-                        color: idx === 0 ? '#555b66' : idx === 1 ? '#172b68' : '#101114',
-                        weight: 2.5,
-                        dashArray: '6, 6',
-                      }}
-                    />
-                  ))}
-
-                {/* Outage Density Heatmap Auras */}
-                {layers.heatmap && (
-                  <>
-                    <Circle
-                      center={[7.9210, 125.1150]}
-                      radius={1200}
-                      pathOptions={{ fillColor: '#ef4444', fillOpacity: 0.25, stroke: false }}
-                    />
-                    <Circle
-                      center={[7.9150, 125.0880]}
-                      radius={900}
-                      pathOptions={{ fillColor: '#f59e0b', fillOpacity: 0.28, stroke: false }}
-                    />
-                  </>
-                )}
-
-                {/* Active Outage Markers */}
-                {layers.activeOutages &&
-                  activeOutages.map((o) => (
-                    <Marker key={o.id} position={[o.lat, o.lng]} icon={icons.activeOutage}>
-                      <Popup>
-                        <div className="text-xs space-y-1">
-                          <strong className="text-red-600 block">{o.id} — Active Outage</strong>
-                          <div><strong>Barangay:</strong> {o.barangay}</div>
-                          <div><strong>Cause:</strong> {o.cause}</div>
-                          <div><strong>Affected:</strong> {o.affected} households</div>
-                          <div><strong>Reported:</strong> {o.since}</div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  ))}
-
-                {/* Scheduled Outage Markers */}
-                {layers.scheduled &&
-                  scheduledOutages.map((s) => (
-                    <Marker key={s.id} position={[s.lat, s.lng]} icon={icons.scheduled}>
-                      <Popup>
-                        <div className="text-xs space-y-1">
-                          <strong className="text-brand-blue block">{s.id} — Scheduled Outage</strong>
-                          <div><strong>Barangay:</strong> {s.barangay}</div>
-                          <div><strong>Reason:</strong> {s.reason}</div>
-                          <div><strong>Window:</strong> {s.date}</div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  ))}
-
-                {/* Open Reports Markers */}
-                {layers.openReports &&
-                  openReports.map((r) => (
-                    <Marker key={r.id} position={[r.lat, r.lng]} icon={icons.openReport}>
-                      <Popup>
-                        <div className="text-xs space-y-1">
-                          <strong className="text-amber-600 block">{r.id} — Open Report</strong>
-                          <div><strong>Barangay:</strong> {r.barangay}</div>
-                          <div><strong>Type:</strong> {r.type}</div>
-                          <div><strong>Submitted:</strong> {r.submitted}</div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  ))}
-
-                {/* Resolved Incident Markers */}
-                {layers.resolved &&
-                  resolvedIncidents.map((r) => (
-                    <Marker key={r.id} position={[r.lat, r.lng]} icon={icons.resolved}>
-                      <Popup>
-                        <div className="text-xs space-y-1">
-                          <strong className="text-emerald-600 block">{r.id} — Resolved</strong>
-                          <div><strong>Barangay:</strong> {r.barangay}</div>
-                          <div><strong>Resolved:</strong> {r.resolved}</div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  ))}
-
-                {/* Barangay Center Markers */}
-                {layers.barangays &&
-                  barangayCenters.map((b) => (
-                    <Marker key={b.name} position={[b.lat, b.lng]} icon={icons.barangay}>
-                      <Popup>
-                        <div className="text-xs space-y-1">
-                          <strong className="text-brand-ink block">Brgy. {b.name}</strong>
-                          <div><strong>Total households:</strong> {b.households.toLocaleString()}</div>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  ))}
-              </MapContainer>
-
-              {/* Floating Action Buttons on Map Right Edge (Matching Reference Screenshot) */}
-              <div className="absolute bottom-6 right-4 z-[400] flex flex-col gap-2">
-                {/* 1. Compass / Reset View */}
-                <button
-                  type="button"
-                  onClick={resetView}
-                  className="flex size-10 items-center justify-center rounded-xl bg-white border border-brand-line text-brand-ink hover:bg-brand-paper shadow-md transition-all cursor-pointer"
-                  title="Reset compass"
-                >
-                  <Compass className="size-4.5 text-brand-muted" />
-                </button>
-
-                {/* 2. Locate My Location */}
-                <button
-                  type="button"
-                  onClick={locateMe}
-                  className="flex size-10 items-center justify-center rounded-xl bg-white border border-brand-line text-brand-ink hover:bg-brand-paper shadow-md transition-all cursor-pointer"
-                  title="Locate"
-                >
-                  <LocateFixed className="size-4.5 text-brand-muted" />
-                </button>
-
-                {/* 3. Flame / Hotspots (Red) */}
-                <button
-                  type="button"
-                  onClick={() => toggleLayer('activeOutages')}
-                  className="flex size-10 items-center justify-center rounded-xl bg-[#dc2626] text-white hover:bg-red-700 shadow-md transition-all cursor-pointer"
-                  title="Outage fire report"
-                >
-                  <Flame className="size-4.5" />
-                </button>
-
-                {/* 4. Dispatch / Tools (Yellow/Amber) */}
-                <button
-                  type="button"
-                  onClick={() => window.open('/admin/response', '_self')}
-                  className="flex size-10 items-center justify-center rounded-xl bg-[#d97706] text-white hover:bg-amber-700 shadow-md transition-all cursor-pointer"
-                  title="Field dispatch"
-                >
-                  <Wrench className="size-4.5" />
-                </button>
-
-                {/* 5. Matrix / Feeder Layer (Blue) */}
-                <button
-                  type="button"
-                  onClick={() => toggleLayer('darkMatrix')}
-                  className="flex size-10 items-center justify-center rounded-xl bg-brand-blue text-white hover:bg-brand-navy shadow-md transition-all cursor-pointer"
-                  title="Matrix mode"
-                >
-                  <Share2 className="size-4.5" />
-                </button>
-
-                {/* 6. Active Feeders (Bright Red/Yellow) */}
-                <button
-                  type="button"
-                  onClick={() => toggleLayer('feeders')}
-                  className="flex size-10 items-center justify-center rounded-xl bg-[#b91c1c] text-white hover:bg-red-800 shadow-md transition-all cursor-pointer"
-                  title="13.2kV Feeders"
-                >
-                  <Zap className="size-4.5 fill-current" />
-                </button>
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:overflow-hidden">
+          <div className="mx-auto flex h-full max-w-[1600px] flex-col gap-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-brand-muted">Operations</p>
+                <h1 className="mt-0.5 text-xl font-black tracking-tight text-brand-navy sm:text-2xl">Report location map</h1>
+                <p className="mt-1 text-xs text-brand-muted">
+                  Every resident outage report plotted from its captured pin.
+                </p>
               </div>
             </div>
 
-            {/* Right Operations Sidebar Card */}
-            <aside
-              className={`w-full lg:w-80 shrink-0 overflow-y-auto rounded-2xl border border-brand-line/90 bg-white p-4 sm:p-5 space-y-5 shadow-xs ${
-                showMobileSidebar ? 'block' : 'hidden lg:block'
-              }`}
-            >
-              {/* Legend Section */}
-              <section>
-                <h2 className="text-sm font-extrabold text-brand-ink mb-2.5">Legend</h2>
-                <div className="space-y-2">
-                  {[
-                    { color: '#ef4444', label: 'Active Outage', count: activeOutages.length },
-                    { color: '#24449a', label: 'Scheduled Outage', count: scheduledOutages.length },
-                    { color: '#f59e0b', label: 'Open Reports & Verification', count: openReports.length },
-                    { color: '#22c55e', label: 'Resolved Incident', count: resolvedIncidents.length },
-                    { color: '#172b68', label: 'Barangay Centers', count: 31 },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center justify-between text-xs text-brand-muted">
-                      <span className="flex items-center gap-2 font-medium">
-                        <span className="size-2.5 rounded-full shrink-0" style={{ background: item.color }} />
-                        {item.label}
-                      </span>
-                      <span className="tabular-nums font-semibold text-brand-muted">{item.count}</span>
-                    </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+              <div
+                ref={mapContainerRef}
+                className="relative min-h-[420px] flex-1 overflow-hidden rounded-2xl border border-brand-line bg-white shadow-xs lg:min-h-0"
+              >
+                <MapContainer
+                  ref={mapRef}
+                  center={VALENCIA_CENTER}
+                  zoom={12}
+                  className="h-full w-full"
+                  zoomControl
+                  attributionControl
+                >
+                  <TileLayer url={tileUrl} attribution={tileAttribution} />
+                  <FlyToControl target={flyTarget} />
+
+                  {showBarangays &&
+                    barangayCenters.map((barangay) => (
+                      <Marker key={barangay.name} position={[barangay.lat, barangay.lng]} icon={icons.barangay}>
+                        <Popup>
+                          <div className="text-xs text-brand-ink">
+                            <strong className="block text-brand-navy">Brgy. {barangay.name}</strong>
+                            <span className="text-brand-muted">
+                              {barangay.households.toLocaleString()} households
+                            </span>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    ))}
+
+                  {visibleReports.map((report) => (
+                    <Marker
+                      key={report.id}
+                      position={report.position}
+                      icon={reportIcons[report.tone] ?? reportIcons.pending}
+                    >
+                      <Popup>
+                        <ReportPopup report={report} />
+                      </Popup>
+                    </Marker>
                   ))}
-                </div>
-              </section>
+                </MapContainer>
 
-              {/* Outage Density Heatmap Gradient Bar */}
-              <section className="border-t border-brand-line pt-4">
-                <h2 className="text-sm font-extrabold text-brand-ink mb-2 flex items-center gap-1.5">
-                  🔥 Outage Density Heatmap
-                </h2>
-                <div
-                  className="h-2.5 w-full rounded-full shadow-inner"
-                  style={{ background: 'linear-gradient(to right, #24449a, #f59e0b, #ef4444)' }}
-                />
-                <div className="flex justify-between mt-1 text-[10px] text-brand-muted font-semibold uppercase">
-                  <span>Low</span>
-                  <span>Moderate</span>
-                  <span>Critical Hotspot</span>
+                <div className="pointer-events-none absolute bottom-4 left-4 z-[1000] hidden rounded-xl border border-brand-line bg-white/95 px-3 py-2 shadow-md backdrop-blur sm:block">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">Legend</p>
+                  <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1">
+                    {STATUS_ORDER.map((status) => (
+                      <span key={status} className="flex items-center gap-1.5 text-[10px] font-semibold text-brand-muted">
+                        <span className="size-2 rounded-full" style={{ background: statusMeta[status].color }} />
+                        {statusMeta[status].label}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <p className="mt-2 text-[11px] leading-relaxed text-brand-muted">
-                  Current incidents and open unlinked reports only; scheduled and resolved outages are excluded.
-                </p>
-              </section>
 
-              {/* Map Controls */}
-              <section className="border-t border-brand-line pt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-extrabold text-brand-ink">Map Controls</h2>
+                <div className="absolute right-4 top-4 z-[1000] flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={fitReports}
+                    className="grid size-10 place-items-center rounded-xl border border-brand-line bg-white text-brand-ink shadow-md transition-colors hover:bg-brand-paper"
+                    title="Fit all pins"
+                  >
+                    <Focus className="size-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetView}
+                    className="grid size-10 place-items-center rounded-xl border border-brand-line bg-white text-brand-ink shadow-md transition-colors hover:bg-brand-paper"
+                    title="Reset view"
+                  >
+                    <Compass className="size-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={locateMe}
+                    className="grid size-10 place-items-center rounded-xl border border-brand-line bg-white text-brand-ink shadow-md transition-colors hover:bg-brand-paper"
+                    title="My location"
+                  >
+                    <LocateFixed className="size-4" aria-hidden="true" />
+                  </button>
                   <button
                     type="button"
                     onClick={toggleFullscreen}
-                    className="flex items-center gap-1 text-xs font-bold text-brand-blue hover:text-brand-navy cursor-pointer"
+                    className="grid size-10 place-items-center rounded-xl border border-brand-line bg-white text-brand-ink shadow-md transition-colors hover:bg-brand-paper"
+                    title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
                   >
-                    {isFullscreen ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-                    <span>Fullscreen</span>
+                    {isFullscreen ? (
+                      <Minimize2 className="size-4" aria-hidden="true" />
+                    ) : (
+                      <Maximize2 className="size-4" aria-hidden="true" />
+                    )}
                   </button>
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-brand-muted block mb-1">
-                    🎯 Fly to Barangay:
-                  </label>
-                  <select
-                    value={flyTarget?.name || ''}
-                    onChange={(e) => {
-                      const b = barangayCenters.find((bc) => bc.name === e.target.value)
-                      setFlyTarget(b || null)
-                    }}
-                    className="w-full h-9 rounded-lg border border-brand-line bg-white px-3 text-xs font-semibold text-brand-ink focus:border-brand-blue focus:outline-none focus:ring-1 focus:ring-brand-blue cursor-pointer"
-                  >
-                    <option value="">Select a barangay to focus...</option>
-                    {barangayCenters.map((b) => (
-                      <option key={b.name} value={b.name}>
-                        {b.name}
-                      </option>
+                {isLoading && (
+                  <div className="absolute inset-0 z-[1100] grid place-items-center bg-white/70 backdrop-blur-sm">
+                    <p className="rounded-xl bg-white px-4 py-2 text-xs font-bold text-brand-muted shadow-sm">
+                      Loading report locations…
+                    </p>
+                  </div>
+                )}
+
+                {!isLoading && loadError && (
+                  <div className="absolute inset-0 z-[1100] grid place-items-center bg-white/80 p-6 backdrop-blur-sm">
+                    <div className="max-w-sm rounded-xl border border-brand-line bg-white p-4 text-center shadow-sm">
+                      <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
+                      <button
+                        type="button"
+                        onClick={reload}
+                        className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <aside className="flex max-h-[520px] w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-brand-line bg-white shadow-xs lg:max-h-none lg:min-h-0 lg:w-[340px]">
+                <div className="shrink-0 border-b border-brand-line p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h2 className="text-sm font-extrabold text-brand-ink">Reports on map</h2>
+                    <span className="rounded-full bg-[#e5e9f6] px-2 py-0.5 text-[11px] font-bold tabular-nums text-brand-blue">
+                      {visibleReports.length}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {STATUS_ORDER.map((status) => {
+                      const isOn = statusFilter[status] !== false
+                      return (
+                        <button
+                          key={status}
+                          type="button"
+                          aria-pressed={isOn}
+                          onClick={() => setStatusFilter((current) => ({ ...current, [status]: !current[status] }))}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold transition-colors ${
+                            isOn
+                              ? 'border-brand-line bg-white text-brand-ink'
+                              : 'border-transparent bg-brand-paper text-brand-muted opacity-60'
+                          }`}
+                        >
+                          <span className="size-2 rounded-full" style={{ background: statusMeta[status].color }} />
+                          {statusMeta[status].label}
+                          <span className="tabular-nums text-brand-muted">{counts[status]}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-brand-paper p-1">
+                    {[
+                      { key: 'street', label: 'Street' },
+                      { key: 'satellite', label: 'Satellite' },
+                    ].map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => setBasemap(option.key)}
+                        className={`rounded-md px-2 py-1.5 text-[11px] font-bold transition-colors ${
+                          basemap === option.key ? 'bg-white text-brand-navy shadow-xs' : 'text-brand-muted hover:text-brand-ink'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
                     ))}
-                  </select>
+                  </div>
+
+                  <label className="mt-3 flex items-center gap-2 text-[11px] font-semibold text-brand-muted">
+                    <input
+                      type="checkbox"
+                      checked={showBarangays}
+                      onChange={(event) => setShowBarangays(event.target.checked)}
+                      className="size-3.5 rounded border-brand-line accent-brand-blue"
+                    />
+                    Show barangay centers
+                  </label>
                 </div>
-              </section>
 
-              {/* Layers & Smart Grid Checkboxes */}
-              <section className="border-t border-brand-line pt-4">
-                <h2 className="text-sm font-extrabold text-brand-ink mb-2">Layers & Smart Grid</h2>
-                <div className="space-y-0.5">
-                  <LayerToggle
-                    label="13.2kV Feeders"
-                    icon="⚡"
-                    checked={layers.feeders}
-                    onChange={() => toggleLayer('feeders')}
-                    tag="2030"
-                    tagColor="bg-brand-navy text-white"
-                  />
-                  <LayerToggle
-                    label="Cyber 2030 Dark Matrix"
-                    icon="🌐"
-                    checked={layers.darkMatrix}
-                    onChange={() => toggleLayer('darkMatrix')}
-                    tag="Sci-Fi"
-                    tagColor="bg-[#e5e9f6] text-brand-blue"
-                  />
-                  <LayerToggle
-                    label="Outage Density Heatmap"
-                    icon="🔥"
-                    checked={layers.heatmap}
-                    onChange={() => toggleLayer('heatmap')}
-                    tag="Current"
-                    tagColor="bg-[#fff1a8] text-[#221506]"
-                  />
-                  <div className="border-t border-brand-line my-1.5" />
-                  <LayerToggle
-                    label="Active Outages"
-                    checked={layers.activeOutages}
-                    onChange={() => toggleLayer('activeOutages')}
-                    count={activeOutages.length}
-                  />
-                  <LayerToggle
-                    label="Open Reports & Verification"
-                    checked={layers.openReports}
-                    onChange={() => toggleLayer('openReports')}
-                    count={openReports.length}
-                  />
-                  <LayerToggle
-                    label="Resolved Incidents"
-                    checked={layers.resolved}
-                    onChange={() => toggleLayer('resolved')}
-                    count={resolvedIncidents.length}
-                  />
-                  <LayerToggle
-                    label="Scheduled Outages"
-                    checked={layers.scheduled}
-                    onChange={() => toggleLayer('scheduled')}
-                    count={scheduledOutages.length}
-                  />
-                  <div className="border-t border-brand-line my-1.5" />
-                  <LayerToggle
-                    label="Barangay Centers"
-                    checked={layers.barangays}
-                    onChange={() => toggleLayer('barangays')}
-                    count={31}
-                  />
-                  <LayerToggle
-                    label="Roads"
-                    checked={layers.roads}
-                    onChange={() => toggleLayer('roads')}
-                  />
-                  <LayerToggle
-                    label="Street Map"
-                    checked={!layers.satellite}
-                    onChange={() => setLayers((prev) => ({ ...prev, satellite: false }))}
-                  />
-                  <LayerToggle
-                    label="Satellite View"
-                    checked={layers.satellite}
-                    onChange={() => setLayers((prev) => ({ ...prev, satellite: true }))}
-                  />
+                <div className="min-h-0 flex-1 overflow-y-auto p-2">
+                  {visibleReports.map((report) => {
+                    const meta = statusMeta[report.tone] ?? statusMeta.pending
+                    const isActive = flyTarget?.id === report.id
+                    return (
+                      <button
+                        key={report.id}
+                        type="button"
+                        onClick={() =>
+                          setFlyTarget({
+                            id: report.id,
+                            lat: report.position[0],
+                            lng: report.position[1],
+                          })
+                        }
+                        className={`flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors ${
+                          isActive ? 'bg-[#e5e9f6]' : 'hover:bg-brand-paper'
+                        }`}
+                      >
+                        <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ background: meta.color }} />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="truncate text-xs font-bold text-brand-ink">{report.outageType}</span>
+                            <span className="shrink-0 text-[10px] font-semibold text-brand-muted">{report.id}</span>
+                          </span>
+                          <span className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-brand-muted">
+                            <MapPin className="size-3 shrink-0" aria-hidden="true" />
+                            {report.barangay ? `Brgy. ${report.barangay}` : 'Barangay not provided'}
+                            {report.approximate ? ' · approximate' : ''}
+                          </span>
+                          <span className="mt-0.5 block text-[10px] font-medium text-brand-muted">
+                            {report.date} · {report.status}
+                          </span>
+                        </span>
+                      </button>
+                    )
+                  })}
+
+                  {!isLoading && !loadError && visibleReports.length === 0 && (
+                    <div className="px-3 py-8 text-center text-xs text-brand-muted">
+                      {reports.length === 0
+                        ? 'No resident reports yet. New reports appear here as soon as they are submitted.'
+                        : 'No reports match the selected status filters.'}
+                    </div>
+                  )}
                 </div>
-              </section>
 
-              {/* Help Information Note */}
-              <p className="text-[11px] leading-relaxed text-brand-muted border-t border-brand-line pt-4">
-                Pins open individual outage or report details and dispatch actions. Heatmap shows current incidents and open unlinked reports only; scheduled and resolved outages are excluded. Street Map uses labeled roads and places, not 360-degree Street View; Satellite View adds aerial context for field response. Official barangay boundary polygons are not configured; barangay centers are shown instead.
-              </p>
-
-              {/* Bottom Quick Link Button */}
-              <a
-                href="/admin/reports"
-                className="flex items-center justify-between rounded-xl border border-brand-line bg-white p-3 text-xs font-bold text-brand-ink hover:text-brand-blue hover:border-brand-blue/40 shadow-xs transition-all cursor-pointer"
-              >
-                <span>Open outage monitoring</span>
-                <ArrowRight className="size-4" />
-              </a>
-            </aside>
+                {(approximateCount > 0 || unmappedCount > 0) && (
+                  <div className="shrink-0 border-t border-brand-line p-3 text-[10px] leading-4 text-brand-muted">
+                    {approximateCount > 0 && (
+                      <p>{approximateCount} report{approximateCount === 1 ? '' : 's'} had no pin and are plotted at the barangay center.</p>
+                    )}
+                    {unmappedCount > 0 && (
+                      <p>{unmappedCount} report{unmappedCount === 1 ? '' : 's'} could not be placed on the map.</p>
+                    )}
+                  </div>
+                )}
+              </aside>
+            </div>
           </div>
         </main>
       </SidebarInset>

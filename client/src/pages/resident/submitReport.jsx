@@ -17,7 +17,7 @@ import L from 'leaflet'
 import { useEffect, useRef, useState } from 'react'
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { addReport } from '../../lib/reports'
+import { addReport, priorityLabels, reportPriorities } from '../../lib/reports'
 import { VALENCIA_CENTER } from './mapData'
 import { SubmitReportSuccess } from './submitReportSuccess'
 
@@ -225,6 +225,7 @@ export default function SubmitReport() {
 
   // Form State
   const [outageType, setOutageType] = useState('')
+  const [priority, setPriority] = useState('medium')
   const [noticedAt, setNoticedAt] = useState(() => toDateTimeLocalValue())
   const [description, setDescription] = useState('')
 
@@ -455,6 +456,7 @@ export default function SubmitReport() {
         description: `Reported at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}. Waiting for verification.`,
         outageType: typeLabel,
         outageTypeId: outageType,
+        priority,
         startedTime: formatNoticedAt(noticedAt),
         notes: description.trim(),
         barangay,
@@ -611,6 +613,27 @@ export default function SubmitReport() {
               {!outageType && (
                 <p className="mt-1.5 text-[11px] text-[#9a6500]">Choose the type that best matches what happened.</p>
               )}
+            </section>
+
+            {/* Priority */}
+            <section>
+              <label htmlFor="report-priority" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
+                Priority
+              </label>
+              <div className="relative">
+                <select
+                  id="report-priority"
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
+                  className="w-full appearance-none rounded-2xl border border-brand-line bg-white px-3.5 py-2.5 text-xs font-bold text-brand-navy shadow-xs focus:border-brand-blue focus:outline-none cursor-pointer"
+                >
+                  {reportPriorities.map((option) => (
+                    <option key={option} value={option}>{priorityLabels[option]}</option>
+                  ))}
+                </select>
+                <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 rotate-90 text-brand-muted" />
+              </div>
+              <p className="mt-1.5 text-[11px] text-brand-muted">High = whole house out; Medium = one room or appliance; Low = minor flicker.</p>
             </section>
 
             {/* Date and Time Noticed */}

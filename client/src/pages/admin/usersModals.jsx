@@ -171,4 +171,111 @@ export function AdminUsersCreateDialog({
   )
 }
 
+export function AdminUsersEditDialog({
+  open,
+  onOpenChange,
+  form,
+  setForm,
+  onSave,
+  onToggleActive,
+  onResetAccess,
+  isSubmitting,
+  isWorking,
+  errorMessage,
+  user,
+}) {
+  const positionOptions = [
+    'Line Crew / Responder',
+    'Substation Technician',
+    'Grid Maintenance Specialist',
+    'Control Room Dispatcher',
+    'Emergency Response Lead',
+    'Field Support Crew',
+    'Administrator',
+  ]
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[480px] rounded-2xl bg-white p-6 max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl font-bold text-brand-ink">Edit Staff Account</DialogTitle>
+          <DialogDescription className="text-xs text-brand-muted">
+            {user?.email ? `Update ${user.email}'s details. Email changes are made by the staff member, not here.` : 'Update staff details.'}
+          </DialogDescription>
+        </DialogHeader>
+
+        {errorMessage && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">
+            {errorMessage}
+          </div>
+        )}
+
+        <form onSubmit={onSave} className="space-y-4 py-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-brand-muted">Full Name *</label>
+              <Input required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className="h-10 text-sm rounded-xl" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-brand-muted">Staff ID Number</label>
+              <Input value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value })} className="h-10 text-sm rounded-xl" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-brand-muted">Contact Number</label>
+              <Input value={form.contactNumber} onChange={(e) => setForm({ ...form, contactNumber: e.target.value })} className="h-10 text-sm rounded-xl" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-brand-muted">Position</label>
+              <select
+                value={form.position}
+                onChange={(e) => setForm({ ...form, position: e.target.value })}
+                className="h-10 w-full rounded-xl border border-brand-line bg-white px-3 text-sm text-brand-ink outline-none focus:border-brand-navy focus:ring-1 focus:ring-brand-navy"
+              >
+                {positionOptions.map((position) => <option key={position}>{position}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-brand-muted">Address / Coverage</label>
+            <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="h-10 text-sm rounded-xl" />
+          </div>
+
+          <div className="grid gap-2 border-t border-brand-line pt-4 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isWorking}
+              onClick={() => onToggleActive()}
+              className="rounded-xl text-xs font-semibold"
+            >
+              {user?.isActive === false ? 'Reactivate account' : 'Deactivate account'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isWorking}
+              onClick={() => onResetAccess()}
+              className="rounded-xl text-xs font-semibold"
+            >
+              Send password reset link
+            </Button>
+          </div>
+
+          <DialogFooter className="pt-2 gap-2">
+            <Button type="button" variant="outline" disabled={isSubmitting} onClick={() => onOpenChange(false)} className="rounded-xl text-xs font-semibold">
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting} className="bg-brand-navy hover:bg-brand-navy text-white rounded-xl text-xs font-semibold flex items-center gap-2 cursor-pointer">
+              {isSubmitting && <LoaderCircle className="size-4 animate-spin" />}
+              <span>{isSubmitting ? 'Saving...' : 'Save changes'}</span>
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default AdminUsersCreateDialog
