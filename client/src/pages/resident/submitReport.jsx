@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { addReport, priorityLabels, reportPriorities } from '../../lib/reports'
+import { useLanguage } from '../../lib/i18n'
 import { VALENCIA_CENTER } from '../../components/resident/mapData'
 import { SubmitReportSuccess } from '../../components/resident/submitReportSuccess'
 
@@ -79,11 +80,11 @@ function toDateTimeLocalValue(date = new Date()) {
   return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16)
 }
 
-function formatNoticedAt(value) {
+function formatNoticedAt(value, locale) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
 
-  return date.toLocaleString('en-US', {
+  return date.toLocaleString(locale, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -221,6 +222,7 @@ function locationErrorMessage(error) {
 }
 
 export default function SubmitReport() {
+  const { t, locale } = useLanguage()
   const [step, setStep] = useState(1) // 1, 2, 3, 4, or 5 (success)
 
   // Form State
@@ -335,7 +337,7 @@ export default function SubmitReport() {
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
       setIsLocationError(true)
-      setLocationMessage('Location is not available on this device. Place the pin on the map instead.')
+      setLocationMessage(t('Location is not available on this device. Place the pin on the map instead.'))
       return
     }
 
@@ -358,12 +360,12 @@ export default function SubmitReport() {
         mapRef.current?.flyTo([nextPin.lat, nextPin.lng], 16)
         expandedMapRef.current?.flyTo([nextPin.lat, nextPin.lng], 16)
         resolvePinnedLocation(nextPin.lat, nextPin.lng)
-        setLocationMessage(`Location captured to about ${Math.round(coords.accuracy)} m. Adjust the pin if it looks off.`)
+        setLocationMessage(t('Location captured to about {meters} m. Adjust the pin if it looks off.', { meters: Math.round(coords.accuracy) }))
       },
       (error) => {
         setIsLocating(false)
         setIsLocationError(true)
-        setLocationMessage(locationErrorMessage(error))
+        setLocationMessage(t(locationErrorMessage(error)))
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     )
@@ -443,21 +445,23 @@ export default function SubmitReport() {
     setIsSubmitting(true)
     setSubmitError('')
 
-    const typeLabel = outageTypes.find((type) => type.id === outageType)?.label ?? 'Power interruption'
+    const typeLabel = t(outageTypes.find((type) => type.id === outageType)?.label ?? 'Power interruption')
     const now = new Date()
 
     try {
       const report = await addReport({
-        title: `${typeLabel} in Brgy. ${barangay}`,
-        location: `Brgy. ${barangay}`,
+        title: t('{type} in Brgy. {barangay}', { type: typeLabel, barangay }),
+        location: t('Brgy. {barangay}', { barangay }),
         status: 'Pending',
         tone: 'pending',
         progress: 1,
-        description: `Reported at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}. Waiting for verification.`,
+        description: t('Reported at {time}. Waiting for verification.', {
+          time: now.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' }),
+        }),
         outageType: typeLabel,
         outageTypeId: outageType,
         priority,
-        startedTime: formatNoticedAt(noticedAt),
+        startedTime: formatNoticedAt(noticedAt, locale),
         notes: description.trim(),
         barangay,
         landmark: landmark.trim(),
@@ -483,7 +487,7 @@ export default function SubmitReport() {
     return (
       <SubmitReportSuccess
         reportReference={reportReference}
-        outageType={outageTypes.find((t) => t.id === outageType)?.label}
+        outageType={t(outageTypes.find((type) => type.id === outageType)?.label)}
         barangay={barangay}
       />
     )
@@ -523,22 +527,22 @@ export default function SubmitReport() {
             type="button"
             onClick={() => (step > 1 ? setStep(step - 1) : (window.location.href = '/community'))}
             className="grid size-9 place-items-center rounded-xl text-brand-muted hover:bg-[#e5e9f6] cursor-pointer"
-            aria-label="Back"
+            aria-label={t('Back')}
           >
             <ChevronLeft className="size-5" />
           </button>
 
           <div className="text-center">
-            <h1 className="text-sm font-extrabold text-brand-navy">Report an interruption</h1>
+            <h1 className="text-sm font-extrabold text-brand-navy">{t('Report an interruption')}</h1>
             <p className="text-[11px] font-semibold text-brand-muted">
-              Step {step} of 4 · {stepTitles[step]}
+              {t('Step {step} of 4 · {title}', { step, title: t(stepTitles[step]) })}
             </p>
           </div>
 
           <a
             href="/community"
             className="grid size-9 place-items-center rounded-xl text-brand-muted hover:bg-[#e5e9f6] hover:text-brand-muted"
-            aria-label="Close"
+            aria-label={t('Close')}
           >
             <X className="size-5" />
           </a>
@@ -577,7 +581,7 @@ export default function SubmitReport() {
                       isActive ? 'text-brand-navy' : isDone ? 'text-brand-blue' : 'text-brand-muted'
                     }`}
                   >
-                    {stepTitles[s]}
+                    {t(stepTitles[s])}
                   </span>
                 </div>
               )
@@ -594,7 +598,7 @@ export default function SubmitReport() {
             {/* Interruption Type */}
             <section>
               <label htmlFor="interruption-type" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
-                Interruption type
+                {t('Interruption type')}
               </label>
               <div className="relative">
                 <select
@@ -604,22 +608,22 @@ export default function SubmitReport() {
                   required
                   className="w-full appearance-none rounded-2xl border border-brand-line bg-white px-3.5 py-2.5 text-xs font-bold text-brand-navy shadow-xs focus:border-brand-blue focus:outline-none cursor-pointer"
                 >
-                  <option value="" disabled>Select a type</option>
+                  <option value="" disabled>{t('Select a type')}</option>
                   {outageTypes.map((type) => (
-                    <option key={type.id} value={type.id}>{type.label}</option>
+                    <option key={type.id} value={type.id}>{t(type.label)}</option>
                   ))}
                 </select>
                 <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 rotate-90 text-brand-muted" />
               </div>
               {!outageType && (
-                <p className="mt-1.5 text-[11px] text-[#9a6500]">Choose the type that best matches what happened.</p>
+                <p className="mt-1.5 text-[11px] text-[#9a6500]">{t('Choose the type that best matches what happened.')}</p>
               )}
             </section>
 
             {/* Priority */}
             <section>
               <label htmlFor="report-priority" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
-                Priority
+                {t('Priority')}
               </label>
               <div className="relative">
                 <select
@@ -629,18 +633,18 @@ export default function SubmitReport() {
                   className="w-full appearance-none rounded-2xl border border-brand-line bg-white px-3.5 py-2.5 text-xs font-bold text-brand-navy shadow-xs focus:border-brand-blue focus:outline-none cursor-pointer"
                 >
                   {reportPriorities.map((option) => (
-                    <option key={option} value={option}>{priorityLabels[option]}</option>
+                    <option key={option} value={option}>{t(priorityLabels[option])}</option>
                   ))}
                 </select>
                 <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 rotate-90 text-brand-muted" />
               </div>
-              <p className="mt-1.5 text-[11px] text-brand-muted">High = whole house out; Medium = one room or appliance; Low = minor flicker.</p>
+              <p className="mt-1.5 text-[11px] text-brand-muted">{t('High = whole house out; Medium = one room or appliance; Low = minor flicker.')}</p>
             </section>
 
             {/* Date and Time Noticed */}
             <section>
               <label htmlFor="noticed-at" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
-                Date and time noticed
+                {t('Date and time noticed')}
               </label>
               <input
                 id="noticed-at"
@@ -656,13 +660,13 @@ export default function SubmitReport() {
             {/* Description Textarea */}
             <section>
               <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-muted">
-                Description (Optional)
+                {t('Description (Optional)')}
               </h2>
               <textarea
                 rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Add details that help the response team"
+                placeholder={t('Add details that help the response team')}
                 className="w-full rounded-2xl border border-brand-line bg-white p-3.5 text-xs text-brand-ink placeholder:text-brand-muted focus:border-brand-blue focus:outline-none"
               />
             </section>
@@ -671,7 +675,7 @@ export default function SubmitReport() {
             <div className="flex items-start gap-2.5 rounded-2xl border border-[fff1a8] bg-[fff1a8] p-3.5 text-[11px] leading-relaxed text-[#744210]">
               <AlertTriangle className="size-4 shrink-0 text-[#b45309] mt-0.5" />
               <span>
-                Fallen wire or sparks? Keep away from it and call your local emergency number.
+                {t('Fallen wire or sparks? Keep away from it and call your local emergency number.')}
               </span>
             </div>
           </div>
@@ -685,14 +689,14 @@ export default function SubmitReport() {
               <LocationMap pin={pinPosition} onPick={handlePickPin} mapRef={mapRef} />
 
               <span className="pointer-events-none absolute left-2 top-2 z-[1000] rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-bold text-brand-navy shadow-sm backdrop-blur-xs">
-                Tap the map or drag the pin
+                {t('Tap the map or drag the pin')}
               </span>
 
               <button
                 ref={expandMapButtonRef}
                 type="button"
                 onClick={() => setIsMapExpanded(true)}
-                aria-label="Expand map"
+                aria-label={t('Expand map')}
                 className="absolute right-2 top-2 z-[1000] grid size-9 place-items-center rounded-xl border border-brand-line bg-white/95 text-brand-blue shadow-sm backdrop-blur-xs transition-colors hover:bg-white cursor-pointer"
               >
                 <Maximize2 className="size-4" />
@@ -707,7 +711,7 @@ export default function SubmitReport() {
               className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-brand-line bg-white text-xs font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.99] transition-all cursor-pointer disabled:cursor-wait disabled:opacity-70"
             >
               <LocateFixed className={`size-4 ${isLocating ? 'animate-spin' : ''}`} />
-              <span>{isLocating ? 'Locating...' : 'Use my current location'}</span>
+              <span>{isLocating ? t('Locating…') : t('Use my current location')}</span>
             </button>
 
             {locationMessage && (
@@ -717,26 +721,26 @@ export default function SubmitReport() {
             {/* Pinned Location */}
             <section>
               <label htmlFor="pinned-location" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
-                Pinned location
+                {t('Pinned location')}
               </label>
               <input
                 id="pinned-location"
                 type="text"
                 value={pinnedLocation}
                 onChange={(e) => setPinnedLocation(e.target.value)}
-                placeholder="Tap the map to fill this"
+                placeholder={t('Tap the map to fill this')}
                 required
                 className="w-full rounded-2xl border border-brand-line bg-white px-3.5 py-2.5 text-xs text-brand-navy shadow-xs placeholder:text-brand-muted focus:border-brand-blue focus:outline-none font-medium"
               />
               {isResolvingLocation && (
-                <p className="mt-1.5 text-[11px] text-brand-muted">Finding the address…</p>
+                <p className="mt-1.5 text-[11px] text-brand-muted">{t('Finding the address…')}</p>
               )}
             </section>
 
             {/* Barangay Dropdown */}
             <section>
               <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
-                Barangay
+                {t('Barangay')}
               </label>
               <div className="relative">
                 <select
@@ -753,19 +757,19 @@ export default function SubmitReport() {
                 </select>
                 <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 rotate-90 text-brand-muted" />
               </div>
-              <p className="mt-1.5 text-[11px] text-brand-muted">Auto-filled from the pin when it can be matched.</p>
+              <p className="mt-1.5 text-[11px] text-brand-muted">{t('Auto-filled from the pin when it can be matched.')}</p>
             </section>
 
             {/* Street or Landmark Input */}
             <section>
               <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
-                Street or landmark
+                {t('Street or landmark')}
               </label>
               <input
                 type="text"
                 value={landmark}
                 onChange={(e) => setLandmark(e.target.value)}
-                placeholder="e.g., near the chapel, Purok 3"
+                placeholder={t('e.g., near the chapel, Purok 3')}
                 className="w-full rounded-2xl border border-brand-line bg-white px-3.5 py-2.5 text-xs text-brand-navy shadow-xs placeholder:text-brand-muted focus:border-brand-blue focus:outline-none font-medium"
               />
             </section>
@@ -774,7 +778,7 @@ export default function SubmitReport() {
             <div className="flex items-start gap-1.5 text-[11px] text-brand-muted leading-relaxed">
               <Info className="size-3.5 shrink-0 text-brand-muted mt-0.5" />
               <span>
-                The pin is approximate. Drag it or tap the map to match the reported spot.
+                {t('The pin is approximate. Drag it or tap the map to match the reported spot.')}
               </span>
             </div>
           </div>
@@ -784,7 +788,7 @@ export default function SubmitReport() {
         {step === 3 && (
           <div className="space-y-4 animate-in fade-in">
             <p className="text-xs text-brand-muted leading-relaxed">
-              Photos or a short video help the team verify your report faster. This step is optional.
+              {t('Photos or a short video help the team verify your report faster. This step is optional.')}
             </p>
 
             {/* Action Buttons */}
@@ -798,7 +802,7 @@ export default function SubmitReport() {
                 <div className="grid size-10 place-items-center rounded-xl bg-[e5e9f6] text-brand-blue">
                   <Camera className="size-5" />
                 </div>
-                <span className="text-xs font-bold text-brand-blue">Take photo</span>
+                <span className="text-xs font-bold text-brand-blue">{t('Take photo')}</span>
               </button>
 
               <button
@@ -810,7 +814,7 @@ export default function SubmitReport() {
                 <div className="grid size-10 place-items-center rounded-xl bg-[e5e9f6] text-brand-blue">
                   <Video className="size-5" />
                 </div>
-                <span className="text-xs font-bold text-brand-blue">Record video</span>
+                <span className="text-xs font-bold text-brand-blue">{t('Record video')}</span>
               </button>
 
               <button
@@ -820,16 +824,16 @@ export default function SubmitReport() {
                 className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-line bg-white text-xs font-bold text-brand-blue transition-all hover:bg-brand-paper active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ImageIcon className="size-4" />
-                Upload photo or video
+                {t('Upload photo or video')}
               </button>
             </div>
 
-            {photoError && <p className="text-[11px] font-semibold text-[#b42318]">{photoError}</p>}
+            {photoError && <p className="text-[11px] font-semibold text-[#b42318]">{t(photoError)}</p>}
 
             {/* Added Evidence Grid */}
             <section>
               <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-muted">
-                Added ({photos.length} of 3){isProcessingPhoto ? ' · Processing…' : ''}
+                {t('Added ({count} of 3)', { count: photos.length })}{isProcessingPhoto ? ` · ${t('Processing…')}` : ''}
               </h2>
               <div className="flex flex-wrap items-center gap-3">
                 {photos.map((photo) => (
@@ -853,7 +857,7 @@ export default function SubmitReport() {
                     ) : (
                       <img
                         src={photo.previewUrl}
-                        alt={photo.label || 'Uploaded evidence'}
+                        alt={photo.label || t('Uploaded evidence')}
                         className="size-full rounded-2xl object-cover"
                       />
                     )}
@@ -863,7 +867,7 @@ export default function SubmitReport() {
                       type="button"
                       onClick={() => handleRemovePhoto(photo.id)}
                       className="absolute -right-1.5 -top-1.5 z-10 grid size-5 place-items-center rounded-full border border-brand-line bg-white text-brand-muted shadow-xs hover:bg-red-50 hover:text-red-600"
-                      aria-label={`Remove ${photo.label || 'attachment'}`}
+                      aria-label={photo.label ? t('Remove {label}', { label: photo.label }) : t('Remove attachment')}
                     >
                       <X className="size-3" />
                     </button>
@@ -877,7 +881,7 @@ export default function SubmitReport() {
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isProcessingPhoto}
                     className="grid size-20 place-items-center rounded-2xl border-2 border-dashed border-brand-line text-brand-blue hover:bg-brand-paper cursor-pointer disabled:cursor-wait disabled:opacity-50"
-                    aria-label="Add photo or video"
+                    aria-label={t('Add photo or video')}
                   >
                     <Plus className="size-6" />
                   </button>
@@ -889,7 +893,7 @@ export default function SubmitReport() {
             <div className="flex items-start gap-2.5 rounded-2xl border border-brand-line bg-[e5e9f6] p-3.5 text-[11px] leading-relaxed text-brand-blue">
               <Info className="size-4 shrink-0 text-brand-blue mt-0.5" />
               <span>
-                Show the transformer, lines or your meter if you can. Avoid faces and license plates.
+                {t('Show the transformer, lines or your meter if you can. Avoid faces and license plates.')}
               </span>
             </div>
           </div>
@@ -901,30 +905,32 @@ export default function SubmitReport() {
             {/* Details Summary Card */}
             <div className="rounded-2xl border border-brand-line bg-white p-4 shadow-xs">
               <div className="flex items-center justify-between border-b border-brand-line pb-2">
-                <h3 className="text-sm font-extrabold text-brand-navy">Details</h3>
+                <h3 className="text-sm font-extrabold text-brand-navy">{t('Details')}</h3>
                 <button
                   type="button"
                   onClick={() => setStep(1)}
                   className="text-xs font-bold text-brand-blue hover:underline"
                 >
-                  Edit
+                  {t('Edit')}
                 </button>
               </div>
               <div className="mt-2.5 space-y-1.5 text-xs">
                 <div className="flex justify-between gap-3">
-                  <span className="text-brand-muted">Type</span>
+                  <span className="text-brand-muted">{t('Type')}</span>
                   <strong className="text-right text-brand-ink">
-                    {outageTypes.find((t) => t.id === outageType)?.label ?? 'Not selected'}
+                    {outageType
+                      ? t(outageTypes.find((type) => type.id === outageType)?.label)
+                      : t('Not selected')}
                   </strong>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-brand-muted">Noticed</span>
-                  <strong className="text-right text-brand-ink">{formatNoticedAt(noticedAt)}</strong>
+                  <span className="text-brand-muted">{t('Noticed')}</span>
+                  <strong className="text-right text-brand-ink">{formatNoticedAt(noticedAt, locale)}</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-brand-muted">Notes</span>
+                  <span className="text-brand-muted">{t('Notes')}</span>
                   <span className="font-semibold text-brand-ink text-right max-w-[200px] truncate">
-                    {description || 'No notes added'}
+                    {description || t('No notes added')}
                   </span>
                 </div>
               </div>
@@ -933,38 +939,40 @@ export default function SubmitReport() {
             {/* Location Summary Card */}
             <div className="rounded-2xl border border-brand-line bg-white p-4 shadow-xs">
               <div className="flex items-center justify-between border-b border-brand-line pb-2">
-                <h3 className="text-sm font-extrabold text-brand-navy">Location</h3>
+                <h3 className="text-sm font-extrabold text-brand-navy">{t('Location')}</h3>
                 <button
                   type="button"
                   onClick={() => setStep(2)}
                   className="text-xs font-bold text-brand-blue hover:underline"
                 >
-                  Edit
+                  {t('Edit')}
                 </button>
               </div>
               <div className="mt-2.5 space-y-1.5 text-xs">
                 <div className="flex justify-between gap-3">
-                  <span className="text-brand-muted">Barangay</span>
+                  <span className="text-brand-muted">{t('Barangay')}</span>
                   <strong className="text-brand-ink">{barangay}</strong>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-brand-muted">Pinned location</span>
+                  <span className="text-brand-muted">{t('Pinned location')}</span>
                   <strong className="max-w-[210px] truncate text-right text-brand-ink">
-                    {pinnedLocation || 'Not pinned'}
+                    {pinnedLocation || t('Not pinned')}
                   </strong>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <span className="text-brand-muted">Landmark</span>
+                  <span className="text-brand-muted">{t('Landmark')}</span>
                   <strong className="max-w-[210px] truncate text-right text-brand-ink">
-                    {landmark || 'Not provided'}
+                    {landmark || t('Not provided')}
                   </strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-brand-muted">Pin</span>
+                  <span className="text-brand-muted">{t('Pin')}</span>
                   <strong className="text-brand-ink">
                     {pinSource === 'gps'
-                      ? `GPS${coordinates?.accuracy ? `, about ${Math.round(coordinates.accuracy)} m` : ''}`
-                      : 'Placed manually'}
+                      ? (coordinates?.accuracy
+                          ? t('GPS, about {meters} m', { meters: Math.round(coordinates.accuracy) })
+                          : t('GPS'))
+                      : t('Placed manually')}
                   </strong>
                 </div>
               </div>
@@ -973,13 +981,13 @@ export default function SubmitReport() {
             {/* Evidence Summary Card */}
             <div className="rounded-2xl border border-brand-line bg-white p-4 shadow-xs">
               <div className="flex items-center justify-between border-b border-brand-line pb-2">
-                <h3 className="text-sm font-extrabold text-brand-navy">Evidence</h3>
+                <h3 className="text-sm font-extrabold text-brand-navy">{t('Evidence')}</h3>
                 <button
                   type="button"
                   onClick={() => setStep(3)}
                   className="text-xs font-bold text-brand-blue hover:underline"
                 >
-                  Edit
+                  {t('Edit')}
                 </button>
               </div>
               <div className="mt-3 flex items-center gap-2">
@@ -996,8 +1004,10 @@ export default function SubmitReport() {
                 </div>
                 <span className="text-xs font-semibold text-brand-muted">
                   {photos.length === 0
-                    ? 'No evidence attached'
-                    : `${photos.length} attachment${photos.length === 1 ? '' : 's'} attached`}
+                    ? t('No evidence attached')
+                    : photos.length === 1
+                      ? t('{count} attachment attached', { count: photos.length })
+                      : t('{count} attachments attached', { count: photos.length })}
                 </span>
               </div>
             </div>
@@ -1010,10 +1020,10 @@ export default function SubmitReport() {
                 onChange={(e) => setConfirmed(e.target.checked)}
                 className="size-4 rounded border-brand-line text-brand-blue accent-brand-blue mt-0.5 cursor-pointer"
               />
-              <span>I confirm this information is accurate to the best of my knowledge.</span>
+              <span>{t('I confirm this information is accurate to the best of my knowledge.')}</span>
             </label>
 
-            {submitError && <p className="text-[11px] font-semibold text-[#b42318]">{submitError}</p>}
+            {submitError && <p className="text-[11px] font-semibold text-[#b42318]">{t(submitError)}</p>}
           </div>
         )}
       </main>
@@ -1027,7 +1037,7 @@ export default function SubmitReport() {
             onClick={() => (step > 1 ? setStep(step - 1) : (window.location.href = '/community'))}
             className="flex-1 rounded-2xl border border-brand-line bg-white py-3 text-xs font-bold text-brand-navy hover:bg-brand-paper active:scale-[0.99] transition-all cursor-pointer"
           >
-            {step === 1 ? 'Cancel' : 'Back'}
+            {step === 1 ? t('Cancel') : t('Back')}
           </button>
 
           {/* Next or Submit Button */}
@@ -1038,7 +1048,7 @@ export default function SubmitReport() {
               disabled={isProcessingPhoto || (step === 1 && (!outageType || !noticedAt)) || (step >= 2 && !pinnedLocation)}
               className="flex-1 rounded-2xl bg-brand-blue py-3 text-xs font-bold text-white shadow-xs hover:bg-brand-navy active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-1 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span>Next</span>
+              <span>{t('Next')}</span>
               <ChevronRight className="size-4" />
             </button>
           ) : (
@@ -1053,7 +1063,7 @@ export default function SubmitReport() {
               }`}
             >
               <Send className="size-3.5 fill-current" />
-              <span>{isSubmitting ? 'Submitting...' : 'Submit report'}</span>
+              <span>{isSubmitting ? t('Submitting…') : t('Submit report')}</span>
             </button>
           )}
         </div>
@@ -1068,14 +1078,14 @@ export default function SubmitReport() {
         >
           <header className="flex items-center justify-between border-b border-brand-line bg-white px-4 py-3">
             <div>
-              <h2 id="expanded-map-title" className="text-sm font-extrabold text-brand-navy">Pick the report location</h2>
-              <p className="text-[11px] text-brand-muted">Tap the map or drag the pin.</p>
+              <h2 id="expanded-map-title" className="text-sm font-extrabold text-brand-navy">{t('Pick the report location')}</h2>
+              <p className="text-[11px] text-brand-muted">{t('Tap the map or drag the pin.')}</p>
             </div>
             <button
               ref={closeMapButtonRef}
               type="button"
               onClick={() => setIsMapExpanded(false)}
-              aria-label="Close expanded map"
+              aria-label={t('Close expanded map')}
               className="grid size-9 place-items-center rounded-xl border border-brand-line bg-white text-brand-muted cursor-pointer"
             >
               <X className="size-4.5" />
@@ -1094,13 +1104,13 @@ export default function SubmitReport() {
               className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-brand-line bg-white text-xs font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.99] transition-all cursor-pointer disabled:cursor-wait disabled:opacity-70"
             >
               <LocateFixed className={`size-4 ${isLocating ? 'animate-spin' : ''}`} />
-              <span>{isLocating ? 'Locating...' : 'Use my current location'}</span>
+              <span>{isLocating ? t('Locating…') : t('Use my current location')}</span>
             </button>
             {locationMessage && (
               <p className={`text-[11px] leading-relaxed ${isLocationError ? 'text-[#9a6500]' : 'text-[#137a48]'}`}>{locationMessage}</p>
             )}
             <p className="text-[11px] text-brand-muted">
-              Pin: {pinPosition.lat.toFixed(5)}, {pinPosition.lng.toFixed(5)}
+              {t('Pin: {lat}, {lng}', { lat: pinPosition.lat.toFixed(5), lng: pinPosition.lng.toFixed(5) })}
             </p>
           </div>
         </div>

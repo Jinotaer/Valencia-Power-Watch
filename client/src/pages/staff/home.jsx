@@ -14,6 +14,7 @@ import {
   updateReportStatus,
 } from '../../lib/reports'
 import { supabase } from '../../lib/supabase'
+import { useLanguage } from '../../lib/i18n'
 import { ReportPriorityBadge, ReportStatusBadge } from '../../components/resident/reportView'
 import { ResolutionEvidenceInput } from '../../components/staff/evidenceInput'
 import { StaffNotificationsButton } from '../../components/staff/notificationsModal'
@@ -30,6 +31,7 @@ const steps = [
 ]
 
 export default function StaffHome() {
+  const { t } = useLanguage()
   const [reports, setReports] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -110,9 +112,9 @@ export default function StaffHome() {
       setUpdateForm({ remarks: '', eta: '' })
       setShowStatusModal(false)
       reload()
-      showToast(statusKey === 'resolved' ? 'Marked as resolved. Great work!' : 'Status updated: In progress.')
+      showToast(statusKey === 'resolved' ? t('Marked as resolved. Great work!') : t('Status updated: In progress.'))
     } catch {
-      showToast('We could not update this report. Check your connection and try again.')
+      showToast(t('We could not update this report. Check your connection and try again.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -144,7 +146,7 @@ export default function StaffHome() {
             </span>
             <div>
               <span className="block text-[9.5px] font-extrabold uppercase tracking-[.14em] text-brand-muted">
-                STAFF PORTAL
+                {t('STAFF PORTAL')}
               </span>
               <span className="block text-base font-black tracking-[-.03em] text-brand-navy">
                 PowerWatch
@@ -162,7 +164,7 @@ export default function StaffHome() {
         {/* USER GREETING */}
         <section className="mb-4">
           <h1 className="text-3xl font-black tracking-tight text-brand-navy">
-            Hello, {staffName || 'Crew'}
+            {t('Hello, {name}', { name: staffName || t('Crew') })}
           </h1>
           <p className="text-xs font-semibold text-brand-muted mt-0.5">Valencia City</p>
         </section>
@@ -179,11 +181,11 @@ export default function StaffHome() {
                 }`}
               />
               <span className="text-sm font-extrabold text-brand-navy">
-                {isOnDuty ? 'On duty' : 'Off duty'}
+                {isOnDuty ? t('On duty') : t('Off duty')}
               </span>
             </div>
             <p className="text-xs text-brand-muted font-medium mt-0.5">
-              {isOnDuty ? 'Sharing location with dispatch' : 'Location sharing paused'}
+              {isOnDuty ? t('Sharing location with dispatch') : t('Location sharing paused')}
             </p>
           </div>
 
@@ -195,7 +197,7 @@ export default function StaffHome() {
             onClick={() => {
               const next = !isOnDuty
               setIsOnDuty(next)
-              showToast(next ? 'You are now marked ON DUTY' : 'You are now marked OFF DUTY')
+              showToast(next ? t('You are now marked ON DUTY') : t('You are now marked OFF DUTY'))
             }}
             className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
               isOnDuty ? 'bg-brand-blue' : 'bg-brand-line'
@@ -212,15 +214,15 @@ export default function StaffHome() {
         {/* CURRENT JOB HERO CARD */}
         {isLoading && (
           <section className="mb-6 rounded-3xl border border-brand-line bg-white p-8 text-center">
-            <p className="text-sm font-semibold text-brand-muted">Loading your current job…</p>
+            <p className="text-sm font-semibold text-brand-muted">{t('Loading your current job…')}</p>
           </section>
         )}
 
         {!isLoading && loadError && (
           <section className="mb-6 rounded-3xl border border-brand-line bg-white p-8 text-center">
-            <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
+            <p className="text-sm font-bold text-[#b42318]">{t(loadError)}</p>
             <button type="button" onClick={reload} className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4 cursor-pointer">
-              Try again
+              {t('Try again')}
             </button>
           </section>
         )}
@@ -235,7 +237,7 @@ export default function StaffHome() {
             <div className="relative z-10 flex items-center justify-between">
               <span className="inline-flex items-center gap-1 rounded-full bg-brand-yellow px-2.5 py-1 text-xs font-black text-brand-navy shadow-xs">
                 <Zap className="size-3 fill-current" />
-                <span>Current job</span>
+                <span>{t('Current job')}</span>
               </span>
               <span className="font-mono text-xs font-bold text-brand-line tracking-wide">
                 {currentJob.id}
@@ -251,7 +253,7 @@ export default function StaffHome() {
             <div className="relative z-10 mt-2 flex items-center gap-1.5 text-xs font-medium text-[#e5e9f6]">
               <MapPin className="size-3.5 text-brand-yellow shrink-0" />
               <span className="truncate">
-                {currentJob.barangay ? `Brgy. ${currentJob.barangay}` : currentJob.location}
+                {currentJob.barangay ? t('Brgy. {barangay}', { barangay: currentJob.barangay }) : currentJob.location}
                 {currentJob.pinnedLocation ? ` · ${currentJob.pinnedLocation}` : currentJob.landmark ? ` · ${currentJob.landmark}` : ''}
               </span>
             </div>
@@ -295,7 +297,7 @@ export default function StaffHome() {
                           isCurrent ? 'text-white' : isPassed ? 'text-brand-yellow' : 'text-white/60'
                         }`}
                       >
-                        {stg.label}
+                        {t(stg.label)}
                       </span>
                     </div>
                   )
@@ -312,7 +314,7 @@ export default function StaffHome() {
                 className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-white text-xs sm:text-sm font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.98] transition-all cursor-pointer"
               >
                 <Navigation className="size-4 rotate-45" />
-                <span>Navigate</span>
+                <span>{t('Navigate')}</span>
               </button>
 
               {/* Update Status Button */}
@@ -324,7 +326,7 @@ export default function StaffHome() {
                 }}
                 className="flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-brand-yellow text-xs sm:text-sm font-black text-brand-navy shadow-xs hover:bg-brand-yellow active:scale-[0.98] transition-all cursor-pointer"
               >
-                <span>Update status</span>
+                <span>{t('Update status')}</span>
               </button>
             </div>
           </section>
@@ -332,9 +334,9 @@ export default function StaffHome() {
 
         {!isLoading && !loadError && !currentJob && (
           <section className="mb-6 rounded-3xl border border-dashed border-brand-line bg-white p-8 text-center">
-            <p className="text-sm font-bold text-brand-navy">No active job right now</p>
+            <p className="text-sm font-bold text-brand-navy">{t('No active job right now')}</p>
             <p className="mt-1 text-xs text-brand-muted">
-              Assignments appear here the moment an administrator assigns a report to you.
+              {t('Assignments appear here the moment an administrator assigns a report to you.')}
             </p>
           </section>
         )}
@@ -342,8 +344,8 @@ export default function StaffHome() {
         {/* ASSIGNED TO YOU SECTION */}
         <section>
           <div className="mb-2.5 flex items-center justify-between px-1">
-            <h2 className="text-base font-black text-brand-navy">Assigned to you</h2>
-            <span className="text-xs font-bold text-brand-muted">{reports.length} jobs</span>
+            <h2 className="text-base font-black text-brand-navy">{t('Assigned to you')}</h2>
+            <span className="text-xs font-bold text-brand-muted">{t('{count} jobs', { count: reports.length })}</span>
           </div>
 
           <div className="space-y-3">
@@ -362,7 +364,7 @@ export default function StaffHome() {
                       {report.outageType}
                     </h3>
                     <p className="text-xs text-brand-muted font-medium truncate mt-0.5">
-                      {report.barangay ? `Brgy. ${report.barangay}` : report.location} · Noticed {report.startedTime || report.date}
+                      {report.barangay ? t('Brgy. {barangay}', { barangay: report.barangay }) : report.location} · {t('Noticed {time}', { time: report.startedTime || report.date })}
                     </p>
                   </div>
                 </div>
@@ -375,12 +377,12 @@ export default function StaffHome() {
             ))}
 
             {!isLoading && !loadError && otherJobs.length === 0 && reports.length > 0 && (
-              <p className="px-1 text-xs text-brand-muted">That's everything — your current job is the only one assigned to you.</p>
+              <p className="px-1 text-xs text-brand-muted">{t("That's everything — your current job is the only one assigned to you.")}</p>
             )}
 
             {!isLoading && !loadError && reports.length === 0 && (
               <div className="rounded-3xl border border-dashed border-brand-line p-6 text-center text-xs text-brand-muted">
-                No jobs assigned to you yet.
+                {t('No jobs assigned to you yet.')}
               </div>
             )}
           </div>
@@ -399,7 +401,7 @@ export default function StaffHome() {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
                   {currentJob.id}
                 </span>
-                <h3 className="text-base font-extrabold text-brand-navy">Update Job Status</h3>
+                <h3 className="text-base font-extrabold text-brand-navy">{t('Update Job Status')}</h3>
               </div>
               <button
                 type="button"
@@ -434,7 +436,7 @@ export default function StaffHome() {
                       >
                         {option.key === 'resolved' ? 3 : 2}
                       </span>
-                      <span>{option.label}</span>
+                      <span>{t(option.label)}</span>
                     </span>
                     {current && <Check className="size-4 text-brand-blue" />}
                   </button>
@@ -442,7 +444,7 @@ export default function StaffHome() {
               })}
               <ResolutionEvidenceInput files={evidenceFiles} onChange={setEvidenceFiles} disabled={isSubmitting} />
               {isSubmitting && (
-                <p className="pt-1 text-center text-[11px] font-semibold text-brand-muted">Updating…</p>
+                <p className="pt-1 text-center text-[11px] font-semibold text-brand-muted">{t('Updating…')}</p>
               )}
             </div>
           </div>
@@ -457,7 +459,7 @@ export default function StaffHome() {
             role="dialog"
           >
             <div className="flex items-center justify-between border-b border-brand-line pb-3">
-              <h3 className="text-base font-extrabold text-brand-navy">Directions to Site</h3>
+              <h3 className="text-base font-extrabold text-brand-navy">{t('Directions to Site')}</h3>
               <button
                 type="button"
                 onClick={() => setShowNavModal(false)}
@@ -469,15 +471,17 @@ export default function StaffHome() {
 
             <div className="pt-4 space-y-3 text-xs">
               <div className="rounded-2xl border border-brand-line bg-brand-paper p-3.5">
-                <span className="text-[10px] font-bold uppercase text-brand-muted">Destination</span>
+                <span className="text-[10px] font-bold uppercase text-brand-muted">{t('Destination')}</span>
                 <p className="font-extrabold text-brand-navy text-sm mt-0.5">
-                  {currentJob.barangay ? `Brgy. ${currentJob.barangay}` : currentJob.location}
+                  {currentJob.barangay ? t('Brgy. {barangay}', { barangay: currentJob.barangay }) : currentJob.location}
                   {currentJob.pinnedLocation ? ` · ${currentJob.pinnedLocation}` : ''}
                 </p>
                 <p className="text-brand-muted mt-1 font-medium">
                   {currentJob.coordinates
-                    ? `Using the GPS pin the resident captured${currentJob.coordinates.accuracy ? ` (±${Math.round(currentJob.coordinates.accuracy)} m)` : ''}.`
-                    : 'No GPS pin — directions search the barangay name.'}
+                    ? t('Using the GPS pin the resident captured{accuracy}.', {
+                        accuracy: currentJob.coordinates.accuracy ? ` (±${Math.round(currentJob.coordinates.accuracy)} m)` : '',
+                      })
+                    : t('No GPS pin — directions search the barangay name.')}
                 </p>
               </div>
 
@@ -487,7 +491,7 @@ export default function StaffHome() {
                   className="flex h-11 items-center justify-center gap-1.5 rounded-xl bg-brand-blue font-bold text-white shadow-xs hover:bg-brand-navy"
                 >
                   <Navigation className="size-3.5" />
-                  <span>Navigate in app</span>
+                  <span>{t('Navigate in app')}</span>
                 </a>
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(currentDestination)}`}
@@ -496,7 +500,7 @@ export default function StaffHome() {
                   className="flex h-11 items-center justify-center gap-1.5 rounded-xl border border-brand-line font-bold text-brand-ink hover:bg-brand-paper"
                 >
                   <ExternalLink className="size-3.5" />
-                  <span>Google Maps</span>
+                  <span>{t('Google Maps')}</span>
                 </a>
               </div>
             </div>

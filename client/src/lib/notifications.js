@@ -88,11 +88,18 @@ export async function countUnreadNotifications() {
   }
 
   const lastSeen = getLastSeenAnnouncements()
+  const announcements = await loadAnnouncements(50).catch(() => [])
   if (lastSeen > 0) {
-    const announcements = await loadAnnouncements(50).catch(() => [])
     count += announcements.filter(
       (row) => new Date(row.publishedAt).getTime() > lastSeen,
     ).length
+  } else {
+    // If not marked seen yet, count recent announcements from the last 14 days (up to 5)
+    const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000
+    const recent = announcements.filter(
+      (row) => new Date(row.publishedAt).getTime() > fourteenDaysAgo,
+    )
+    count += Math.min(recent.length, 5)
   }
 
   return count

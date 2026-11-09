@@ -1,5 +1,6 @@
 import { Plus, Video, X } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
+import { useLanguage } from '../../lib/i18n'
 
 // Photo/video proof that a job was fixed, supporting up to 3 attachments.
 // Styled consistently with resident report evidence uploads.
@@ -12,6 +13,7 @@ export function ResolutionEvidenceInput({
   maxFiles = 3,
 }) {
   const inputRef = useRef(null)
+  const { t } = useLanguage()
 
   // Normalize: support either files array or single file prop
   const fileList = useMemo(() => {
@@ -80,7 +82,7 @@ export function ResolutionEvidenceInput({
               ) : (
                 <img
                   src={preview.url}
-                  alt={preview.file.name || 'Uploaded evidence'}
+                  alt={preview.file.name || t('Uploaded evidence')}
                   className="size-full object-cover"
                 />
               )}
@@ -92,7 +94,7 @@ export function ResolutionEvidenceInput({
                 type="button"
                 onClick={() => handleRemove(idx)}
                 className="absolute -right-1.5 -top-1.5 z-10 grid size-5 place-items-center rounded-full border border-brand-line bg-white text-brand-muted shadow-xs hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
-                aria-label={`Remove attachment ${idx + 1}`}
+                aria-label={t('Remove attachment {index}', { index: idx + 1 })}
               >
                 <X className="size-3 stroke-[2.5]" />
               </button>
@@ -111,7 +113,7 @@ export function ResolutionEvidenceInput({
                 ? 'border-white/35 text-white hover:bg-white/10 active:scale-95'
                 : 'border-brand-line text-brand-blue hover:bg-brand-paper active:scale-95'
             }`}
-            aria-label="Add photo or video"
+            aria-label={t('Add photo or video')}
           >
             <Plus className="size-6 stroke-[2.2]" />
           </button>
@@ -121,15 +123,15 @@ export function ResolutionEvidenceInput({
         <div className="flex flex-col justify-center min-w-[120px] max-w-[200px] pr-1">
           <span className={`text-xs font-bold leading-snug truncate ${dark ? 'text-white' : 'text-brand-navy'}`}>
             {fileList.length === 0
-              ? 'Attach proof of fix'
-              : `${fileList.length} of ${maxFiles} attached`}
+              ? t('Attach proof of fix')
+              : t('{count} of {max} attached', { count: fileList.length, max: maxFiles })}
           </span>
           <span className={`text-[11px] leading-tight mt-0.5 truncate ${dark ? 'text-brand-line' : 'text-brand-muted'}`}>
             {fileList.length === 0
-              ? `Up to ${maxFiles} photos or videos`
+              ? t('Up to {max} photos or videos', { max: maxFiles })
               : fileList.length < maxFiles
-              ? 'Tap + to add more'
-              : 'Max attachments reached'}
+              ? t('Tap + to add more')
+              : t('Max attachments reached')}
           </span>
         </div>
       </div>

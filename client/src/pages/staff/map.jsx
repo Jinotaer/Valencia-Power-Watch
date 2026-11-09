@@ -26,6 +26,7 @@ import {
   routeProgress,
 } from '../../lib/routing'
 import { ReportStatusBadge } from '../../components/resident/reportView'
+import { useLanguage } from '../../lib/i18n'
 import { icons, STAFF_DEFAULT_GPS } from '../../components/staff/mapData'
 import { ResolutionEvidenceInput } from '../../components/staff/evidenceInput'
 
@@ -60,14 +61,15 @@ function ManeuverIcon({ step }) {
   return <ArrowUp className="size-5" />
 }
 
-function NavEndButton({ onClick, children = 'End' }) {
+function NavEndButton({ onClick, children }) {
+  const { t } = useLanguage()
   return (
     <button
       type="button"
       onClick={onClick}
       className="shrink-0 rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-white/20"
     >
-      {children}
+      {children ?? t('End')}
     </button>
   )
 }
@@ -83,6 +85,7 @@ function MapController({ targetCoord, zoom }) {
 }
 
 export default function StaffMap() {
+  const { t } = useLanguage()
   const [reports, setReports] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -177,11 +180,11 @@ export default function StaffMap() {
   const startNavigation = (job) => {
     const destination = destinationFor(job)
     if (!destination) {
-      showToast('This report has no pin or known barangay center. Use Google Maps instead.')
+      showToast(t('This report has no pin or known barangay center. Use Google Maps instead.'))
       return
     }
     if (!('geolocation' in navigator)) {
-      showToast('This device cannot share its location.')
+      showToast(t('This device cannot share its location.'))
       return
     }
 
@@ -190,7 +193,7 @@ export default function StaffMap() {
     setNavTarget({
       job,
       ...destination,
-      label: job.barangay ? `Brgy. ${job.barangay}` : job.location,
+      label: job.barangay ? t('Brgy. {barangay}', { barangay: job.barangay }) : job.location,
     })
     setNavRoute(null)
     setNavPosition(null)
@@ -226,10 +229,10 @@ export default function StaffMap() {
       }
     } catch {
       if (session === navSession.current) {
-        setNavError('We could not get driving directions. Check your connection and try again.')
+        setNavError(t('We could not get driving directions. Check your connection and try again.'))
       }
     }
-  }, [navTarget, navRoute])
+  }, [navTarget, navRoute, t])
 
   const retryRoute = () => {
     lastRouteAt.current = 0
@@ -247,7 +250,7 @@ export default function StaffMap() {
         setNavPosition(next)
         requestRoute(next)
       },
-      () => setNavError('Could not read your GPS. Move to an open area and try again.'),
+      () => setNavError(t('Could not read your GPS. Move to an open area and try again.')),
       { enableHighAccuracy: true, timeout: 15000 },
     )
   }
@@ -270,15 +273,15 @@ export default function StaffMap() {
       (error) => {
         setNavError(
           error.code === error.PERMISSION_DENIED
-            ? 'Location access is blocked. Allow it in your browser settings to navigate.'
-            : 'Could not read your GPS. Move to an open area and try again.',
+            ? t('Location access is blocked. Allow it in your browser settings to navigate.')
+            : t('Could not read your GPS. Move to an open area and try again.'),
         )
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
     )
 
     return () => navigator.geolocation.clearWatch(watchId)
-  }, [navTarget, navRoute, requestRoute])
+  }, [navTarget, navRoute, requestRoute, t])
 
   const navProgress = useMemo(
     () => (navTarget && navRoute && navPosition ? routeProgress(navRoute, navPosition) : null),
@@ -294,13 +297,13 @@ export default function StaffMap() {
           setStaffPosition(coords)
           setTargetCoord(coords)
           setTargetZoom(15)
-          showToast('Updated live GPS coordinates')
+          showToast(t('Updated live GPS coordinates'))
         },
-        () => showToast('Could not access GPS — check location permission.'),
+        () => showToast(t('Could not access GPS — check location permission.')),
         { enableHighAccuracy: true, timeout: 5000 },
       )
     } else {
-      showToast('Live GPS is not available on this device.')
+      showToast(t('Live GPS is not available on this device.'))
     }
   }
 
@@ -323,9 +326,9 @@ export default function StaffMap() {
       setActiveJob(null)
       stopNavigation()
       reload()
-      showToast('Marked as resolved. Great work!')
+      showToast(t('Marked as resolved. Great work!'))
     } catch {
-      showToast('We could not update this report. Check your connection and try again.')
+      showToast(t('We could not update this report. Check your connection and try again.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -441,7 +444,7 @@ export default function StaffMap() {
                       onClick={retryRoute}
                       className="h-9 rounded-xl bg-brand-yellow text-xs font-black text-brand-navy transition-colors hover:bg-[#f5c400]"
                     >
-                      Try again
+                      {t('Try again')}
                     </button>
                     <button
                       type="button"
@@ -460,11 +463,11 @@ export default function StaffMap() {
                         <Flag className="size-5" />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-black leading-tight">You have arrived</p>
+                        <p className="text-sm font-black leading-tight">{t('You have arrived')}</p>
                         <p className="truncate text-[11px] font-semibold text-brand-line">{navTarget.label}</p>
                       </div>
                     </div>
-                    <NavEndButton onClick={stopNavigation}>Done</NavEndButton>
+                    <NavEndButton onClick={stopNavigation}>{t('Done')}</NavEndButton>
                   </div>
                   <ResolutionEvidenceInput files={evidenceFiles} onChange={setEvidenceForJob} dark disabled={isSubmitting} />
                   {cardJob?.tone !== 'resolved' && (
@@ -474,7 +477,7 @@ export default function StaffMap() {
                       disabled={isSubmitting}
                       className="mt-3 h-10 w-full rounded-xl bg-brand-yellow text-xs font-black text-brand-navy transition-colors hover:bg-[#f5c400] disabled:opacity-60"
                     >
-                      Mark resolved
+                      {t('Mark resolved')}
                     </button>
                   )}
                 </>
@@ -486,19 +489,22 @@ export default function StaffMap() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-base font-black leading-tight">
-                        {navProgress.step?.instruction ?? 'Continue to your destination'}
+                        {navProgress.step?.instruction ?? t('Continue to your destination')}
                       </p>
                       {navProgress.toNext > 0 && (
                         <p className="mt-0.5 text-[11px] font-semibold text-brand-line">
-                          in {formatDistance(navProgress.toNext)}
+                          {t('in {distance}', { distance: formatDistance(navProgress.toNext) })}
                         </p>
                       )}
                     </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/15 pt-2.5">
                     <p className="min-w-0 truncate text-[11px] font-semibold text-brand-line">
-                      {formatDistance(navProgress.remaining)} · {formatDuration(navProgress.etaSeconds)} left
-                      {navTarget.approximate ? ' · approximate pin' : ''}
+                      {t('{distance} · {duration} left', {
+                        distance: formatDistance(navProgress.remaining),
+                        duration: formatDuration(navProgress.etaSeconds),
+                      })}
+                      {navTarget.approximate ? ` · ${t('approximate pin')}` : ''}
                     </p>
                     <NavEndButton onClick={stopNavigation} />
                   </div>
@@ -510,7 +516,7 @@ export default function StaffMap() {
                       <Navigation className="size-4 animate-pulse" />
                     </span>
                     <p className="text-xs font-semibold">
-                      {navPosition ? 'Getting directions…' : 'Finding your location…'}
+                      {navPosition ? t('Getting directions…') : t('Finding your location…')}
                     </p>
                   </div>
                   <NavEndButton onClick={stopNavigation} />
@@ -531,14 +537,18 @@ export default function StaffMap() {
                   </span>
                   <div className="min-w-0">
                     <h1 className="text-sm font-black leading-tight text-white truncate">
-                      To {activeJob.barangay ? `Brgy. ${activeJob.barangay}` : activeJob.location}
+                      {t('To {place}', {
+                        place: activeJob.barangay
+                          ? t('Brgy. {barangay}', { barangay: activeJob.barangay })
+                          : activeJob.location,
+                      })}
                     </h1>
                     <p className="text-[11px] font-semibold text-brand-line truncate">
                       {activeJob.coordinates
                         ? activeJob.coordinates.accuracy
-                          ? `GPS pin · ±${Math.round(activeJob.coordinates.accuracy)} m`
-                          : 'GPS pin captured'
-                        : `${activeJob.id} · no GPS pin captured`}
+                          ? t('GPS pin · ±{meters} m', { meters: Math.round(activeJob.coordinates.accuracy) })
+                          : t('GPS pin captured')
+                        : t('{id} · no GPS pin captured', { id: activeJob.id })}
                     </p>
                   </div>
                 </div>
@@ -547,11 +557,11 @@ export default function StaffMap() {
                   type="button"
                   onClick={() => {
                     setActiveJob(null)
-                    showToast('Job deselected')
+                    showToast(t('Job deselected'))
                   }}
                   className="rounded-xl border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20 active:scale-95 transition-all cursor-pointer shrink-0"
                 >
-                  End
+                  {t('End')}
                 </button>
               </div>
             )}
@@ -568,7 +578,7 @@ export default function StaffMap() {
                 }`}
               >
                 <ClipboardList className="size-3.5" />
-                <span>My jobs {activeCount}</span>
+                <span>{t('My jobs')} {activeCount}</span>
               </button>
 
               <button
@@ -581,7 +591,7 @@ export default function StaffMap() {
                 }`}
               >
                 <Check className="size-3.5" />
-                <span>Done {doneCount}</span>
+                <span>{t('Done')} {doneCount}</span>
               </button>
             </div>
           </div>
@@ -596,7 +606,7 @@ export default function StaffMap() {
             type="button"
             onClick={handleZoomIn}
             className="grid size-11 place-items-center text-brand-navy hover:bg-brand-paper transition-colors cursor-pointer"
-            aria-label="Zoom in"
+            aria-label={t('Zoom in')}
           >
             <Plus className="size-5" />
           </button>
@@ -605,7 +615,7 @@ export default function StaffMap() {
             type="button"
             onClick={handleZoomOut}
             className="grid size-11 place-items-center text-brand-navy hover:bg-brand-paper transition-colors cursor-pointer"
-            aria-label="Zoom out"
+            aria-label={t('Zoom out')}
           >
             <Minus className="size-5" />
           </button>
@@ -616,7 +626,7 @@ export default function StaffMap() {
           type="button"
           onClick={handleLocateStaff}
           className="grid size-11 place-items-center rounded-2xl bg-white text-brand-blue shadow-[0_6px_20px_rgba(23,43,104,0.14)] border border-brand-line hover:bg-brand-paper cursor-pointer"
-          aria-label="My GPS location"
+          aria-label={t('My GPS location')}
         >
           <LocateFixed className="size-5" />
         </button>
@@ -625,7 +635,7 @@ export default function StaffMap() {
       {/* BOTTOM FLOATING CARD: Current Work Order Summary */}
       {!isLoading && !loadError && !navTarget && cardJob && (
         <aside
-          aria-label="Job navigation summary"
+          aria-label={t('Job navigation summary')}
           className="absolute bottom-[92px] sm:bottom-[100px] inset-x-0 z-[500] px-3 sm:px-4 pointer-events-none"
         >
           <div className="mx-auto w-full max-w-md pointer-events-auto">
@@ -643,12 +653,12 @@ export default function StaffMap() {
 
               {/* Subtitle / Work Order info */}
               <p className="mt-1 text-xs text-brand-muted leading-relaxed">
-                {cardJob.id} · {cardJob.barangay ? `Brgy. ${cardJob.barangay}` : cardJob.location} ·
-                Noticed {cardJob.startedTime || cardJob.date}
+                {cardJob.id} · {cardJob.barangay ? t('Brgy. {barangay}', { barangay: cardJob.barangay }) : cardJob.location} ·{' '}
+                {t('Noticed {time}', { time: cardJob.startedTime || cardJob.date })}
               </p>
               {cardJob.tone !== 'resolved' && !cardJob.coordinates && (
                 <p className="mt-1.5 text-[11px] font-semibold text-[#9a6500]">
-                  This report has no GPS pin — navigation uses the barangay center.
+                  {t('This report has no GPS pin — navigation uses the barangay center.')}
                 </p>
               )}
 
@@ -663,7 +673,7 @@ export default function StaffMap() {
                       className="flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-brand-blue px-3 text-xs sm:text-sm font-bold text-white shadow-xs hover:bg-brand-navy transition-all cursor-pointer"
                     >
                       <Navigation className="size-4 rotate-45" />
-                      <span>Navigate</span>
+                      <span>{t('Navigate')}</span>
                     </button>
 
                     <button
@@ -672,7 +682,7 @@ export default function StaffMap() {
                       disabled={isSubmitting}
                       className="flex h-11 items-center justify-center rounded-2xl bg-brand-yellow px-3 text-xs sm:text-sm font-black text-brand-navy shadow-xs hover:bg-brand-yellow active:scale-[0.98] transition-all disabled:opacity-60 cursor-pointer"
                     >
-                      Mark resolved
+                      {t('Mark resolved')}
                     </button>
                   </div>
 
@@ -682,12 +692,12 @@ export default function StaffMap() {
                     rel="noreferrer"
                     className="mt-2.5 flex items-center justify-center gap-1.5 text-[11px] font-bold text-brand-blue underline underline-offset-4"
                   >
-                    Open in Google Maps
+                    {t('Open in Google Maps')}
                   </a>
                 </>
               ) : (
                 <p className="mt-4 rounded-xl bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700">
-                  Resolved — this job needs no further action.
+                  {t('Resolved — this job needs no further action.')}
                 </p>
               )}
             </div>
@@ -700,12 +710,12 @@ export default function StaffMap() {
         <div className="absolute top-[110px] inset-x-0 z-[500] px-4 pointer-events-none">
           <div className="mx-auto max-w-md rounded-2xl border border-brand-line bg-white p-4 text-center shadow-sm pointer-events-auto">
             {isLoading ? (
-              <p className="text-xs font-semibold text-brand-muted">Loading your assigned jobs…</p>
+              <p className="text-xs font-semibold text-brand-muted">{t('Loading your assigned jobs…')}</p>
             ) : (
               <>
-                <p className="text-xs font-bold text-[#b42318]">{loadError}</p>
+                <p className="text-xs font-bold text-[#b42318]">{t(loadError)}</p>
                 <button type="button" onClick={reload} className="mt-1.5 text-xs font-bold text-brand-blue underline underline-offset-4 cursor-pointer">
-                  Try again
+                  {t('Try again')}
                 </button>
               </>
             )}
@@ -717,7 +727,9 @@ export default function StaffMap() {
       {!navTarget && !isLoading && !loadError && visibleJobs.length > 0 && unpinnedCount > 0 && (
         <div className="absolute top-[110px] inset-x-0 z-[500] px-4 pointer-events-none">
           <div className="mx-auto max-w-md rounded-2xl bg-white/95 px-4 py-2.5 text-center text-[11px] font-semibold text-brand-muted shadow-sm border border-brand-line pointer-events-auto">
-            {unpinnedCount} {unpinnedCount === 1 ? 'job has' : 'jobs have'} no GPS pin — navigation uses the barangay center.
+            {unpinnedCount === 1
+              ? t('{count} job has no GPS pin — navigation uses the barangay center.', { count: unpinnedCount })
+              : t('{count} jobs have no GPS pin — navigation uses the barangay center.', { count: unpinnedCount })}
           </div>
         </div>
       )}
@@ -725,7 +737,7 @@ export default function StaffMap() {
       {!isLoading && !loadError && reports.length === 0 && (
         <div className="absolute top-[110px] inset-x-0 z-[500] px-4 pointer-events-none">
           <div className="mx-auto max-w-md rounded-2xl border border-dashed border-brand-line bg-white p-6 text-center text-xs text-brand-muted shadow-sm pointer-events-auto">
-            Nothing assigned to you yet — markers appear here once the administrator assigns jobs.
+            {t('Nothing assigned to you yet — markers appear here once the administrator assigns jobs.')}
           </div>
         </div>
       )}

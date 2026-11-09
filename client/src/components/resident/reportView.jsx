@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react'
 import { Badge } from '../ui/badge'
+import { useLanguage } from '../../lib/i18n'
 import { priorityLabels } from '../../lib/reports'
 
 const toneClasses = {
@@ -10,13 +11,14 @@ const toneClasses = {
 }
 
 export function ReportStatusBadge({ tone, status }) {
+  const { t } = useLanguage()
   return (
     <Badge
       variant="outline"
       className={`h-auto shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${toneClasses[tone] ?? 'bg-[#e5e9f6] text-brand-muted border-brand-line'}`}
     >
       {tone === 'verified' && <Check className="mr-0.5 inline size-3" strokeWidth={3} aria-hidden="true" />}
-      {status}
+      {t(status)}
     </Badge>
   )
 }
@@ -28,18 +30,20 @@ const priorityClasses = {
 }
 
 export function ReportPriorityBadge({ priority = 'medium' }) {
+  const { t } = useLanguage()
   const key = String(priority).toLowerCase()
   return (
     <Badge
       variant="outline"
       className={`h-auto shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${priorityClasses[key] ?? priorityClasses.medium}`}
     >
-      {priorityLabels[key] ?? key}
+      {t(priorityLabels[key] ?? key)}
     </Badge>
   )
 }
 
 export function ReportTimeline({ progress }) {
+  const { t } = useLanguage()
   const steps = ['Submitted', 'Verified', 'Dispatched', 'Resolved']
 
   return (
@@ -55,7 +59,7 @@ export function ReportTimeline({ progress }) {
               <span className={`grid size-4 place-items-center rounded-full border-2 ${complete ? 'border-brand-blue bg-brand-blue text-white' : current ? 'border-brand-line bg-white' : 'border-brand-line bg-white'}`}>
                 {complete && <Check className="size-2.5" strokeWidth={3} aria-hidden="true" />}
               </span>
-              <span className="text-[9px] font-semibold text-brand-muted">{step}</span>
+              <span className="text-[9px] font-semibold text-brand-muted">{t(step)}</span>
             </div>
           )
         })}

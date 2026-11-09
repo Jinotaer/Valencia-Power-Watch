@@ -1,4 +1,5 @@
 import { ClipboardList, House, Map, UserRound, Wrench } from 'lucide-react'
+import { useLanguage } from '../../lib/i18n'
 
 const navigation = {
   resident: [
@@ -16,6 +17,7 @@ const navigation = {
 }
 
 export function PortalMobileNav({ role }) {
+  const { t } = useLanguage()
   const items = navigation[role] ?? navigation.resident
   const currentPath = window.location.pathname
 
@@ -39,7 +41,7 @@ export function PortalMobileNav({ role }) {
                   </span>
                 )}
               </span>
-              <span>{label}</span>
+              <span>{t(label)}</span>
             </a>
           )
         })}
@@ -49,13 +51,14 @@ export function PortalMobileNav({ role }) {
 }
 
 export function PortalMark({ role }) {
+  const { t } = useLanguage()
   return (
     <div className="flex items-center gap-2.5">
       <span className="grid size-9 place-items-center rounded-xl bg-brand-yellow text-brand-navy">
         <Wrench className="size-4.5" strokeWidth={2.5} aria-hidden="true" />
       </span>
       <span>
-        <span className="block text-[10px] font-bold uppercase tracking-[.14em] text-brand-muted">{role === 'staff' ? 'Field workspace' : 'Community portal'}</span>
+        <span className="block text-[10px] font-bold uppercase tracking-[.14em] text-brand-muted">{t(role === 'staff' ? 'Field workspace' : 'Community portal')}</span>
         <span className="block text-base font-extrabold tracking-[-.03em] text-brand-navy">PowerWatch</span>
       </span>
     </div>

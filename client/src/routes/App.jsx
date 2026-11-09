@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import LanguageProvider from '../components/common/LanguageProvider'
 import Guard from './Guard'
 import {
   defaultManifest,
@@ -41,9 +42,11 @@ function App() {
   }, [section])
 
   return (
-    <Guard pathname={pathname} section={section}>
-      {resolvePage(pathname, section)}
-    </Guard>
+    <LanguageProvider>
+      <Guard pathname={pathname} section={section}>
+        {resolvePage(pathname, section)}
+      </Guard>
+    </LanguageProvider>
   )
 }
 

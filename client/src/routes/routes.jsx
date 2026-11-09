@@ -33,6 +33,7 @@ import SubmitReport from '../pages/resident/submitReport'
 import StaffHome from '../pages/staff/home'
 import StaffJobs from '../pages/staff/jobs'
 import StaffMap from '../pages/staff/map'
+import StaffNotifications from '../pages/staff/notifications'
 import StaffProfile from '../pages/staff/profile'
 
 /* -------------------------------------------------------------------------- */
@@ -163,6 +164,7 @@ const pageRoutes = new Map([
   // Staff
   ['/staff/jobs', <StaffJobs />],
   ['/staff/map', <StaffMap />],
+  ['/staff/notifications', <StaffNotifications />],
   ['/staff/profile', <StaffProfile />],
 
   // Admin

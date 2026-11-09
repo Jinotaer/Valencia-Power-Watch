@@ -4,6 +4,7 @@ import { Circle, MapContainer, Marker, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { VALENCIA_CENTER, barangayCenters } from '../../lib/geo'
+import { useLanguage } from '../../lib/i18n'
 import { loadPublicOutages } from '../../lib/reports'
 import { loadActiveSchedules } from '../../lib/schedules'
 import { icons } from '../../components/resident/mapData'
@@ -25,6 +26,7 @@ function MapController({ targetCoord, zoom }) {
 }
 
 export default function ResidentMap() {
+  const { t, locale } = useLanguage()
   const [outages, setOutages] = useState([])
   const [schedules, setSchedules] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -98,10 +100,10 @@ export default function ResidentMap() {
         list.push({
           kind: 'outage',
           id: outage.id,
-          title: outage.outageType,
+          title: t(outage.outageType),
           name: outage.barangay,
-          location: outage.barangay ? `Brgy. ${outage.barangay}` : 'Valencia City',
-          status: outage.status,
+          location: outage.barangay ? t('Brgy. {barangay}', { barangay: outage.barangay }) : t('Valencia City'),
+          status: t(outage.status),
           tone: outage.tone,
           date: outage.updatedAt ?? outage.createdAt,
           position,
@@ -117,10 +119,10 @@ export default function ResidentMap() {
       list.push({
         kind: 'schedule',
         id: schedule.id,
-        title: schedule.title || 'Scheduled outage',
-        name: schedule.barangay ?? 'Multiple barangays',
-        location: schedule.barangay ? `Brgy. ${schedule.barangay}` : 'Multiple barangays',
-        status: 'Scheduled',
+        title: schedule.title || t('Scheduled outage'),
+        name: schedule.barangay ?? t('Multiple barangays'),
+        location: schedule.barangay ? t('Brgy. {barangay}', { barangay: schedule.barangay }) : t('Multiple barangays'),
+        status: t('Scheduled'),
         tone: 'scheduled',
         date: schedule.date,
         position: [center.lat, center.lng],
@@ -130,7 +132,7 @@ export default function ResidentMap() {
     })
 
     return list
-  }, [outages, schedules, centerByBarangay])
+  }, [outages, schedules, centerByBarangay, t])
 
   const visibleItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -162,16 +164,16 @@ export default function ResidentMap() {
 
   const handleLocateMe = () => {
     if (!('geolocation' in navigator)) {
-      showToast('Location is not available on this device.')
+      showToast(t('Location is not available on this device.'))
       return
     }
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         setTargetCoord([coords.latitude, coords.longitude])
         setTargetZoom(15)
-        showToast('Centered on your location')
+        showToast(t('Centered on your location'))
       },
-      () => showToast('Could not access GPS — check location permission.'),
+      () => showToast(t('Could not access GPS — check location permission.')),
       { enableHighAccuracy: true, timeout: 8000 },
     )
   }
@@ -187,10 +189,10 @@ export default function ResidentMap() {
   const satelliteTiles = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 
   const statusMeta = {
-    pending: { label: 'Pending', badge: 'bg-[#fff1a8] text-[#9a6500]', icon: Clock },
-    verified: { label: 'Verified', badge: 'bg-[#d9f9e8] text-[#137a48]', icon: Check },
-    resolved: { label: 'Resolved', badge: 'bg-[#e5e9f6] text-brand-ink', icon: Check },
-    scheduled: { label: 'Scheduled', badge: 'bg-[#e5e9f6] text-brand-blue', icon: Calendar },
+    pending: { label: t('Pending'), badge: 'bg-[#fff1a8] text-[#9a6500]', icon: Clock },
+    verified: { label: t('Verified'), badge: 'bg-[#d9f9e8] text-[#137a48]', icon: Check },
+    resolved: { label: t('Resolved'), badge: 'bg-[#e5e9f6] text-brand-ink', icon: Check },
+    scheduled: { label: t('Scheduled'), badge: 'bg-[#e5e9f6] text-brand-blue', icon: Calendar },
   }
 
   return (
@@ -252,7 +254,7 @@ export default function ResidentMap() {
             <Search className="size-4.5 text-brand-muted shrink-0 mr-2.5" />
             <input
               type="text"
-              placeholder="Search barangay or place"
+              placeholder={t('Search barangay or place')}
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               className="w-full bg-transparent text-sm font-medium text-brand-navy placeholder:text-brand-muted focus:outline-none"
@@ -261,16 +263,16 @@ export default function ResidentMap() {
               type="button"
               onClick={() => setShowLayerMenu(!showLayerMenu)}
               className="ml-2 flex size-9 shrink-0 items-center justify-center rounded-xl bg-[e5e9f6] text-brand-blue transition-colors hover:bg-[e5e9f6] active:scale-95 cursor-pointer"
-              title="Map layers"
+              title={t('Map layers')}
             >
               <Layers className="size-4.5" />
             </button>
             {showLayerMenu && (
               <div className="absolute top-full right-0 mt-2 w-48 rounded-2xl border border-brand-line bg-white p-2 shadow-xl z-50">
-                <span className="block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted">Basemap View</span>
+                <span className="block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-muted">{t('Basemap View')}</span>
                 {[
-                  ['street', 'Street Map'],
-                  ['satellite', 'Satellite View'],
+                  ['street', t('Street Map')],
+                  ['satellite', t('Satellite View')],
                 ].map(([key, label]) => (
                   <button
                     key={key}
@@ -296,7 +298,7 @@ export default function ResidentMap() {
               className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${filter === 'active' ? 'bg-brand-blue text-white' : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'}`}
             >
               <Zap className="size-3.5 fill-brand-yellow text-brand-yellow" />
-              <span>Active {activeCount}</span>
+              <span>{t('Active {count}', { count: activeCount })}</span>
             </button>
             <button
               type="button"
@@ -304,7 +306,7 @@ export default function ResidentMap() {
               className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${filter === 'scheduled' ? 'bg-brand-blue text-white' : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'}`}
             >
               <Calendar className="size-3.5 text-brand-blue" />
-              <span>Scheduled {scheduledCount}</span>
+              <span>{t('Scheduled {count}', { count: scheduledCount })}</span>
             </button>
             <button
               type="button"
@@ -312,7 +314,7 @@ export default function ResidentMap() {
               className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold shadow-sm transition-all cursor-pointer whitespace-nowrap ${filter === 'resolved' ? 'bg-brand-blue text-white' : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'}`}
             >
               <Check className="size-3.5 text-[#137a48]" />
-              <span>Resolved {resolvedCount}</span>
+              <span>{t('Resolved {count}', { count: resolvedCount })}</span>
             </button>
           </div>
         </div>
@@ -320,15 +322,15 @@ export default function ResidentMap() {
 
       <div className="absolute right-4 top-[38%] -translate-y-1/2 z-[500] flex flex-col items-center gap-3">
         <div className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-[0_6px_20px_rgba(23,43,104,0.14)] border border-brand-line">
-          <button type="button" onClick={handleZoomIn} className="grid size-11 place-items-center text-brand-navy hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer" aria-label="Zoom in">
+          <button type="button" onClick={handleZoomIn} className="grid size-11 place-items-center text-brand-navy hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer" aria-label={t('Zoom in')}>
             <Plus className="size-5" />
           </button>
           <div className="h-px w-full bg-brand-paper" />
-          <button type="button" onClick={handleZoomOut} className="grid size-11 place-items-center text-brand-navy hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer" aria-label="Zoom out">
+          <button type="button" onClick={handleZoomOut} className="grid size-11 place-items-center text-brand-navy hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer" aria-label={t('Zoom out')}>
             <Minus className="size-5" />
           </button>
         </div>
-        <button type="button" onClick={handleLocateMe} className="grid size-11 place-items-center rounded-2xl bg-white text-brand-blue shadow-[0_6px_20px_rgba(23,43,104,0.14)] border border-brand-line hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer" aria-label="Center on my location">
+        <button type="button" onClick={handleLocateMe} className="grid size-11 place-items-center rounded-2xl bg-white text-brand-blue shadow-[0_6px_20px_rgba(23,43,104,0.14)] border border-brand-line hover:bg-brand-paper active:bg-[e5e9f6] transition-colors cursor-pointer" aria-label={t('Center on my location')}>
           <LocateFixed className="size-5" />
         </button>
       </div>
@@ -337,8 +339,8 @@ export default function ResidentMap() {
         <div className="absolute top-[120px] inset-x-0 z-[500] px-4 pointer-events-none">
           <div className="mx-auto max-w-md rounded-2xl border border-brand-line bg-white p-4 text-center shadow-sm pointer-events-auto">
             {isLoading
-              ? <p className="text-xs font-semibold text-brand-muted">Loading outage locations…</p>
-              : <><p className="text-xs font-bold text-[#b42318]">{loadError}</p><button type="button" onClick={retryLoad} className="mt-1.5 text-xs font-bold text-brand-blue underline underline-offset-4 cursor-pointer">Try again</button></>}
+              ? <p className="text-xs font-semibold text-brand-muted">{t('Loading outage locations…')}</p>
+              : <><p className="text-xs font-bold text-[#b42318]">{t(loadError)}</p><button type="button" onClick={retryLoad} className="mt-1.5 text-xs font-bold text-brand-blue underline underline-offset-4 cursor-pointer">{t('Try again')}</button></>}
           </div>
         </div>
       )}
@@ -347,14 +349,14 @@ export default function ResidentMap() {
         <div className="absolute top-[120px] inset-x-0 z-[500] px-4 pointer-events-none">
           <div className="mx-auto max-w-md rounded-2xl border border-dashed border-brand-line bg-white p-6 text-center text-xs text-brand-muted shadow-sm pointer-events-auto">
             {outages.length === 0 && schedules.length === 0
-              ? 'No outage markers yet. Resident reports and published schedules will appear here as they happen.'
-              : 'No locations match this filter or search.'}
+              ? t('No outage markers yet. Resident reports and published schedules will appear here as they happen.')
+              : t('No locations match this filter or search.')}
           </div>
         </div>
       )}
 
       {!isLoading && !loadError && selectedItem && (
-        <aside aria-label="Incident summary" className="absolute bottom-[92px] sm:bottom-[100px] inset-x-0 z-[500] px-3 sm:px-4 pointer-events-none">
+        <aside aria-label={t('Incident summary')} className="absolute bottom-[92px] sm:bottom-[100px] inset-x-0 z-[500] px-3 sm:px-4 pointer-events-none">
           <div className="mx-auto w-full max-w-md pointer-events-auto">
             <div className="rounded-3xl border border-brand-line bg-white p-4 sm:p-5 shadow-[0_8px_30px_rgba(23,43,104,0.16)]">
               <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-brand-line" />
@@ -369,20 +371,20 @@ export default function ResidentMap() {
                 {selectedItem.location}
                 {selectedItem.kind === 'schedule'
                   ? ` · ${selectedItem.schedule.dateLabel} · ${selectedItem.schedule.timeLabel}`
-                  : ` · ${new Date(selectedItem.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
-                {selectedItem.approximate ? ' · marker at barangay center' : ''}
+                  : ` · ${new Date(selectedItem.date).toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                {selectedItem.approximate ? ` · ${t('marker at barangay center')}` : ''}
               </p>
               <p className="mt-1.5 text-[11px] font-semibold text-brand-muted">
                 {selectedItem.kind === 'schedule'
-                  ? (selectedItem.schedule.description ?? 'Scheduled maintenance published by the utility.')
-                  : 'A resident reported this outage. Status updates appear here as crews respond.'}
+                  ? (selectedItem.schedule.description ?? t('Scheduled maintenance published by the utility.'))
+                  : t('A resident reported this outage. Status updates appear here as crews respond.')}
               </p>
               <div className="mt-4 grid grid-cols-2 gap-2.5 sm:gap-3">
                 <a href="/community/reports/new" className="flex h-11 items-center justify-center rounded-2xl bg-brand-blue px-3 text-xs sm:text-sm font-bold text-white shadow-xs hover:bg-brand-navy transition-all">
-                  Report this outage
+                  {t('Report this outage')}
                 </a>
                 <a href="/community/notifications" className="flex h-11 items-center justify-center rounded-2xl bg-brand-yellow px-3 text-xs sm:text-sm font-black text-brand-navy shadow-xs hover:bg-brand-yellow active:scale-[0.98] transition-all">
-                  Get updates
+                  {t('Get updates')}
                 </a>
               </div>
             </div>

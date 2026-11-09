@@ -1,4 +1,5 @@
-import { X, MapPin } from 'lucide-react'
+import { Check, X, MapPin } from 'lucide-react'
+import { languages, useLanguage } from '../../lib/i18n'
 
 const valenciaBarangays = [
   'Guinoyuran',
@@ -47,7 +48,9 @@ export function ResidentProfileModals({
   handleSaveBarangay,
   handleSavePassword,
   handleSignOut,
+  onSelectLanguage,
 }) {
+  const { language, t } = useLanguage()
   return (
     <>
       {/* INTERACTIVE MODALS */}
@@ -60,10 +63,11 @@ export function ResidentProfileModals({
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-brand-line pb-3">
               <h3 className="text-base font-bold text-brand-navy">
-                {activeModal === 'personal' && 'Personal Information'}
-                {activeModal === 'barangay' && 'Select Home Barangay'}
-                {activeModal === 'password' && 'Change Password'}
-                {activeModal === 'signout' && 'Sign Out Confirmation'}
+                {activeModal === 'personal' && t('Personal Information')}
+                {activeModal === 'barangay' && t('Select Home Barangay')}
+                {activeModal === 'language' && t('Language')}
+                {activeModal === 'password' && t('Change Password')}
+                {activeModal === 'signout' && t('Sign Out Confirmation')}
               </h3>
               <button
                 type="button"
@@ -79,7 +83,7 @@ export function ResidentProfileModals({
               {activeModal === 'personal' && (
                 <form onSubmit={handleSavePersonal} className="space-y-3.5">
                   <div>
-                    <label className="block text-xs font-semibold text-brand-muted mb-1">Full name</label>
+                    <label className="block text-xs font-semibold text-brand-muted mb-1">{t('Full name')}</label>
                     <input
                       type="text"
                       required
@@ -89,7 +93,7 @@ export function ResidentProfileModals({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-brand-muted mb-1">Email address</label>
+                    <label className="block text-xs font-semibold text-brand-muted mb-1">{t('Email address')}</label>
                     <input
                       type="email"
                       required
@@ -99,7 +103,7 @@ export function ResidentProfileModals({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-brand-muted mb-1">Contact number</label>
+                    <label className="block text-xs font-semibold text-brand-muted mb-1">{t('Contact number')}</label>
                     <input
                       type="tel"
                       value={personalForm.phone}
@@ -113,13 +117,13 @@ export function ResidentProfileModals({
                       onClick={() => setActiveModal(null)}
                       className="flex-1 rounded-xl border border-brand-line py-2.5 text-xs font-bold text-brand-muted hover:bg-brand-paper"
                     >
-                      Cancel
+                      {t('Cancel')}
                     </button>
                     <button
                       type="submit"
                       className="flex-1 rounded-xl bg-brand-blue py-2.5 text-xs font-bold text-white shadow-xs hover:bg-brand-navy"
                     >
-                      Save changes
+                      {t('Save changes')}
                     </button>
                   </div>
                 </form>
@@ -128,7 +132,7 @@ export function ResidentProfileModals({
               {activeModal === 'barangay' && (
                 <form onSubmit={handleSaveBarangay} className="space-y-4">
                   <p className="text-xs text-brand-muted">
-                    Choose your primary barangay in Valencia City to prioritize relevant power interruption advisories.
+                    {t('Choose your primary barangay in Valencia City to prioritize relevant power interruption advisories.')}
                   </p>
                   <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
                     {valenciaBarangays.map((brgy) => (
@@ -142,7 +146,7 @@ export function ResidentProfileModals({
                       >
                         <span className="flex items-center gap-2">
                           <MapPin className="size-3.5 text-brand-blue" />
-                          Brgy. {brgy}
+                          {t('Brgy. {barangay}', { barangay: brgy })}
                         </span>
                         <input
                           type="radio"
@@ -160,22 +164,45 @@ export function ResidentProfileModals({
                       onClick={() => setActiveModal(null)}
                       className="flex-1 rounded-xl border border-brand-line py-2.5 text-xs font-bold text-brand-muted hover:bg-brand-paper"
                     >
-                      Cancel
+                      {t('Cancel')}
                     </button>
                     <button
                       type="submit"
                       className="flex-1 rounded-xl bg-brand-blue py-2.5 text-xs font-bold text-white shadow-xs hover:bg-brand-navy"
                     >
-                      Confirm
+                      {t('Confirm')}
                     </button>
                   </div>
                 </form>
               )}
 
+              {activeModal === 'language' && (
+                <div className="space-y-2">
+                  <p className="text-xs leading-5 text-brand-muted">
+                    {t('Choose the language used across the community portal.')}
+                  </p>
+                  {languages.map(({ code, label }) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => onSelectLanguage(code, label)}
+                      className={`flex w-full items-center justify-between rounded-xl border p-3 text-sm font-semibold transition-colors ${
+                        language === code
+                          ? 'border-brand-blue bg-[e5e9f6] text-brand-navy'
+                          : 'border-brand-line bg-white text-brand-ink hover:bg-brand-paper'
+                      }`}
+                    >
+                      <span>{label}</span>
+                      {language === code && <Check className="size-4 text-brand-blue" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {activeModal === 'password' && (
                 <form onSubmit={handleSavePassword} className="space-y-3.5">
                   <div>
-                    <label className="block text-xs font-semibold text-brand-muted mb-1">Current password</label>
+                    <label className="block text-xs font-semibold text-brand-muted mb-1">{t('Current password')}</label>
                     <input
                       type="password"
                       required
@@ -186,7 +213,7 @@ export function ResidentProfileModals({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-brand-muted mb-1">New password</label>
+                    <label className="block text-xs font-semibold text-brand-muted mb-1">{t('New password')}</label>
                     <input
                       type="password"
                       required
@@ -197,7 +224,7 @@ export function ResidentProfileModals({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-brand-muted mb-1">Confirm new password</label>
+                    <label className="block text-xs font-semibold text-brand-muted mb-1">{t('Confirm new password')}</label>
                     <input
                       type="password"
                       required
@@ -213,13 +240,13 @@ export function ResidentProfileModals({
                       onClick={() => setActiveModal(null)}
                       className="flex-1 rounded-xl border border-brand-line py-2.5 text-xs font-bold text-brand-muted hover:bg-brand-paper"
                     >
-                      Cancel
+                      {t('Cancel')}
                     </button>
                     <button
                       type="submit"
                       className="flex-1 rounded-xl bg-brand-blue py-2.5 text-xs font-bold text-white shadow-xs hover:bg-brand-navy"
                     >
-                      Update password
+                      {t('Update password')}
                     </button>
                   </div>
                 </form>
@@ -228,7 +255,7 @@ export function ResidentProfileModals({
               {activeModal === 'signout' && (
                 <div className="space-y-4">
                   <p className="text-sm text-brand-muted">
-                    Are you sure you want to sign out of the Valencia PowerWatch Community Portal?
+                    {t('Are you sure you want to sign out of the Valencia PowerWatch Community Portal?')}
                   </p>
                   <div className="flex gap-2">
                     <button
@@ -236,14 +263,14 @@ export function ResidentProfileModals({
                       onClick={() => setActiveModal(null)}
                       className="flex-1 rounded-xl border border-brand-line py-2.5 text-xs font-bold text-brand-muted hover:bg-brand-paper cursor-pointer"
                     >
-                      Cancel
+                      {t('Cancel')}
                     </button>
                     <button
                       type="button"
                       onClick={handleSignOut}
                       className="flex-1 rounded-xl bg-red-600 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-red-700 cursor-pointer"
                     >
-                      Yes, sign out
+                      {t('Yes, sign out')}
                     </button>
                   </div>
                 </div>

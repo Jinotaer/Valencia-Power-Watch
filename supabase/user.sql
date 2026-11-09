@@ -16,6 +16,7 @@ create table if not exists public.users (
   is_active boolean not null default true,
   notification_preferences jsonb not null
     default '{"outageAlerts":true,"reportStatusUpdates":true,"scheduledReminders":false}'::jsonb,
+  language text not null default 'en' check (language in ('en', 'fil', 'bce')),
   created_at timestamptz not null default now()
 );
 
@@ -26,6 +27,9 @@ alter table public.users add column if not exists position text;
 alter table public.users
   add column if not exists notification_preferences jsonb not null
   default '{"outageAlerts":true,"reportStatusUpdates":true,"scheduledReminders":false}'::jsonb;
+alter table public.users
+  add column if not exists language text not null default 'en'
+  check (language in ('en', 'fil', 'bce'));
 
 update public.users set id_number = null where role = 'resident' and id_number like 'VP-%';
 
@@ -82,7 +86,7 @@ create policy "Admins can update user profiles"
 
 -- Editors may only change profile columns, never `role` or `is_active` directly
 revoke update on public.users from authenticated;
-grant update (id_number, full_name, contact_number, address, position, notification_preferences) on public.users to authenticated;
+grant update (id_number, full_name, contact_number, address, position, notification_preferences, language) on public.users to authenticated;
 
 -- 4. Admin-only activation toggle (is_active is not user-self-editable)
 create or replace function public.set_user_active(p_user_id uuid, p_is_active boolean)

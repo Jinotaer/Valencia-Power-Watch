@@ -10,6 +10,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { loadAssignedReports, priorityLabels, updateReportStatus } from '../../lib/reports'
+import { useLanguage } from '../../lib/i18n'
 import { ResolutionEvidenceInput } from '../../components/staff/evidenceInput'
 import { StaffNotificationsButton } from '../../components/staff/notificationsModal'
 import { StaffUpdateFields } from '../../components/staff/updateFields'
@@ -31,6 +32,7 @@ const STATUS_OPTIONS = [{ key: 'verified', label: 'In progress' }, { key: 'resol
 const stageKey = (tone) => (tone === 'resolved' ? 'resolved' : 'verified')
 
 export default function StaffJobs() {
+  const { t } = useLanguage()
   const [reports, setReports] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -113,9 +115,9 @@ export default function StaffJobs() {
       setUpdateForm({ remarks: '', eta: '' })
       setStatusJob(null)
       reload()
-      showToast(statusKey === 'resolved' ? 'Marked as resolved. Great work!' : 'Status updated: In progress.')
+      showToast(statusKey === 'resolved' ? t('Marked as resolved. Great work!') : t('Status updated: In progress.'))
     } catch {
-      showToast('We could not update this report. Check your connection and try again.')
+      showToast(t('We could not update this report. Check your connection and try again.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -151,7 +153,7 @@ export default function StaffJobs() {
             </span>
             <div>
               <span className="block text-[9.5px] font-extrabold uppercase tracking-[.14em] text-brand-muted">
-                STAFF PORTAL
+                {t('STAFF PORTAL')}
               </span>
               <span className="block text-base font-black tracking-[-.03em] text-brand-navy">
                 PowerWatch
@@ -168,8 +170,8 @@ export default function StaffJobs() {
       <main className="mx-auto w-full max-w-md px-4 pb-32 pt-5 flex-1">
         {/* Page Heading */}
         <section className="mb-4">
-          <h1 className="text-3xl font-black tracking-tight text-brand-navy">Jobs</h1>
-          <p className="text-xs font-semibold text-brand-muted mt-0.5">Your assigned work orders.</p>
+          <h1 className="text-3xl font-black tracking-tight text-brand-navy">{t('Jobs')}</h1>
+          <p className="text-xs font-semibold text-brand-muted mt-0.5">{t('Your assigned work orders.')}</p>
         </section>
 
         {/* Filter Pills */}
@@ -190,7 +192,7 @@ export default function StaffJobs() {
                   : 'bg-white border border-brand-line text-brand-navy hover:bg-brand-paper'
               }`}
             >
-              {option.label} {option.count}
+              {t(option.label)} {option.count}
             </button>
           ))}
         </div>
@@ -199,15 +201,15 @@ export default function StaffJobs() {
         <div className="space-y-4">
           {isLoading && (
             <div className="rounded-3xl border border-brand-line bg-white p-8 text-center">
-              <p className="text-sm font-semibold text-brand-muted">Loading your assigned jobs…</p>
+              <p className="text-sm font-semibold text-brand-muted">{t('Loading your assigned jobs…')}</p>
             </div>
           )}
 
           {!isLoading && loadError && (
             <div className="rounded-3xl border border-brand-line bg-white p-8 text-center">
-              <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
+              <p className="text-sm font-bold text-[#b42318]">{t(loadError)}</p>
               <button type="button" onClick={reload} className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4 cursor-pointer">
-                Try again
+                {t('Try again')}
               </button>
             </div>
           )}
@@ -237,7 +239,7 @@ export default function StaffJobs() {
                 <div className="mt-1 flex items-center gap-1.5 text-xs font-medium text-brand-muted">
                   <MapPin className="size-3.5 shrink-0 text-brand-blue" />
                   <span className="truncate">
-                    {report.barangay ? `Brgy. ${report.barangay}` : report.location}
+                    {report.barangay ? t('Brgy. {barangay}', { barangay: report.barangay }) : report.location}
                     {report.pinnedLocation ? ` · ${report.pinnedLocation}` : report.landmark ? ` · ${report.landmark}` : ''}
                   </span>
                 </div>
@@ -245,7 +247,7 @@ export default function StaffJobs() {
                 {/* Order ID & Report Time */}
                 <div className="mt-1 flex items-center text-xs font-medium text-brand-muted">
                   <span>
-                    {report.id} · Noticed {report.startedTime || report.date}
+                    {report.id} · {t('Noticed {time}', { time: report.startedTime || report.date })}
                   </span>
                 </div>
 
@@ -262,7 +264,7 @@ export default function StaffJobs() {
                 </div>
 
                 {/* Step Subtitle Caption */}
-                <p className="mt-1.5 text-[11px] font-semibold text-brand-muted">{TONE_LABEL[report.tone]}</p>
+                <p className="mt-1.5 text-[11px] font-semibold text-brand-muted">{t(TONE_LABEL[report.tone])}</p>
 
                 {/* Action Buttons Row */}
                 {isDone ? (
@@ -271,7 +273,7 @@ export default function StaffJobs() {
                     onClick={() => setReviewJob(report)}
                     className="mt-4 flex h-10 w-full items-center justify-center rounded-xl border border-brand-line bg-white text-xs font-bold text-brand-muted hover:bg-brand-paper transition-all cursor-pointer"
                   >
-                    View resolution summary
+                    {t('View resolution summary')}
                   </button>
                 ) : (
                   <div className="mt-4 grid grid-cols-3 gap-2">
@@ -280,7 +282,7 @@ export default function StaffJobs() {
                       onClick={() => setReviewJob(report)}
                       className="flex h-11 items-center justify-center rounded-2xl border border-brand-line bg-white text-xs font-bold text-brand-ink shadow-xs hover:bg-brand-paper active:scale-[0.98] transition-all cursor-pointer"
                     >
-                      <span>Details</span>
+                      <span>{t('Details')}</span>
                     </button>
                     <button
                       type="button"
@@ -288,14 +290,14 @@ export default function StaffJobs() {
                       className="flex h-11 items-center justify-center gap-1 rounded-2xl border border-brand-line bg-white text-xs font-bold text-brand-blue shadow-xs hover:bg-brand-paper active:scale-[0.98] transition-all cursor-pointer"
                     >
                       <Navigation className="size-3.5 rotate-45" />
-                      <span>Navigate</span>
+                      <span>{t('Navigate')}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => openStatus(report)}
                       className="flex h-11 items-center justify-center rounded-2xl bg-brand-blue text-xs font-bold text-white shadow-xs hover:bg-brand-navy active:scale-[0.98] transition-all cursor-pointer"
                     >
-                      <span>Status</span>
+                      <span>{t('Status')}</span>
                     </button>
                   </div>
                 )}
@@ -306,8 +308,8 @@ export default function StaffJobs() {
           {!isLoading && !loadError && jobs.length === 0 && (
             <div className="rounded-3xl border border-dashed border-brand-line p-8 text-center text-xs text-brand-muted">
               {reports.length === 0
-                ? 'Nothing assigned to you yet. Reports appear here once an administrator assigns them.'
-                : 'No jobs found under this filter.'}
+                ? t('Nothing assigned to you yet. Reports appear here once an administrator assigns them.')
+                : t('No jobs found under this filter.')}
             </div>
           )}
         </div>
@@ -342,32 +344,32 @@ export default function StaffJobs() {
 
             <dl className="grid gap-3 pt-4 text-xs">
               {[
-                ['Reported by', reviewJob.residentName || 'Unknown resident'],
-                ['Barangay', reviewJob.barangay ? `Brgy. ${reviewJob.barangay}` : '—'],
+                ['Reported by', reviewJob.residentName || t('Unknown resident')],
+                ['Barangay', reviewJob.barangay ? t('Brgy. {barangay}', { barangay: reviewJob.barangay }) : '—'],
                 ['Landmark', reviewJob.landmark || '—'],
                 ['Pinned location', reviewJob.pinnedLocation || '—'],
-                ['Priority', priorityLabels[reviewJob.priority] ?? 'Medium'],
+                ['Priority', t(priorityLabels[reviewJob.priority] ?? 'Medium')],
                 ['Noticed', reviewJob.startedTime || reviewJob.date || '—'],
                 ['Submitted', reviewJob.date || '—'],
               ].map(([label, value]) => (
                 <div key={label} className="grid grid-cols-[110px_1fr] gap-2">
-                  <dt className="text-[10px] font-bold uppercase tracking-wider text-brand-muted pt-0.5">{label}</dt>
+                  <dt className="text-[10px] font-bold uppercase tracking-wider text-brand-muted pt-0.5">{t(label)}</dt>
                   <dd className="font-semibold text-brand-muted break-words">{value}</dd>
                 </div>
               ))}
             </dl>
 
             <div className="mt-4 border-t border-brand-line pt-3">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">Resident notes</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">{t('Resident notes')}</span>
               <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-brand-muted">
-                {reviewJob.notes || 'No notes were added.'}
+                {reviewJob.notes || t('No notes were added.')}
               </p>
             </div>
 
             {!reviewJob.coordinates && (
               <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-[#fff1a8] p-3 text-[11px] font-semibold text-[#9a6500]">
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-                No GPS pin was captured — navigate by the barangay and landmark.
+                {t('No GPS pin was captured — navigate by the barangay and landmark.')}
               </p>
             )}
 
@@ -384,7 +386,7 @@ export default function StaffJobs() {
                 }}
                 className="mt-4 flex h-10 w-full items-center justify-center rounded-xl bg-brand-blue text-xs font-bold text-white hover:bg-brand-navy cursor-pointer"
               >
-                Update status
+                {t('Update status')}
               </button>
             )}
           </div>
@@ -403,7 +405,7 @@ export default function StaffJobs() {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
                   {statusJob.id}
                 </span>
-                <h3 className="text-base font-extrabold text-brand-navy">Update Job Status</h3>
+                <h3 className="text-base font-extrabold text-brand-navy">{t('Update Job Status')}</h3>
               </div>
               <button
                 type="button"
@@ -438,7 +440,7 @@ export default function StaffJobs() {
                       >
                         {option.key === 'resolved' ? 3 : 2}
                       </span>
-                      <span>{option.label}</span>
+                      <span>{t(option.label)}</span>
                     </span>
                     {current && <Check className="size-4 text-brand-blue" />}
                   </button>
@@ -446,7 +448,7 @@ export default function StaffJobs() {
               })}
               <ResolutionEvidenceInput files={evidenceFiles} onChange={setEvidenceFiles} disabled={isSubmitting} />
               {isSubmitting && (
-                <p className="pt-1 text-center text-[11px] font-semibold text-brand-muted">Updating…</p>
+                <p className="pt-1 text-center text-[11px] font-semibold text-brand-muted">{t('Updating…')}</p>
               )}
             </div>
           </div>
@@ -461,7 +463,7 @@ export default function StaffJobs() {
             role="dialog"
           >
             <div className="flex items-center justify-between border-b border-brand-line pb-3">
-              <h3 className="text-base font-extrabold text-brand-navy">Directions to Site</h3>
+              <h3 className="text-base font-extrabold text-brand-navy">{t('Directions to Site')}</h3>
               <button
                 type="button"
                 onClick={() => setNavJob(null)}
@@ -473,15 +475,17 @@ export default function StaffJobs() {
 
             <div className="pt-4 space-y-3 text-xs">
               <div className="rounded-2xl border border-brand-line bg-brand-paper p-3.5">
-                <span className="text-[10px] font-bold uppercase text-brand-muted">Destination</span>
+                <span className="text-[10px] font-bold uppercase text-brand-muted">{t('Destination')}</span>
                 <p className="font-extrabold text-brand-navy text-sm mt-0.5">
-                  {navJob.barangay ? `Brgy. ${navJob.barangay}` : navJob.location}
+                  {navJob.barangay ? t('Brgy. {barangay}', { barangay: navJob.barangay }) : navJob.location}
                   {navJob.pinnedLocation ? ` · ${navJob.pinnedLocation}` : ''}
                 </p>
                 <p className="text-brand-muted mt-1 font-medium">
                   {navJob.coordinates
-                    ? `Using the GPS pin the resident captured${navJob.coordinates.accuracy ? ` (±${Math.round(navJob.coordinates.accuracy)} m)` : ''}.`
-                    : 'No GPS pin — directions search the barangay name.'}
+                    ? t('Using the GPS pin the resident captured{accuracy}.', {
+                        accuracy: navJob.coordinates.accuracy ? ` (±${Math.round(navJob.coordinates.accuracy)} m)` : '',
+                      })
+                    : t('No GPS pin — directions search the barangay name.')}
                 </p>
               </div>
 
@@ -491,7 +495,7 @@ export default function StaffJobs() {
                   className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-brand-blue py-2.5 font-bold text-white shadow-xs hover:bg-brand-navy"
                 >
                   <Navigation className="size-3.5" />
-                  <span>Navigate in app</span>
+                  <span>{t('Navigate in app')}</span>
                 </a>
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination(navJob))}`}
@@ -500,7 +504,7 @@ export default function StaffJobs() {
                   className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-brand-line py-2.5 font-bold text-brand-ink hover:bg-brand-paper"
                 >
                   <ExternalLink className="size-3.5" />
-                  <span>Google Maps</span>
+                  <span>{t('Google Maps')}</span>
                 </a>
               </div>
             </div>

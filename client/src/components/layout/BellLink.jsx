@@ -1,10 +1,12 @@
 import { Bell } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useLanguage } from '../../lib/i18n'
 import { countUnreadNotifications } from '../../lib/notifications'
 
 // Bell button for resident headers: opens the notifications page and shows the
 // live unread count (stored notifications + new advisories).
 export function BellLink() {
+  const { t } = useLanguage()
   const [unread, setUnread] = useState(0)
 
   useEffect(() => {
@@ -22,12 +24,12 @@ export function BellLink() {
   return (
     <a
       href="/community/notifications"
-      className="relative grid size-9 place-items-center rounded-xl border border-brand-line bg-white text-brand-muted transition-colors hover:bg-brand-paper sm:size-10"
-      aria-label={unread > 0 ? `Notifications (${unread} unread)` : 'Notifications'}
+      className="relative grid size-9 place-items-center rounded-xl border border-brand-line bg-white text-brand-navy shadow-xs transition-colors hover:bg-brand-paper sm:size-10 no-underline"
+      aria-label={unread > 0 ? t('Notifications ({count} unread)', { count: unread }) : t('Notifications')}
     >
-      <Bell className="size-[17px] sm:size-[19px]" aria-hidden="true" />
+      <Bell className="size-4.5 text-brand-navy" aria-hidden="true" />
       {unread > 0 && (
-        <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-brand-yellow px-0.5 text-[9px] font-black text-brand-navy ring-2 ring-white">
+        <span className="absolute -right-1.5 -top-1.5 grid min-w-4.5 h-4.5 place-items-center rounded-full bg-brand-yellow px-1 text-[10px] font-black text-brand-navy shadow-xs ring-2 ring-white">
           {unread > 9 ? '9+' : unread}
         </span>
       )}

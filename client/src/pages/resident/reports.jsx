@@ -2,6 +2,7 @@ import { ChevronRight, ClipboardList, FilePlus2, MapPin, Search } from 'lucide-r
 import { useEffect, useMemo, useState } from 'react'
 import { PortalMobileNav, PortalMark } from '../../components/layout/PortalMobileNav'
 import { BellLink } from '../../components/layout/BellLink'
+import { useLanguage } from '../../lib/i18n'
 import { loadReports } from '../../lib/reports'
 import { ReportStatusBadge, ReportTimeline } from '../../components/resident/reportView'
 
@@ -12,26 +13,41 @@ const filters = [
   { label: 'Resolved', matches: (report) => report.status === 'Resolved' },
 ]
 
+const statusSummary = {
+  pending: 'Waiting for verification.',
+  verified: 'The report was verified and is being coordinated.',
+  resolved: 'This report has been resolved.',
+  rejected: 'An administrator rejected this report.',
+}
+
 function ReportCard({ report }) {
+  const { t, locale } = useLanguage()
+  const time = new Date(report.createdAt).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
+  const summary = t(statusSummary[report.tone] ?? statusSummary.pending)
+
   return (
     <article className="rounded-2xl border border-brand-line bg-white p-3.5 shadow-[0_6px_18px_rgba(23,43,104,0.04)] sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="max-w-[22ch] text-[13px] font-extrabold leading-tight text-brand-navy sm:text-sm">{report.title}</h3>
+          <h3 className="max-w-[22ch] text-[13px] font-extrabold leading-tight text-brand-navy sm:text-sm">
+            {t('{type} in Brgy. {barangay}', { type: t(report.outageType), barangay: report.barangay })}
+          </h3>
           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-medium text-brand-muted sm:text-xs">
-            <span className="inline-flex items-center gap-1"><MapPin className="size-3 text-brand-blue" aria-hidden="true" />{report.location}</span>
+            <span className="inline-flex items-center gap-1"><MapPin className="size-3 text-brand-blue" aria-hidden="true" />{t('Brgy. {barangay}', { barangay: report.barangay })}</span>
             <span>·</span>
-            <span>{report.date}</span>
+            <span>{new Date(report.createdAt).toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
           </div>
         </div>
         <ReportStatusBadge tone={report.tone} status={report.status} />
       </div>
-      <p className="mt-3 max-w-[48ch] text-[11px] leading-4 text-brand-muted sm:text-sm sm:leading-6">{report.description}</p>
+      <p className="mt-3 max-w-[48ch] text-[11px] leading-4 text-brand-muted sm:text-sm sm:leading-6">
+        {t('Reported at {time}. {summary}', { time, summary })}
+      </p>
       <ReportTimeline progress={report.progress} />
       <div className="mt-3 flex items-center justify-between border-t border-brand-line pt-2.5">
         <span className="text-[9px] font-semibold tracking-[.04em] text-brand-muted sm:text-[11px]">{report.id}</span>
         <a href={`/community/reports/${report.id}`} className="inline-flex items-center gap-0.5 text-[10px] font-bold text-brand-blue no-underline hover:text-brand-navy sm:text-xs">
-          View details <ChevronRight className="size-3" aria-hidden="true" />
+          {t('View details')} <ChevronRight className="size-3" aria-hidden="true" />
         </a>
       </div>
     </article>
@@ -39,6 +55,7 @@ function ReportCard({ report }) {
 }
 
 export default function ResidentReports() {
+  const { t } = useLanguage()
   const [reports, setReports] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -97,8 +114,8 @@ export default function ResidentReports() {
 
       <main className="mx-auto max-w-3xl px-3 pb-32 pt-5 sm:px-5 sm:pt-8 md:pb-10">
         <div className="mb-4">
-          <h1 className="text-[clamp(1.7rem,6vw,2.4rem)] font-extrabold leading-[1.05] tracking-[-.045em] text-brand-navy">My Reports</h1>
-          <p className="mt-1 text-[11px] leading-4 text-brand-muted sm:mt-2 sm:text-sm sm:leading-6">Track your submitted reports and their status.</p>
+          <h1 className="text-[clamp(1.7rem,6vw,2.4rem)] font-extrabold leading-[1.05] tracking-[-.045em] text-brand-navy">{t('My Reports')}</h1>
+          <p className="mt-1 text-[11px] leading-4 text-brand-muted sm:mt-2 sm:text-sm sm:leading-6">{t('Track your submitted reports and their status.')}</p>
         </div>
 
         <div className="mb-3 grid grid-cols-3 gap-2 sm:mb-5 sm:gap-3">
@@ -109,39 +126,39 @@ export default function ResidentReports() {
           ].map(([value, label, color]) => (
             <div key={label} className="rounded-xl border border-brand-line bg-white px-3 py-2.5 sm:rounded-2xl sm:px-4 sm:py-3">
               <strong className={`block text-lg font-extrabold leading-none ${color}`}>{value}</strong>
-              <span className="mt-1 block text-[9px] font-semibold text-brand-muted sm:text-[11px]">{label}</span>
+              <span className="mt-1 block text-[9px] font-semibold text-brand-muted sm:text-[11px]">{t(label)}</span>
             </div>
           ))}
         </div>
 
         <a href="/community/reports/new" className="group mb-3 flex min-h-9 items-center justify-between gap-3 rounded-xl bg-brand-blue px-3 text-white no-underline shadow-[0_7px_16px_rgba(36,68,154,0.2)] transition-transform hover:-translate-y-0.5 sm:mb-5 sm:min-h-12 sm:rounded-2xl sm:px-4">
-          <span className="flex items-center gap-2 text-[11px] font-bold sm:text-sm"><span className="grid size-5 place-items-center rounded-md bg-brand-yellow text-brand-navy sm:size-7 sm:rounded-lg"><FilePlus2 className="size-3 sm:size-4" strokeWidth={2.5} aria-hidden="true" /></span>Report an interruption</span>
+          <span className="flex items-center gap-2 text-[11px] font-bold sm:text-sm"><span className="grid size-5 place-items-center rounded-md bg-brand-yellow text-brand-navy sm:size-7 sm:rounded-lg"><FilePlus2 className="size-3 sm:size-4" strokeWidth={2.5} aria-hidden="true" /></span>{t('Report an interruption')}</span>
           <ChevronRight className="size-4 opacity-90" aria-hidden="true" />
         </a>
 
         <section aria-labelledby="report-history-heading">
           <div className="mb-2 flex items-center justify-between gap-3 sm:mb-3">
-            <h2 id="report-history-heading" className="text-base font-extrabold tracking-[-.02em] text-brand-navy sm:text-lg">Report history</h2>
-            <span className="text-[10px] font-semibold text-brand-muted sm:text-xs">{isLoading ? 'Loading…' : loadError ? 'Unavailable' : `${visibleReports.length} reports`}</span>
+            <h2 id="report-history-heading" className="text-base font-extrabold tracking-[-.02em] text-brand-navy sm:text-lg">{t('Report history')}</h2>
+            <span className="text-[10px] font-semibold text-brand-muted sm:text-xs">{isLoading ? t('Loading…') : loadError ? t('Unavailable') : t('{count} reports', { count: visibleReports.length })}</span>
           </div>
           <label className="mb-2 flex h-9 items-center gap-2 rounded-xl border border-brand-line bg-white px-3 text-[11px] text-brand-muted focus-within:border-brand-blue focus-within:ring-2 focus-within:ring-[e5e9f6] sm:mb-3 sm:h-11 sm:text-sm">
             <Search className="size-3.5 sm:size-4" aria-hidden="true" />
-            <span className="sr-only">Search reports</span>
-            <input className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-brand-muted" type="search" placeholder="Search by place or report ID" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <span className="sr-only">{t('Search reports')}</span>
+            <input className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-brand-muted" type="search" placeholder={t('Search by place or report ID')} value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
           <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 sm:gap-2">
             {filters.map(({ label }) => {
               const count = label === 'All' ? reports.length : reports.filter((report) => report.status === label).length
-              return <button key={label} type="button" onClick={() => setFilter(label)} className={`shrink-0 rounded-full px-2.5 py-1.5 text-[10px] font-bold transition-colors sm:px-3 sm:text-xs ${filter === label ? 'bg-brand-blue text-white' : 'border border-brand-line bg-white text-brand-muted hover:border-brand-line'}`}>{label} <span className="opacity-80">{count}</span></button>
+              return <button key={label} type="button" onClick={() => setFilter(label)} className={`shrink-0 rounded-full px-2.5 py-1.5 text-[10px] font-bold transition-colors sm:px-3 sm:text-xs ${filter === label ? 'bg-brand-blue text-white' : 'border border-brand-line bg-white text-brand-muted hover:border-brand-line'}`}>{t(label)} <span className="opacity-80">{count}</span></button>
             })}
           </div>
 
           <div className="space-y-2.5 sm:space-y-3">
-            {isLoading && <div className="rounded-2xl border border-brand-line bg-white px-5 py-10 text-center text-sm font-semibold text-brand-muted">Loading your reports…</div>}
+            {isLoading && <div className="rounded-2xl border border-brand-line bg-white px-5 py-10 text-center text-sm font-semibold text-brand-muted">{t('Loading your reports…')}</div>}
             {!isLoading && loadError && (
               <div className="rounded-2xl border border-[#f3c7c3] bg-white px-5 py-10 text-center">
-                <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
-                <button type="button" className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4" onClick={retryLoad}>Try again</button>
+                <p className="text-sm font-bold text-[#b42318]">{t(loadError)}</p>
+                <button type="button" className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4" onClick={retryLoad}>{t('Try again')}</button>
               </div>
             )}
             {!isLoading && !loadError && visibleReports.map((report) => <ReportCard key={report.id} report={report} />)}
@@ -150,13 +167,13 @@ export default function ResidentReports() {
                 <ClipboardList className="mx-auto size-8 text-brand-muted" aria-hidden="true" />
                 {reports.length === 0 ? (
                   <>
-                    <p className="mt-3 text-sm font-bold text-brand-muted">You haven&apos;t submitted any reports yet.</p>
-                    <a href="/community/reports/new" className="mt-2 inline-block text-xs font-bold text-brand-blue underline underline-offset-4">Report an interruption</a>
+                    <p className="mt-3 text-sm font-bold text-brand-muted">{t("You haven't submitted any reports yet.")}</p>
+                    <a href="/community/reports/new" className="mt-2 inline-block text-xs font-bold text-brand-blue underline underline-offset-4">{t('Report an interruption')}</a>
                   </>
                 ) : (
                   <>
-                    <p className="mt-3 text-sm font-bold text-brand-muted">No reports match this filter.</p>
-                    <button type="button" className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4" onClick={() => { setFilter('All'); setQuery('') }}>Show all reports</button>
+                    <p className="mt-3 text-sm font-bold text-brand-muted">{t('No reports match this filter.')}</p>
+                    <button type="button" className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4" onClick={() => { setFilter('All'); setQuery('') }}>{t('Show all reports')}</button>
                   </>
                 )}
               </div>
