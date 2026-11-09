@@ -1,5 +1,6 @@
-import { ArrowRight, Eye, EyeOff, LoaderCircle, Lock, Mail, Zap } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, LoaderCircle, Lock, Mail } from 'lucide-react'
 import { useState } from 'react'
+import powerWatchLogo from '../../../assets/logo.svg'
 import { AdminAuthLayout } from '../../../components/auth/AdminAuthLayout'
 import { Input } from '../../../components/ui/input'
 import { supabase } from '../../../lib/supabase'
@@ -64,9 +65,7 @@ function AdminLogin() {
       <div className="w-full rounded-lg sm:rounded-xl border border-brand-line bg-white p-6 sm:p-8 md:p-10  transition-all">
         {/* Brand Header */}
         <div className="mb-5 sm:mb-6 flex items-center justify-center gap-2.5 select-none">
-          <span className="grid size-8 sm:size-9 place-items-center rounded-xl bg-brand-yellow text-brand-navy shadow-xs">
-            <Zap className="size-4.5 sm:size-5 fill-current" aria-hidden="true" />
-          </span>
+          <img src={powerWatchLogo} alt="Valencia PowerWatch" className="size-8 sm:size-9 rounded-xl object-contain" />
           <span className="text-lg sm:text-xl font-bold tracking-tight text-brand-navy">
             PowerWatch
           </span>

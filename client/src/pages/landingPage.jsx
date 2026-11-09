@@ -14,9 +14,9 @@ import {
   Smartphone,
   Volume2,
   X,
-  Zap,
 } from 'lucide-react'
 import { useState } from 'react'
+import powerWatchLogo from '../assets/logo.svg'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
 
 const features = [
@@ -113,9 +113,7 @@ function Header() {
           href="/"
           aria-label="Valencia PowerWatch home"
         >
-          <span className="grid size-9 place-items-center rounded-full bg-brand-yellow text-[#111c38] shadow-sm">
-            <Zap className="size-5 fill-current" aria-hidden="true" />
-          </span>
+          <img src={powerWatchLogo} alt="Valencia PowerWatch" className="size-9 shrink-0 rounded-xl" />
           <span>PowerWatch</span>
         </a>
 
@@ -167,9 +165,9 @@ function Header() {
           </a>
           <a
             className="inline-flex h-11 items-center justify-center rounded-full bg-[#24449a] px-6 text-sm font-bold text-white no-underline transition-colors hover:bg-[#1b357a]"
-            href="/login"
+            href="/admin/login"
           >
-            Open the app
+            Admin login
           </a>
         </nav>
       </div>
@@ -179,80 +177,78 @@ function Header() {
 
 function PhonePreview() {
   return (
-    <div className="relative mx-auto flex w-full max-w-[440px] items-center justify-center py-4">
+    <div className="relative mx-auto flex w-full max-w-[540px] items-center justify-center py-6 sm:py-10">
       {/* Subtle concentric radar circles */}
       <div
-        className="pointer-events-none absolute size-[330px] rounded-full border border-[#dce3f4] sm:size-[390px]"
+        className="pointer-events-none absolute size-[400px] rounded-full border border-[#dce3f4] sm:size-[480px] lg:size-[520px]"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute size-[270px] rounded-full border border-dashed border-[#cfd8ee] sm:size-[320px]"
+        className="pointer-events-none absolute size-[320px] rounded-full border border-dashed border-[#cfd8ee] sm:size-[380px] lg:size-[420px]"
         aria-hidden="true"
       />
 
       {/* Floating badge: Report verified */}
-      <div className="absolute left-0 top-[24%] z-20 inline-flex items-center gap-2 rounded-full border border-[#e6eaf2] bg-white px-3.5 py-2 text-xs font-bold text-[#111c38] shadow-[0_10px_25px_rgba(17,28,56,0.1)] sm:-left-3">
-        <span className="grid size-4 place-items-center rounded-full bg-emerald-50 text-emerald-600">
-          <Check className="size-3 stroke-[2.5]" aria-hidden="true" />
+      <div className="absolute -left-2 top-[22%] z-20 inline-flex items-center gap-2.5 rounded-full border border-[#e6eaf2] bg-white px-4 py-2.5 text-xs font-bold text-[#111c38] shadow-[0_12px_30px_rgba(17,28,56,0.12)] sm:-left-6 sm:text-sm">
+        <span className="grid size-5 place-items-center rounded-full bg-emerald-50 text-emerald-600">
+          <Check className="size-3.5 stroke-[2.5]" aria-hidden="true" />
         </span>
         <span>Report verified</span>
       </div>
 
       {/* Phone Device Frame */}
-      <div className="relative z-10 w-[262px] rounded-[40px] border-[7px] border-[#111c38] bg-white p-4 shadow-[0_24px_60px_rgba(17,28,56,0.16)] sm:w-[278px]">
+      <div className="relative z-10 w-[310px] rounded-[48px] border-[8px] border-[#111c38] bg-white p-5 shadow-[0_28px_70px_rgba(17,28,56,0.18)] sm:w-[340px]">
         {/* App Header inside Phone */}
-        <div className="mb-3.5 flex items-center gap-2">
-          <span className="grid size-6 place-items-center rounded-full bg-brand-yellow text-[#111c38]">
-            <Zap className="size-3.5 fill-current" aria-hidden="true" />
-          </span>
-          <span className="text-xs font-extrabold text-[#111c38]">PowerWatch</span>
+        <div className="mb-4 flex items-center gap-2.5">
+          <img src={powerWatchLogo} alt="" className="size-7 shrink-0 rounded-lg" />
+          <span className="text-sm font-extrabold text-[#111c38]">PowerWatch</span>
         </div>
 
-        <div className="mb-3.5">
-          <div className="text-base font-extrabold tracking-[-0.02em] text-[#111c38]">Power updates</div>
-          <div className="text-[11px] text-[#647087]">Brgy. Guinuyoran</div>
+        <div className="mb-4">
+          <div className="text-lg font-extrabold tracking-[-0.02em] text-[#111c38]">Power updates</div>
+          <div className="text-xs text-[#647087]">Brgy. Guinuyoran</div>
         </div>
 
         {/* Active Interruption Card inside Phone */}
-        <div className="mb-3 rounded-2xl bg-[#24449a] p-3.5 text-white">
-          <span className="mb-2 inline-block rounded-full bg-brand-yellow px-2.5 py-0.5 text-[10px] font-extrabold text-[#111c38]">
+        <div className="mb-4 rounded-2xl bg-[#24449a] p-4 text-white shadow-sm">
+          <span className="mb-2.5 inline-block rounded-full bg-brand-yellow px-3 py-0.5 text-[11px] font-extrabold text-[#111c38]">
             Active interruption
           </span>
-          <div className="mb-1.5 text-xs font-bold leading-snug text-white">
+          <div className="mb-2 text-sm font-bold leading-snug text-white">
             Interruption reported in your area
           </div>
-          <p className="mb-3 text-[10px] leading-relaxed text-blue-100">
+          <p className="mb-3.5 text-xs leading-relaxed text-blue-100">
             Verified at 8:42 AM. A response team is being arranged.
           </p>
-          <span className="inline-block rounded-full bg-white px-3 py-1 text-[10px] font-bold text-[#111c38]">
+          <span className="inline-block rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-[#111c38]">
             View on map
           </span>
         </div>
 
         {/* Primary CTA inside Phone */}
-        <div className="mb-3 rounded-xl bg-brand-yellow py-2.5 text-center text-[11px] font-extrabold text-[#111c38]">
+        <div className="mb-4 rounded-2xl bg-brand-yellow py-3 text-center text-xs font-extrabold text-[#111c38] shadow-xs">
           Report an interruption
         </div>
 
         {/* Bottom Quick Tiles inside Phone */}
-        <div className="mb-6 grid grid-cols-3 gap-1.5 text-center">
-          <div className="rounded-xl border border-[#e6eaf2] bg-[#f8f9fc] px-1.5 py-2.5 text-[10px] font-bold leading-tight text-[#111c38]">
+        <div className="mb-6 grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-2xl border border-[#e6eaf2] bg-[#f8f9fc] px-2 py-3 text-[11px] font-bold leading-tight text-[#111c38]">
             Outage
             <br />
             map
           </div>
-          <div className="rounded-xl border border-[#e6eaf2] bg-[#f8f9fc] px-1.5 py-2.5 text-[10px] font-bold leading-tight text-[#111c38]">
+          <div className="rounded-2xl border border-[#e6eaf2] bg-[#f8f9fc] px-2 py-3 text-[11px] font-bold leading-tight text-[#111c38]">
             Scheduled
           </div>
-          <div className="rounded-xl border border-[#e6eaf2] bg-[#f8f9fc] px-1.5 py-2.5 text-[10px] font-bold leading-tight text-[#111c38]">
+          <div className="rounded-2xl border border-[#e6eaf2] bg-[#f8f9fc] px-2 py-3 text-[11px] font-bold leading-tight text-[#111c38]">
             My reports
           </div>
         </div>
       </div>
 
       {/* Floating badge: Crew en route */}
-      <div className="absolute bottom-[16%] right-0 z-20 inline-flex items-center gap-2 rounded-full border border-[#e6eaf2] bg-white px-3.5 py-2 text-xs font-bold text-[#111c38] shadow-[0_10px_25px_rgba(17,28,56,0.1)] sm:-right-2">
-        <Navigation className="size-3.5 text-[#24449a]" aria-hidden="true" />
+      <div className="absolute -right-2 bottom-[14%] z-20 inline-flex items-center gap-2.5 rounded-full border border-[#e6eaf2] bg-white px-4 py-2.5 text-xs font-bold text-[#111c38] shadow-[0_12px_30px_rgba(17,28,56,0.12)] sm:-right-6 sm:text-sm">
+        <Navigation className="size-4 text-[#24449a]" aria-hidden="true" />
         <span>Crew en route</span>
       </div>
     </div>
@@ -361,46 +357,30 @@ function LandingPage() {
       )}
 
       <main>
-        {/* Hero Section */}
-        <section className="bg-[#f2f5fc] py-14 sm:py-20 lg:py-24">
-          <div className="mx-auto grid w-[min(1180px,calc(100%-32px))] grid-cols-1 items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
-            <div>
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-[#e3e9f8] px-4 py-2 text-xs font-bold text-[#24449a] sm:text-sm">
+        {/* Hero Section - Full Viewport Screen Height */}
+        <section className="relative flex min-h-[calc(100vh-76px)] w-full items-center bg-[#f2f5fc] py-12 lg:py-0">
+          <div className="mx-auto grid w-[min(1240px,calc(100%-40px))] grid-cols-1 items-center gap-10 py-4 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12 xl:gap-16">
+            <div className="max-w-[640px]">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#e3e9f8] px-4 py-1.5 text-xs font-bold text-[#24449a] sm:text-sm">
                 <MapPin className="size-4" aria-hidden="true" />
                 <span>Valencia City, Bukidnon</span>
               </div>
 
-              <h1 className="mb-6 max-w-[620px] text-[clamp(42px,5.8vw,64px)] font-extrabold leading-[1.05] tracking-[-0.035em] text-[#111c38]">
+              <h1 className="mb-5 text-[clamp(38px,4.8vw,58px)] font-extrabold leading-[1.06] tracking-[-0.03em] text-[#111c38]">
                 Report power interruptions.{' '}
                 <span className="text-[#24449a]">Stay informed.</span>
               </h1>
 
-              <p className="mb-8 max-w-[52ch] text-lg leading-[1.6] text-[#555b66] sm:text-xl">
+              <p className="mb-8 max-w-[50ch] text-base leading-[1.65] text-[#555b66] sm:text-lg">
                 PowerWatch connects residents, field crews and administrators, so every outage report is verified, tracked and answered in one place.
               </p>
 
-              {/* Primary Hero Buttons */}
-              <div className="mb-5 flex flex-wrap items-center gap-3.5">
-                <a
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-brand-yellow px-7 text-sm font-extrabold text-[#111c38] no-underline transition-colors hover:bg-[#ffe033] sm:text-base"
-                  href="/community/submit-report"
-                >
-                  Report an outage
-                </a>
-                <a
-                  className="inline-flex h-12 items-center justify-center rounded-full border border-[#d8dce6] bg-white px-7 text-sm font-bold text-[#111c38] no-underline transition-colors hover:bg-[#f7f8fb] sm:text-base"
-                  href="/community/map"
-                >
-                  View outage map
-                </a>
-              </div>
-
               {/* Install the App Row - Direct Download Trigger */}
-              <div className="flex flex-wrap items-center gap-4 pt-2">
+              <div className="flex flex-wrap items-center gap-4">
                 <button
                   type="button"
                   onClick={handleDownloadClick}
-                  className="inline-flex h-12 cursor-pointer items-center justify-center gap-2.5 rounded-full bg-[#24449a] px-6 text-sm font-bold text-white transition-colors hover:bg-[#1b357a] sm:text-base"
+                  className="inline-flex h-12 cursor-pointer items-center justify-center gap-2.5 rounded-full bg-[#24449a] px-7 text-sm font-bold text-white shadow-md shadow-[#24449a]/20 transition-all hover:bg-[#1b357a] hover:shadow-lg sm:text-base"
                 >
                   {isInstalled ? (
                     <>
@@ -414,7 +394,7 @@ function LandingPage() {
                     </>
                   )}
                 </button>
-                <p className="m-0 max-w-[36ch] text-sm leading-snug text-[#555b66]">
+                <p className="m-0 max-w-[34ch] text-xs leading-snug text-[#555b66] sm:text-sm">
                   For residents and field staff. Works on Android and iPhone, no app store needed.
                 </p>
               </div>
@@ -425,39 +405,39 @@ function LandingPage() {
         </section>
 
         {/* Features Section */}
-        <section id="features" className="bg-white py-16 sm:py-24" aria-labelledby="features-heading">
-          <div className="mx-auto w-[min(1180px,calc(100%-32px))]">
-            <div className="mb-12 max-w-[720px]">
-              <span className="mb-4 inline-block rounded-full bg-[#e3e9f8] px-4 py-1.5 text-xs font-bold text-[#24449a] sm:text-sm">
+        <section id="features" className="bg-white py-14 sm:py-20" aria-labelledby="features-heading">
+          <div className="mx-auto w-[min(1240px,calc(100%-40px))]">
+            <div className="mb-10 max-w-[680px]">
+              <span className="mb-3.5 inline-block rounded-full bg-[#e3e9f8] px-3.5 py-1 text-xs font-bold text-[#24449a] sm:text-sm">
                 Features
               </span>
               <h2
                 id="features-heading"
-                className="mb-4 text-[clamp(32px,4.2vw,48px)] font-extrabold leading-[1.1] tracking-[-0.03em] text-[#111c38]"
+                className="mb-3 text-[clamp(28px,3.5vw,42px)] font-extrabold leading-[1.12] tracking-[-0.025em] text-[#111c38]"
               >
                 Everything residents need during a power interruption
               </h2>
-              <p className="m-0 text-base leading-[1.6] text-[#555b66] sm:text-lg">
+              <p className="m-0 text-sm leading-[1.6] text-[#555b66] sm:text-base">
                 Report quickly, see what is happening nearby, and follow every update.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {features.map(({ icon: Icon, title, text }) => (
                 <article
                   key={title}
-                  className="rounded-2xl border border-[#e6eaf2] bg-white p-7"
+                  className="rounded-2xl border border-[#e6eaf2] bg-white p-6 transition-shadow hover:shadow-md"
                 >
                   <span
-                    className="mb-5 inline-grid size-12 place-items-center rounded-xl bg-[#eef2fb] text-[#24449a]"
+                    className="mb-4 inline-grid size-11 place-items-center rounded-xl bg-[#eef2fb] text-[#24449a]"
                     aria-hidden="true"
                   >
-                    <Icon className="size-6" strokeWidth={2} />
+                    <Icon className="size-5.5" strokeWidth={2} />
                   </span>
-                  <h3 className="mb-2.5 text-lg font-bold tracking-[-0.015em] text-[#111c38] sm:text-xl">
+                  <h3 className="mb-2 text-base font-bold tracking-[-0.015em] text-[#111c38] sm:text-lg">
                     {title}
                   </h3>
-                  <p className="m-0 text-sm leading-[1.6] text-[#555b66]">{text}</p>
+                  <p className="m-0 text-xs leading-[1.6] text-[#555b66] sm:text-sm">{text}</p>
                 </article>
               ))}
             </div>
@@ -467,33 +447,33 @@ function LandingPage() {
         {/* How It Works Section */}
         <section
           id="how-it-works"
-          className="bg-[#f2f5fc] py-16 sm:py-24"
+          className="bg-[#f2f5fc] py-14 sm:py-20"
           aria-labelledby="process-heading"
         >
-          <div className="mx-auto w-[min(1180px,calc(100%-32px))]">
-            <div className="mb-12 max-w-[700px]">
-              <span className="mb-4 inline-block rounded-full bg-[#e3e9f8] px-4 py-1.5 text-xs font-bold text-[#24449a] sm:text-sm">
+          <div className="mx-auto w-[min(1240px,calc(100%-40px))]">
+            <div className="mb-10 max-w-[680px]">
+              <span className="mb-3.5 inline-block rounded-full bg-[#e3e9f8] px-3.5 py-1 text-xs font-bold text-[#24449a] sm:text-sm">
                 How it works
               </span>
               <h2
                 id="process-heading"
-                className="m-0 text-[clamp(32px,4.2vw,48px)] font-extrabold leading-[1.1] tracking-[-0.03em] text-[#111c38]"
+                className="m-0 text-[clamp(28px,3.5vw,42px)] font-extrabold leading-[1.12] tracking-[-0.025em] text-[#111c38]"
               >
                 From report to restoration update
               </h2>
             </div>
 
-            <ol className="m-0 grid list-none grid-cols-1 gap-6 p-0 sm:grid-cols-2 lg:grid-cols-4">
+            <ol className="m-0 grid list-none grid-cols-1 gap-5 p-0 sm:grid-cols-2 lg:grid-cols-4">
               {steps.map(({ number, title, text }) => (
                 <li
                   key={title}
-                  className="rounded-2xl border border-[#e6eaf2] bg-white p-7"
+                  className="rounded-2xl border border-[#e6eaf2] bg-white p-6 transition-shadow hover:shadow-md"
                 >
-                  <span className="mb-5 inline-grid size-10 place-items-center rounded-full bg-brand-yellow text-sm font-extrabold text-[#111c38]">
+                  <span className="mb-4 inline-grid size-9 place-items-center rounded-full bg-brand-yellow text-xs font-extrabold text-[#111c38]">
                     {number}
                   </span>
-                  <h3 className="mb-2 text-lg font-bold text-[#111c38] sm:text-xl">{title}</h3>
-                  <p className="m-0 text-sm leading-[1.6] text-[#555b66]">{text}</p>
+                  <h3 className="mb-2 text-base font-bold text-[#111c38] sm:text-lg">{title}</h3>
+                  <p className="m-0 text-xs leading-[1.6] text-[#555b66] sm:text-sm">{text}</p>
                 </li>
               ))}
             </ol>
@@ -501,114 +481,75 @@ function LandingPage() {
         </section>
 
         {/* Built For Each Role Section */}
-        <section id="portals" className="bg-white py-16 sm:py-24" aria-labelledby="portals-heading">
-          <div className="mx-auto w-[min(1180px,calc(100%-32px))]">
-            <div className="mb-12 max-w-[720px]">
-              <span className="mb-4 inline-block rounded-full bg-[#e3e9f8] px-4 py-1.5 text-xs font-bold text-[#24449a] sm:text-sm">
+        <section id="portals" className="bg-white py-14 sm:py-20" aria-labelledby="portals-heading">
+          <div className="mx-auto w-[min(1240px,calc(100%-40px))]">
+            <div className="mb-10 max-w-[680px]">
+              <span className="mb-3.5 inline-block rounded-full bg-[#e3e9f8] px-3.5 py-1 text-xs font-bold text-[#24449a] sm:text-sm">
                 One app, one admin portal
               </span>
               <h2
                 id="portals-heading"
-                className="mb-4 text-[clamp(32px,4.2vw,48px)] font-extrabold leading-[1.1] tracking-[-0.03em] text-[#111c38]"
+                className="mb-3 text-[clamp(28px,3.5vw,42px)] font-extrabold leading-[1.12] tracking-[-0.025em] text-[#111c38]"
               >
                 Built for each role
               </h2>
-              <p className="m-0 text-base leading-[1.6] text-[#555b66] sm:text-lg">
+              <p className="m-0 text-sm leading-[1.6] text-[#555b66] sm:text-base">
                 Residents and field staff use the same app and the same sign-in page. The screens you see depend on your account.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
               {/* Residents Card */}
-              <article className="flex flex-col justify-between rounded-2xl border border-[#e6eaf2] bg-white p-7 sm:p-8">
+              <article className="flex flex-col justify-between rounded-2xl border border-[#e6eaf2] bg-white p-6 sm:p-7">
                 <div>
                   <div className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[#24449a]">
                     RESIDENTS · IN THE APP
                   </div>
-                  <h3 className="mb-4 text-xl font-extrabold tracking-[-0.02em] text-[#111c38] sm:text-2xl">
+                  <h3 className="mb-3 text-lg font-extrabold tracking-[-0.02em] text-[#111c38] sm:text-xl">
                     Report and follow outages
                   </h3>
-                  <ul className="mb-6 list-none space-y-3 p-0 text-sm text-[#4a5568]">
+                  <ul className="mb-6 list-none space-y-2.5 p-0 text-xs text-[#4a5568] sm:text-sm">
                     <li>Report an outage with GPS and photos</li>
                     <li>Follow your report history</li>
                     <li>View outages and announcements</li>
                   </ul>
                 </div>
-
-                <div className="flex flex-wrap items-center gap-3 pt-3">
-                  <a
-                    href="/community"
-                    className="inline-flex h-11 items-center justify-center rounded-full bg-[#24449a] px-6 text-sm font-bold text-white no-underline transition-colors hover:bg-[#1b357a]"
-                  >
-                    Open resident portal
-                  </a>
-                  {!isInstalled && (
-                    <button
-                      type="button"
-                      onClick={handleDownloadClick}
-                      className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-full border border-[#d8dce6] bg-white px-6 text-sm font-bold text-[#24449a] transition-colors hover:bg-[#f2f5fc]"
-                    >
-                      <Download className="size-4" aria-hidden="true" />
-                      <span>Download app</span>
-                    </button>
-                  )}
-                </div>
               </article>
 
               {/* Field Staff Card */}
-              <article className="flex flex-col justify-between rounded-2xl border border-[#e6eaf2] bg-white p-7 sm:p-8">
+              <article className="flex flex-col justify-between rounded-2xl border border-[#e6eaf2] bg-white p-6 sm:p-7">
                 <div>
                   <div className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[#24449a]">
                     FIELD STAFF · IN THE APP
                   </div>
-                  <h3 className="mb-4 text-xl font-extrabold tracking-[-0.02em] text-[#111c38] sm:text-2xl">
+                  <h3 className="mb-3 text-lg font-extrabold tracking-[-0.02em] text-[#111c38] sm:text-xl">
                     Handle assigned jobs
                   </h3>
-                  <ul className="mb-4 list-none space-y-3 p-0 text-sm text-[#4a5568]">
+                  <ul className="mb-3 list-none space-y-2.5 p-0 text-xs text-[#4a5568] sm:text-sm">
                     <li>See assigned jobs and stages</li>
                     <li>Navigate to the reported location</li>
                     <li>Add notes and upload evidence</li>
                   </ul>
-                  <p className="mb-6 text-xs text-[#647087]">
+                  <p className="mb-5 text-[11px] text-[#647087]">
                     Staff accounts are issued by administrators.
                   </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 pt-3">
-                  <button
-                    type="button"
-                    onClick={handleDownloadClick}
-                    className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-full bg-[#24449a] px-6 text-sm font-bold text-white transition-colors hover:bg-[#1b357a]"
-                  >
-                    <Download className="size-4" aria-hidden="true" />
-                    <span>Download app</span>
-                  </button>
                 </div>
               </article>
 
               {/* Administrators Card */}
-              <article className="flex flex-col justify-between rounded-2xl border border-[#e6eaf2] bg-white p-7 sm:p-8">
+              <article className="flex flex-col justify-between rounded-2xl border border-[#e6eaf2] bg-white p-6 sm:p-7">
                 <div>
                   <div className="mb-2 text-xs font-extrabold uppercase tracking-wider text-[#24449a]">
                     ADMINISTRATORS · WEB PORTAL
                   </div>
-                  <h3 className="mb-4 text-xl font-extrabold tracking-[-0.02em] text-[#111c38] sm:text-2xl">
+                  <h3 className="mb-3 text-lg font-extrabold tracking-[-0.02em] text-[#111c38] sm:text-xl">
                     Manage the system
                   </h3>
-                  <ul className="mb-6 list-none space-y-3 p-0 text-sm text-[#4a5568]">
+                  <ul className="mb-6 list-none space-y-2.5 p-0 text-xs text-[#4a5568] sm:text-sm">
                     <li>Review and verify reports</li>
                     <li>Assign staff and track progress</li>
                     <li>Publish announcements and manage outages</li>
                   </ul>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 pt-3">
-                  <a
-                    href="/admin/login"
-                    className="inline-flex h-11 items-center justify-center rounded-full bg-[#24449a] px-6 text-sm font-bold text-white no-underline transition-colors hover:bg-[#1b357a]"
-                  >
-                    Admin sign in
-                  </a>
                 </div>
               </article>
             </div>
@@ -616,23 +557,23 @@ function LandingPage() {
         </section>
 
         {/* Install PowerWatch on Your Phone Dark Navy Section */}
-        <section id="install-app" className="bg-[#111c38] py-16 text-white sm:py-24">
-          <div className="mx-auto grid w-[min(1180px,calc(100%-32px))] grid-cols-1 items-center gap-10 lg:grid-cols-[1fr_1.05fr] lg:gap-16">
+        <section id="install-app" className="bg-[#111c38] py-14 text-white sm:py-20">
+          <div className="mx-auto grid w-[min(1240px,calc(100%-40px))] grid-cols-1 items-center gap-8 lg:grid-cols-[1fr_1.05fr] lg:gap-14">
             <div>
-              <h2 className="mb-4 max-w-[480px] text-[clamp(32px,4vw,44px)] font-extrabold leading-[1.1] tracking-[-0.025em] text-white">
+              <h2 className="mb-3.5 max-w-[460px] text-[clamp(28px,3.5vw,40px)] font-extrabold leading-[1.12] tracking-[-0.025em] text-white">
                 Install PowerWatch on your phone
               </h2>
-              <p className="m-0 max-w-[46ch] text-base leading-[1.6] text-blue-100 sm:text-lg">
+              <p className="m-0 max-w-[44ch] text-sm leading-[1.6] text-blue-100 sm:text-base">
                 Install it directly to your home screen with no app store or login required.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-7 sm:p-8">
-              <h3 className="mb-2 text-lg font-extrabold text-white sm:text-xl">PowerWatch App</h3>
-              <p className="mb-5 text-sm leading-relaxed text-blue-100">
+            <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-6 sm:p-7">
+              <h3 className="mb-2 text-base font-extrabold text-white sm:text-lg">PowerWatch App</h3>
+              <p className="mb-4 text-xs leading-relaxed text-blue-100 sm:text-sm">
                 Direct installation for residents and field staff. Tap the button below to prompt download.
               </p>
-              <div className="mb-6 space-y-1.5 text-sm leading-relaxed text-blue-100">
+              <div className="mb-5 space-y-1 text-xs leading-relaxed text-blue-100 sm:text-sm">
                 <div>
                   <strong className="font-bold text-white">Android / Chrome:</strong> tap Download to install instantly.
                 </div>
@@ -643,16 +584,16 @@ function LandingPage() {
               <button
                 type="button"
                 onClick={handleDownloadClick}
-                className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-full bg-brand-yellow px-7 text-sm font-extrabold text-[#111c38] transition-colors hover:bg-[#ffe033]"
+                className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-full bg-[#24449a] px-6 text-xs font-bold text-white border border-white/20 transition-colors hover:bg-[#1b357a] sm:text-sm"
               >
                 {isInstalled ? (
                   <>
-                    <Smartphone className="size-4.5" aria-hidden="true" />
+                    <Smartphone className="size-4" aria-hidden="true" />
                     <span>Open installed app</span>
                   </>
                 ) : (
                   <>
-                    <Download className="size-4.5" aria-hidden="true" />
+                    <Download className="size-4" aria-hidden="true" />
                     <span>Download app now</span>
                   </>
                 )}
@@ -664,21 +605,21 @@ function LandingPage() {
         {/* FAQ Section */}
         <section
           id="faq"
-          className="bg-white py-16 sm:py-24"
+          className="bg-white py-14 sm:py-20"
           aria-labelledby="faq-heading"
         >
-          <div className="mx-auto w-[min(1180px,calc(100%-32px))]">
-            <div className="mb-10 max-w-[680px]">
-              <span className="mb-4 inline-block rounded-full bg-[#e3e9f8] px-4 py-1.5 text-xs font-bold text-[#24449a] sm:text-sm">
+          <div className="mx-auto w-[min(1240px,calc(100%-40px))]">
+            <div className="mb-9 max-w-[680px]">
+              <span className="mb-3.5 inline-block rounded-full bg-[#e3e9f8] px-3.5 py-1 text-xs font-bold text-[#24449a] sm:text-sm">
                 FAQ
               </span>
               <h2
                 id="faq-heading"
-                className="mb-4 text-[clamp(32px,4.2vw,48px)] font-extrabold leading-[1.1] tracking-[-0.03em] text-[#111c38]"
+                className="mb-3 text-[clamp(28px,3.5vw,42px)] font-extrabold leading-[1.12] tracking-[-0.025em] text-[#111c38]"
               >
                 Straight answers about PowerWatch
               </h2>
-              <p className="m-0 text-base leading-[1.6] text-[#555b66] sm:text-lg">
+              <p className="m-0 text-sm leading-[1.6] text-[#555b66] sm:text-base">
                 Common questions about reporting outages and installing the unified app.
               </p>
             </div>
@@ -694,9 +635,7 @@ function LandingPage() {
               className="mb-3 inline-flex items-center gap-3 text-lg font-extrabold tracking-[-0.02em] text-[#111c38] no-underline sm:text-xl"
               href="/"
             >
-              <span className="grid size-8 place-items-center rounded-full bg-brand-yellow text-[#111c38]">
-                <Zap className="size-4 fill-current" aria-hidden="true" />
-              </span>
+              <img src={powerWatchLogo} alt="Valencia PowerWatch" className="size-8 shrink-0 rounded-xl" />
               <span>PowerWatch</span>
             </a>
             <p className="m-0 max-w-[48ch] text-sm leading-relaxed text-[#555b66]">
@@ -705,8 +644,8 @@ function LandingPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-7 text-sm font-semibold text-[#4a5568]">
-            <a className="no-underline hover:text-[#111c38]" href="/login">
-              Open the app
+            <a className="no-underline hover:text-[#111c38]" href="/download">
+              Download the app
             </a>
             <a className="no-underline hover:text-[#111c38]" href="/admin/login">
               Admin sign in

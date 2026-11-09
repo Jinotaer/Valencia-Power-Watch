@@ -39,7 +39,7 @@ export default function StaffJobs() {
   const [reviewJob, setReviewJob] = useState(null)
   const [statusJob, setStatusJob] = useState(null)
   const [navJob, setNavJob] = useState(null)
-  const [evidenceFile, setEvidenceFile] = useState(null)
+  const [evidenceFiles, setEvidenceFiles] = useState([])
   const [updateForm, setUpdateForm] = useState({ remarks: '', eta: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
@@ -104,12 +104,12 @@ export default function StaffJobs() {
         report.id,
         statusKey,
         report.assignedStaffId,
-        statusKey === 'resolved' && evidenceFile
-          ? [{ file: evidenceFile, label: 'Resolution evidence', type: evidenceFile.type }]
+        statusKey === 'resolved' && evidenceFiles.length > 0
+          ? evidenceFiles.map((file) => ({ file, label: 'Resolution evidence', type: file.type }))
           : [],
         { staffRemarks: updateForm.remarks.trim(), restorationEta: updateForm.eta.trim() },
       )
-      setEvidenceFile(null)
+      setEvidenceFiles([])
       setUpdateForm({ remarks: '', eta: '' })
       setStatusJob(null)
       reload()
@@ -407,7 +407,7 @@ export default function StaffJobs() {
               </div>
               <button
                 type="button"
-                onClick={() => { setStatusJob(null); setEvidenceFile(null) }}
+                onClick={() => { setStatusJob(null); setEvidenceFiles([]) }}
                 className="grid size-8 place-items-center rounded-full text-brand-muted hover:bg-[#e5e9f6] cursor-pointer"
               >
                 <X className="size-4" />
@@ -444,7 +444,7 @@ export default function StaffJobs() {
                   </button>
                 )
               })}
-              <ResolutionEvidenceInput file={evidenceFile} onChange={setEvidenceFile} disabled={isSubmitting} />
+              <ResolutionEvidenceInput files={evidenceFiles} onChange={setEvidenceFiles} disabled={isSubmitting} />
               {isSubmitting && (
                 <p className="pt-1 text-center text-[11px] font-semibold text-brand-muted">Updating…</p>
               )}

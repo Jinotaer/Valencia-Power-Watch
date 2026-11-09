@@ -1,5 +1,5 @@
-import { Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import powerWatchLogo from '../assets/logo.svg'
 import { supabase } from '../lib/supabase'
 import {
   authRoutes,
@@ -15,9 +15,7 @@ function LoadingScreen() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-brand-paper">
       <div className="flex flex-col items-center gap-3">
-        <span className="grid size-10 place-items-center rounded-xl bg-brand-yellow text-brand-navy">
-          <Zap className="size-5 fill-current animate-pulse" />
-        </span>
+        <img src={powerWatchLogo} alt="Loading PowerWatch" className="size-11 rounded-2xl animate-pulse" />
         <span className="text-sm font-medium text-brand-muted">Loading PowerWatch...</span>
       </div>
     </div>
@@ -125,13 +123,16 @@ function Guard({ pathname, section, children }) {
     }
   }, [session, role, authChecked, isActive, section, isAuthRoute, isResetRoute, isPrivateRoute])
 
-  // Show loading screen while checking authentication
-  if (!authChecked) return <LoadingScreen />
+  // Show loading screen while checking authentication or waiting for user role
+  if (!authChecked || (session && !role)) return <LoadingScreen />
 
   // Don't render protected pages until we know the user is signed in and allowed
   if (isPrivateRoute && (!session || !role || !isActive || !isAllowedSection(section, role))) return null
   // Don't flash the login form for a signed-in user who is about to be redirected
   if (isAuthRoute && !isResetRoute && session) return null
+
+  // Mobile PWA restriction temporarily disabled for laptop testing:
+  // (Both resident and staff can access their portals on any device)
 
   return children
 }

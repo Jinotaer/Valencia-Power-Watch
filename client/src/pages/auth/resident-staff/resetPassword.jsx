@@ -1,5 +1,6 @@
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, LoaderCircle, Lock, Zap } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, LoaderCircle, Lock } from 'lucide-react'
 import { useState } from 'react'
+import powerWatchLogo from '../../../assets/logo.svg'
 import { PortalAuthLayout } from '../../../components/auth/PortalAuthLayout'
 import { Input } from '../../../components/ui/input'
 import { supabase } from '../../../lib/supabase'
@@ -53,9 +54,7 @@ function PortalResetPassword({ role = 'resident' }) {
     <PortalAuthLayout>
       <div className="w-full rounded-lg border border-brand-line bg-white p-6 shadow-[0_12px_30px_rgba(27,48,119,0.06)] sm:rounded-xl sm:p-8 md:p-10">
         <div className="mb-5 flex items-center justify-center gap-2.5 sm:mb-6 select-none">
-          <span className="grid size-8 sm:size-9 place-items-center rounded-xl bg-brand-yellow text-brand-navy sm:size-9">
-            <Zap className="size-4.5 sm:size-5 fill-current" />
-          </span>
+          <img src={powerWatchLogo} alt="Valencia PowerWatch" className="size-8 sm:size-9 rounded-xl object-contain" />
           <span className="text-lg sm:text-xl font-bold tracking-tight text-brand-navy">PowerWatch</span>
         </div>
 

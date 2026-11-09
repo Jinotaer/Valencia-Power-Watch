@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:nodemon": "nodemon --watch vite.config.js --watch src --exec vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

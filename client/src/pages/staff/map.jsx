@@ -55,8 +55,8 @@ function ManeuverIcon({ step }) {
   if (!step || step.type === 'arrive') return <Flag className="size-5" />
   if (step.type === 'roundabout' || step.type === 'rotary') return <RotateCw className="size-5" />
   if (step.modifier === 'uturn') return <Undo2 className="size-5" />
-  if (step.modifier.includes('left')) return <ArrowLeft className="size-5" />
-  if (step.modifier.includes('right')) return <ArrowRight className="size-5" />
+  if (step.modifier?.includes('left')) return <ArrowLeft className="size-5" />
+  if (step.modifier?.includes('right')) return <ArrowRight className="size-5" />
   return <ArrowUp className="size-5" />
 }
 
@@ -167,8 +167,12 @@ export default function StaffMap() {
   const cardJob = activeJob ?? visibleJobs.find((r) => r.tone === 'verified') ?? visibleJobs.find((r) => r.tone === 'pending') ?? null
 
   // Evidence belongs to one job; ignore it once another job is selected.
-  const evidenceFile = evidence?.jobId === cardJob?.id ? evidence.file : null
-  const setEvidenceForJob = (file) => setEvidence(file ? { jobId: cardJob?.id, file } : null)
+  const evidenceFiles =
+    evidence && cardJob && evidence.jobId === cardJob.id
+      ? (Array.isArray(evidence.files) ? evidence.files : (evidence.file ? [evidence.file] : []))
+      : []
+  const setEvidenceForJob = (files) =>
+    setEvidence(files && cardJob?.id ? { jobId: cardJob.id, files } : null)
 
   const startNavigation = (job) => {
     const destination = destinationFor(job)
@@ -314,7 +318,7 @@ export default function StaffMap() {
         cardJob.id,
         'resolved',
         cardJob.assignedStaffId,
-        evidenceFile ? [{ file: evidenceFile, label: 'Resolution evidence', type: evidenceFile.type }] : [],
+        evidenceFiles.map((file) => ({ file, label: 'Resolution evidence', type: file.type })),
       )
       setActiveJob(null)
       stopNavigation()
@@ -462,7 +466,7 @@ export default function StaffMap() {
                     </div>
                     <NavEndButton onClick={stopNavigation}>Done</NavEndButton>
                   </div>
-                  <ResolutionEvidenceInput file={evidenceFile} onChange={setEvidenceForJob} dark disabled={isSubmitting} />
+                  <ResolutionEvidenceInput files={evidenceFiles} onChange={setEvidenceForJob} dark disabled={isSubmitting} />
                   {cardJob?.tone !== 'resolved' && (
                     <button
                       type="button"
@@ -651,7 +655,7 @@ export default function StaffMap() {
               {/* Action Buttons Row */}
               {cardJob.tone !== 'resolved' ? (
                 <>
-                  <ResolutionEvidenceInput file={evidenceFile} onChange={setEvidenceForJob} disabled={isSubmitting} />
+                  <ResolutionEvidenceInput files={evidenceFiles} onChange={setEvidenceForJob} disabled={isSubmitting} />
                   <div className="mt-4 grid grid-cols-2 gap-2.5 sm:gap-3">
                     <button
                       type="button"

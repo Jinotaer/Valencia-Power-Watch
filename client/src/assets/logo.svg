@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Rounded Squircle Background -->
+  <rect width="512" height="512" rx="110" fill="#FFDD00"/>
+  
+  <!-- Outer Left Arc -->
+  <path d="M 188.5 174.6 A 105 105 0 0 0 188.5 335.4" stroke="#23419B" stroke-width="19" stroke-linecap="round"/>
+  
+  <!-- Inner Left Arc -->
+  <path d="M 214.1 201.4 A 68 68 0 0 0 214.1 308.6" stroke="#23419B" stroke-width="19" stroke-linecap="round"/>
+  
+  <!-- Inner Right Arc -->
+  <path d="M 297.9 201.4 A 68 68 0 0 1 297.9 308.6" stroke="#23419B" stroke-width="19" stroke-linecap="round"/>
+  
+  <!-- Outer Right Arc -->
+  <path d="M 323.5 174.6 A 105 105 0 0 1 323.5 335.4" stroke="#23419B" stroke-width="19" stroke-linecap="round"/>
+  
+  <!-- Central Lightning Bolt -->
+  <polygon points="270,172 215,264 252,264 242,338 301,244 265,244" fill="#0A1647"/>
+</svg>

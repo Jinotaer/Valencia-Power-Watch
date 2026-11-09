@@ -547,12 +547,13 @@ export default function SubmitReport() {
         {/* STEPPER PROGRESS BAR */}
         <div className="mx-auto max-w-md pt-3 pb-1 px-3">
           <div className="relative flex items-center justify-between">
-            {/* Connecting Track Line */}
-            <div className="absolute left-4 right-4 top-3.5 h-[2px] bg-brand-line -z-0" />
-            <div
-              className="absolute left-4 top-3.5 h-[2px] bg-brand-blue transition-all duration-300 -z-0"
-              style={{ width: `${((step - 1) / 3) * 100}%` }}
-            />
+            {/* Connecting Track Line from center of first step (14px) to center of last step (14px from right) */}
+            <div className="absolute left-3.5 right-3.5 top-3.5 h-[2px] overflow-hidden bg-brand-line">
+              <div
+                className="h-full bg-brand-blue transition-all duration-300"
+                style={{ width: `${((step - 1) / 3) * 100}%` }}
+              />
+            </div>
 
             {[1, 2, 3, 4].map((s) => {
               const isActive = step === s

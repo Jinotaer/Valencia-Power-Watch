@@ -1,5 +1,6 @@
-import { ArrowRight, Download, Eye, EyeOff, LoaderCircle, Lock, Mail, Smartphone, Zap } from 'lucide-react'
+import { ArrowRight, Download, Eye, EyeOff, LoaderCircle, Lock, Mail, Smartphone } from 'lucide-react'
 import { useState } from 'react'
+import powerWatchLogo from '../../../assets/logo.svg'
 import { PortalAuthLayout } from '../../../components/auth/PortalAuthLayout'
 import { Input } from '../../../components/ui/input'
 import { useInstallPrompt } from '../../../hooks/useInstallPrompt'
@@ -99,9 +100,7 @@ function PortalLogin() {
     <PortalAuthLayout>
       <div className="w-full rounded-2xl border border-brand-line bg-white p-6 shadow-[0_12px_30px_rgba(27,48,119,0.06)] sm:p-8 md:p-10">
         <div className="mb-5 flex items-center justify-center gap-2.5 select-none sm:mb-6">
-          <span className="grid size-8 place-items-center rounded-xl bg-brand-yellow text-brand-navy sm:size-9">
-            <Zap className="size-4.5 fill-current sm:size-5" aria-hidden="true" />
-          </span>
+          <img src={powerWatchLogo} alt="Valencia PowerWatch" className="size-8 rounded-xl object-contain sm:size-9" />
           <span className="text-lg font-bold tracking-tight text-brand-navy sm:text-xl">PowerWatch</span>
         </div>
 
