@@ -10,6 +10,9 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
+      devOptions: {
+        enabled: true,
+      },
       manifest: false,
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,jpg,webmanifest}"],

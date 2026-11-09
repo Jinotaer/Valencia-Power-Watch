@@ -1,7 +1,8 @@
-import { ArrowRight, Eye, EyeOff, LoaderCircle, Lock, Mail, Zap } from 'lucide-react'
+import { ArrowRight, Download, Eye, EyeOff, LoaderCircle, Lock, Mail, Smartphone, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { PortalAuthLayout } from '../../../components/auth/PortalAuthLayout'
 import { Input } from '../../../components/ui/input'
+import { useInstallPrompt } from '../../../hooks/useInstallPrompt'
 import { supabase } from '../../../lib/supabase'
 
 // Staff and residents install the same PWA, so one login serves both:
@@ -15,6 +16,11 @@ function PortalLogin() {
   const [loading, setLoading] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendStatus, setResendStatus] = useState('')
+  const [showInstallHelp, setShowInstallHelp] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return new URLSearchParams(window.location.search).get('install') === '1'
+  })
+  const { canInstall, isInstalled, isIOS, promptInstall } = useInstallPrompt()
 
   function updateField(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }))
@@ -57,20 +63,41 @@ function PortalLogin() {
       email: form.email.trim(),
       password: form.password,
     })
-    setLoading(false)
     if (error) {
+      setLoading(false)
       setStatus({ type: 'error', message: error.message || 'We could not sign you in. Check your credentials and try again.' })
       return
     }
 
+    let resolvedRole = data.user?.user_metadata?.role || data.user?.app_metadata?.role || 'resident'
+    if (data.user?.id) {
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', data.user.id)
+        .maybeSingle()
+      if (userRow?.role) {
+        resolvedRole = userRow.role
+      }
+    }
+
+    setLoading(false)
     // Residents land in the community portal, staff in theirs, admins in the
     // console; section guards in App.jsx keep each portal role-exclusive.
-    window.location.assign(portalForRole(data.user?.user_metadata?.role || data.user?.app_metadata?.role))
+    window.location.assign(portalForRole(resolvedRole))
+  }
+
+  async function handleInstallClick() {
+    if (canInstall) {
+      await promptInstall()
+    } else {
+      setShowInstallHelp((prev) => !prev)
+    }
   }
 
   return (
     <PortalAuthLayout>
-      <div className="w-full rounded-lg border border-brand-line bg-white p-6 shadow-[0_12px_30px_rgba(27,48,119,0.06)] sm:rounded-xl sm:p-8 md:p-10">
+      <div className="w-full rounded-2xl border border-brand-line bg-white p-6 shadow-[0_12px_30px_rgba(27,48,119,0.06)] sm:p-8 md:p-10">
         <div className="mb-5 flex items-center justify-center gap-2.5 select-none sm:mb-6">
           <span className="grid size-8 place-items-center rounded-xl bg-brand-yellow text-brand-navy sm:size-9">
             <Zap className="size-4.5 fill-current sm:size-5" aria-hidden="true" />
@@ -81,9 +108,41 @@ function PortalLogin() {
         <div className="mb-6 text-center sm:mb-7">
           <h1 className="text-2xl font-extrabold tracking-tight text-brand-navy sm:text-3xl">Sign in to PowerWatch</h1>
           <p className="mt-1.5 text-xs leading-relaxed text-brand-muted sm:mt-2 sm:text-sm">
-            Residents report interruptions — field staff manage their assigned response work
+            Enter your email and password to access your account.
           </p>
         </div>
+
+        {!isInstalled && (canInstall || isIOS || showInstallHelp) && (
+          <div className="mb-5 rounded-xl border border-brand-blue/20 bg-[#f2f5fc] p-3.5 text-left">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-navy text-brand-yellow">
+                  <Smartphone className="size-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-brand-navy">Install Valencia PowerWatch App</p>
+                  <p className="text-[11px] text-brand-muted">
+                    {isIOS
+                      ? 'Tap Share in Safari, then choose Add to Home Screen.'
+                      : canInstall
+                        ? 'Add the unified Resident & Staff app to your home screen.'
+                        : 'Use your browser menu and select Install App or Add to Home Screen.'}
+                  </p>
+                </div>
+              </div>
+              {canInstall && (
+                <button
+                  type="button"
+                  onClick={handleInstallClick}
+                  className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-brand-navy px-3 text-xs font-bold text-white transition-colors hover:bg-brand-blue"
+                >
+                  <Download className="size-3.5" aria-hidden="true" />
+                  Install
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <form className="space-y-4 sm:space-y-5" onSubmit={handleSubmit} noValidate>
           <div className="space-y-1.5">

@@ -26,13 +26,17 @@ function App() {
     }
     robots.content = section ? 'noindex, nofollow' : 'index, follow'
 
-    document.querySelector('link[rel="manifest"]')?.remove()
     const manifestPath = section ? sectionManifest[section] : defaultManifest
-    if (manifestPath) {
+    const existingManifest = document.querySelector('link[rel="manifest"]')
+    if (!manifestPath) {
+      existingManifest?.remove()
+    } else if (!existingManifest) {
       const link = document.createElement('link')
       link.rel = 'manifest'
       link.href = manifestPath
       document.head.appendChild(link)
+    } else if (existingManifest.getAttribute('href') !== manifestPath) {
+      existingManifest.setAttribute('href', manifestPath)
     }
   }, [section])
 

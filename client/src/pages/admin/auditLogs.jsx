@@ -2,6 +2,8 @@ import { Download, FileSearch, RefreshCw, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
 import AdminSidebar from '../../components/admin/sidebar'
+import PageHeader from '../../components/common/pageHeader'
+import Pagination from '../../components/common/pagination'
 import { SidebarInset, SidebarProvider } from '../../components/ui/sidebar'
 import { loadAuditLogs } from '../../lib/auditLogs'
 import { downloadCsv } from '../../lib/adminUsers'
@@ -35,6 +37,8 @@ export default function AdminAuditLogs() {
   const [reloadKey, setReloadKey] = useState(0)
   const [entityFilter, setEntityFilter] = useState('All entities')
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
   const reload = () => {
     setLoadError('')
@@ -65,6 +69,12 @@ export default function AdminAuditLogs() {
   }, [reloadKey, entityFilter, search])
 
   const visibleLogs = useMemo(() => logs, [logs])
+  const totalPages = Math.max(1, Math.ceil(visibleLogs.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedLogs = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return visibleLogs.slice(start, start + pageSize)
+  }, [visibleLogs, safePage, pageSize])
 
   const exportCsv = () => {
     downloadCsv('powerwatch-audit-logs.csv', [
@@ -80,21 +90,22 @@ export default function AdminAuditLogs() {
         <AdminNavbar title="Administration" section="Audit logs" />
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-[1400px]">
-            <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold tracking-[-.03em] text-brand-navy">Audit logs</h1>
-                <p className="mt-1 max-w-xl text-sm text-brand-muted">Inspect important system activity across users, reports, schedules, announcements, barangays, settings and feedback.</p>
-              </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={exportCsv} disabled={logs.length === 0} className="inline-flex h-10 items-center gap-2 rounded-lg border border-brand-line bg-white px-4 text-sm font-semibold text-brand-navy hover:bg-brand-paper disabled:opacity-60">
-                  <Download className="size-4" />
-                  Export CSV
-                </button>
-                <button type="button" onClick={reload} aria-label="Refresh audit logs" className="grid size-10 place-items-center rounded-lg border border-brand-line bg-white text-brand-muted hover:bg-brand-paper hover:text-brand-navy">
-                  <RefreshCw className="size-4" />
-                </button>
-              </div>
-            </header>
+            <PageHeader
+              className="mb-6"
+              title="Audit logs"
+              description="Inspect important system activity across users, reports, schedules, announcements, barangays, settings and feedback."
+              actions={
+                <>
+                  <button type="button" onClick={exportCsv} disabled={logs.length === 0} className="inline-flex h-10 items-center gap-2 rounded-lg border border-brand-line bg-white px-4 text-sm font-semibold text-brand-navy hover:bg-brand-paper disabled:opacity-60">
+                    <Download className="size-4" />
+                    Export CSV
+                  </button>
+                  <button type="button" onClick={reload} aria-label="Refresh audit logs" className="grid size-10 place-items-center rounded-lg border border-brand-line bg-white text-brand-muted hover:bg-brand-paper hover:text-brand-navy">
+                    <RefreshCw className="size-4" />
+                  </button>
+                </>
+              }
+            />
 
             <section className="overflow-hidden rounded-2xl border border-brand-line bg-white shadow-xs">
               <div className="flex flex-col gap-3 border-b border-brand-line p-4 lg:flex-row lg:items-center">
@@ -140,7 +151,7 @@ export default function AdminAuditLogs() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-brand-line">
-                      {visibleLogs.map((log) => (
+                      {paginatedLogs.map((log) => (
                         <tr key={log.id} className="hover:bg-brand-paper/60">
                           <td className="whitespace-nowrap px-5 py-3 text-brand-muted">{formatDate(log.createdAt)}</td>
                           <td className="max-w-[220px] px-5 py-3 font-semibold text-brand-ink truncate">{log.actorEmail || log.actorId || 'System'}</td>
@@ -152,6 +163,19 @@ export default function AdminAuditLogs() {
                     </tbody>
                   </table>
                 </div>
+              )}
+
+              {!isLoading && !loadError && (
+                <Pagination
+                  page={safePage}
+                  pageSize={pageSize}
+                  total={visibleLogs.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size)
+                    setPage(1)
+                  }}
+                />
               )}
             </section>
           </div>

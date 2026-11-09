@@ -1,37 +1,58 @@
-import { Bell, Check, Plus, RefreshCw, Search, Send, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  Bell,
+  Check,
+  ExternalLink,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
 import AdminSidebar from '../../components/admin/sidebar'
+import PageHeader from '../../components/common/pageHeader'
+import Pagination from '../../components/common/pagination'
+import { Button } from '../../components/ui/button'
+import { Input } from '../../components/ui/input'
 import { SidebarInset, SidebarProvider } from '../../components/ui/sidebar'
 import {
-  createAdminNotification,
   deleteAdminNotification,
   loadAdminNotifications,
-  loadNotificationRecipients,
   markAdminNotificationRead,
 } from '../../lib/notifications'
+import { loadAllReports } from '../../lib/reports'
 
 function formatDate(value) {
   if (!value) return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }
+
+const typeFilterOptions = [
+  { value: 'All', label: 'All notifications' },
+  { value: 'new_report', label: 'New resident reports' },
+  { value: 'report_status', label: 'Status updates' },
+  { value: 'assignment', label: 'Staff dispatches' },
+]
 
 export default function AdminNotifications() {
   const [notifications, setNotifications] = useState([])
-  const [recipients, setRecipients] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const [query, setQuery] = useState('')
-  const [recipientFilter, setRecipientFilter] = useState('All recipients')
+  const [typeFilter, setTypeFilter] = useState('All')
   const [readFilter, setReadFilter] = useState('All')
-  const [isComposing, setIsComposing] = useState(false)
-  const [isSending, setIsSending] = useState(false)
-  const [formError, setFormError] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
   const [toast, setToast] = useState('')
-  const [form, setForm] = useState({ recipients: 'all', selectedUserId: '', title: '', body: '' })
 
   const showToast = (message) => {
     setToast(message)
@@ -47,17 +68,46 @@ export default function AdminNotifications() {
   useEffect(() => {
     let active = true
 
-    Promise.all([loadAdminNotifications().catch(() => []), loadNotificationRecipients().catch(() => [])])
-      .then(([rows, users]) => {
+    Promise.all([
+      loadAdminNotifications(200).catch(() => []),
+      loadAllReports().catch(() => []),
+    ])
+      .then(([notifRows, reportRows]) => {
         if (!active) return
-        setNotifications(rows)
-        setRecipients(users)
+
+        // Synthesize notification items from newly submitted resident reports
+        // so admins are immediately notified of new reports and their priorities
+        const reportNotifs = reportRows.map((report) => ({
+          id: `report-${report.id}`,
+          type: 'new_report',
+          title: `New Outage Report: ${report.id}`,
+          body: `${report.outageType} reported in Brgy. ${report.barangay} by ${report.residentName || 'Resident'} (${report.priority || 'medium'} priority).`,
+          reportReference: report.id,
+          recipientName: 'Administrator',
+          recipientRole: 'admin',
+          readAt: report.status !== 'pending' ? report.updatedAt : null,
+          createdAt: report.createdAt,
+          priority: report.priority,
+          status: report.status,
+          isSynthetic: true,
+        }))
+
+        // Filter persisted notifications to relevant incident & dispatch events
+        const dbNotifs = notifRows
+          .filter((row) => row.type !== 'manual')
+          .map((row) => ({ ...row, isSynthetic: false }))
+
+        // Merge, de-duplicate, and sort newest first
+        const merged = [...reportNotifs, ...dbNotifs].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )
+
+        setNotifications(merged)
       })
       .catch(() => {
         if (active) {
           setNotifications([])
-          setRecipients([])
-          setLoadError('We could not load notifications. Run supabase/notification.sql and try again.')
+          setLoadError('We could not load notifications. Check your connection and try again.')
         }
       })
       .finally(() => {
@@ -69,66 +119,63 @@ export default function AdminNotifications() {
     }
   }, [reloadKey])
 
-  const stats = useMemo(() => ({
-    total: notifications.length,
-    unread: notifications.filter((row) => !row.readAt).length,
-    read: notifications.filter((row) => row.readAt).length,
-    manual: notifications.filter((row) => row.type === 'manual').length,
-  }), [notifications])
+  const visibleNotifications = useMemo(() => {
+    return notifications.filter((row) => {
+      const search = query.trim().toLowerCase()
+      const matchesQuery =
+        !search ||
+        [row.title, row.body, row.reportReference, row.recipientName].some((value) =>
+          String(value || '').toLowerCase().includes(search),
+        )
+      const matchesType =
+        typeFilter === 'All' || row.type === typeFilter
+      const matchesRead =
+        readFilter === 'All' || (readFilter === 'Unread' ? !row.readAt : Boolean(row.readAt))
+      return matchesQuery && matchesType && matchesRead
+    })
+  }, [notifications, query, typeFilter, readFilter])
 
-  const visibleNotifications = useMemo(() => notifications.filter((row) => {
-    const search = query.trim().toLowerCase()
-    const matchesQuery = !search || [row.title, row.body, row.recipientName, row.recipientRole, row.type].some((value) => String(value || '').toLowerCase().includes(search))
-    const matchesRecipient = recipientFilter === 'All recipients' || row.recipientRole === recipientFilter.toLowerCase()
-    const matchesRead = readFilter === 'All' || (readFilter === 'Unread' ? !row.readAt : Boolean(row.readAt))
-    return matchesQuery && matchesRecipient && matchesRead
-  }), [notifications, query, recipientFilter, readFilter])
+  const totalPages = Math.max(1, Math.ceil(visibleNotifications.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginatedNotifications = useMemo(() => {
+    const start = (safePage - 1) * pageSize
+    return visibleNotifications.slice(start, start + pageSize)
+  }, [visibleNotifications, safePage, pageSize])
 
-  const selectedRecipients = useMemo(() => {
-    if (form.recipients === 'all') return recipients.filter((recipient) => recipient.isActive)
-    if (form.recipients === 'resident') return recipients.filter((recipient) => recipient.isActive && recipient.role === 'resident')
-    if (form.recipients === 'staff') return recipients.filter((recipient) => recipient.isActive && recipient.role === 'staff')
-    if (form.recipients === 'one' && form.selectedUserId) return recipients.filter((recipient) => recipient.id === form.selectedUserId)
-    return []
-  }, [form.recipients, form.selectedUserId, recipients])
-
-  const sendNotification = async (event) => {
-    event.preventDefault()
-    if (isSending) return
-
-    setIsSending(true)
-    setFormError('')
-    try {
-      const count = await createAdminNotification({
-        recipientIds: selectedRecipients.map((recipient) => recipient.id),
-        title: form.title,
-        body: form.body,
-      })
-      setIsComposing(false)
-      setForm({ recipients: 'all', selectedUserId: '', title: '', body: '' })
-      showToast(`Notification sent to ${count} recipient${count === 1 ? '' : 's'}.`)
-      reload()
-    } catch (error) {
-      setFormError(error.message || 'Could not send this notification.')
-    } finally {
-      setIsSending(false)
+  const markRead = async (notification) => {
+    if (notification.isSynthetic) {
+      setNotifications((current) =>
+        current.map((row) =>
+          row.id === notification.id ? { ...row, readAt: new Date().toISOString() } : row,
+        ),
+      )
+      showToast('Notification marked as read.')
+      return
     }
-  }
 
-  const markRead = async (id) => {
     try {
-      await markAdminNotificationRead(id)
-      setNotifications((current) => current.map((row) => (row.id === id ? { ...row, readAt: new Date().toISOString() } : row)))
+      await markAdminNotificationRead(notification.id)
+      setNotifications((current) =>
+        current.map((row) =>
+          row.id === notification.id ? { ...row, readAt: new Date().toISOString() } : row,
+        ),
+      )
       showToast('Notification marked as read.')
     } catch {
       showToast('Could not mark this notification as read.')
     }
   }
 
-  const removeNotification = async (id) => {
+  const removeNotification = async (notification) => {
+    if (notification.isSynthetic) {
+      setNotifications((current) => current.filter((row) => row.id !== notification.id))
+      showToast('Notification dismissed.')
+      return
+    }
+
     try {
-      await deleteAdminNotification(id)
-      setNotifications((current) => current.filter((row) => row.id !== id))
+      await deleteAdminNotification(notification.id)
+      setNotifications((current) => current.filter((row) => row.id !== notification.id))
       showToast('Notification deleted.')
     } catch {
       showToast('Could not delete this notification.')
@@ -142,113 +189,214 @@ export default function AdminNotifications() {
         <AdminNavbar title="Administration" section="Notifications" />
 
         {toast && (
-          <div className="fixed top-5 right-5 z-[100] flex items-center gap-2.5 rounded-2xl bg-brand-navy px-4 py-3 text-xs font-bold text-white shadow-xl">
-            <Check className="size-4 text-brand-yellow" />
+          <div
+            role="status"
+            className="fixed top-5 right-5 z-[100] flex items-center gap-2.5 rounded-2xl bg-brand-navy px-4 py-3 text-xs font-bold text-white shadow-xl animate-in fade-in slide-in-from-top-3"
+          >
+            <Check className="size-4 text-brand-yellow" aria-hidden="true" />
             <span>{toast}</span>
           </div>
         )}
 
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-[1400px]">
-            <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold tracking-[-.03em] text-brand-navy">Notifications</h1>
-                <p className="mt-1 max-w-xl text-sm text-brand-muted">Send manual messages and review every notification delivery record.</p>
-              </div>
-              <div className="flex gap-2">
-                <button type="button" onClick={reload} aria-label="Refresh notifications" className="grid size-10 place-items-center rounded-lg border border-brand-line bg-white text-brand-muted hover:bg-brand-paper hover:text-brand-navy">
-                  <RefreshCw className="size-4" />
-                </button>
-                <button type="button" onClick={() => setIsComposing(true)} className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-blue px-4 text-sm font-semibold text-white hover:bg-brand-navy">
-                  <Plus className="size-4" />
-                  New notification
-                </button>
-              </div>
-            </header>
+            <PageHeader
+              className="mb-6"
+              title="Notifications"
+              description="Real-time notifications for incoming resident outage reports, verifications, and staff dispatches."
+            />
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                ['Total deliveries', stats.total],
-                ['Unread', stats.unread],
-                ['Read', stats.read],
-                ['Manual messages', stats.manual],
-              ].map(([label, value]) => (
-                <section key={label} className="rounded-2xl border border-brand-line bg-white p-5 shadow-xs">
-                  <p className="text-sm font-medium text-brand-muted">{label}</p>
-                  <p className="mt-3 text-3xl font-bold text-brand-ink">{value}</p>
-                </section>
-              ))}
-            </div>
+            <section className="overflow-hidden rounded-2xl border border-brand-line bg-white shadow-sm shadow-slate-200/50">
+              <div className="border-b border-brand-line p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="relative min-w-0 flex-1 lg:max-w-md">
+                    <Search
+                      className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-brand-muted"
+                      aria-hidden="true"
+                    />
+                    <Input
+                      type="text"
+                      value={query}
+                      onChange={(event) => {
+                        setQuery(event.target.value)
+                        setPage(1)
+                      }}
+                      placeholder="Search notifications or report ID..."
+                      aria-label="Search notifications"
+                      className="h-10 w-full rounded-xl border-brand-line bg-white pl-9 pr-9 text-xs font-medium text-brand-ink placeholder:text-brand-muted focus-visible:border-brand-line focus-visible:ring-0 sm:text-sm"
+                    />
+                    {query && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => {
+                          setQuery('')
+                          setPage(1)
+                        }}
+                        aria-label="Clear search query"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full text-brand-muted hover:bg-brand-line/50 hover:text-brand-ink cursor-pointer"
+                      >
+                        <X className="size-3.5" aria-hidden="true" />
+                      </Button>
+                    )}
+                  </div>
 
-            <section className="mt-6 overflow-hidden rounded-2xl border border-brand-line bg-white shadow-xs">
-              <div className="flex flex-col gap-3 border-b border-brand-line p-4 lg:flex-row lg:items-center">
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-brand-muted" />
-                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search notifications or recipients..." className="h-10 w-full rounded-lg border border-brand-line bg-white pl-9 pr-3 text-sm text-brand-ink outline-none focus:border-brand-blue" />
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <select
+                      value={typeFilter}
+                      onChange={(event) => {
+                        setTypeFilter(event.target.value)
+                        setPage(1)
+                      }}
+                      aria-label="Filter by notification type"
+                      className="h-10 rounded-xl border border-brand-line bg-white px-3 text-xs font-semibold text-brand-ink focus:border-brand-blue focus:outline-none cursor-pointer"
+                    >
+                      {typeFilterOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={readFilter}
+                      onChange={(event) => {
+                        setReadFilter(event.target.value)
+                        setPage(1)
+                      }}
+                      aria-label="Filter by status"
+                      className="h-10 rounded-xl border border-brand-line bg-white px-3 text-xs font-semibold text-brand-ink focus:border-brand-blue focus:outline-none cursor-pointer"
+                    >
+                      <option value="All">All statuses</option>
+                      <option value="Unread">Unread</option>
+                      <option value="Read">Read</option>
+                    </select>
+                  </div>
                 </div>
-                <select value={readFilter} onChange={(event) => setReadFilter(event.target.value)} aria-label="Filter by read status" className="h-10 rounded-lg border border-brand-line bg-white px-3 text-sm text-brand-ink outline-none focus:border-brand-blue">
-                  <option>All</option>
-                  <option>Unread</option>
-                  <option>Read</option>
-                </select>
-                <select value={recipientFilter} onChange={(event) => setRecipientFilter(event.target.value)} aria-label="Filter by recipient role" className="h-10 rounded-lg border border-brand-line bg-white px-3 text-sm text-brand-ink outline-none focus:border-brand-blue">
-                  <option>All recipients</option>
-                  <option>Resident</option>
-                  <option>Staff</option>
-                  <option>Admin</option>
-                </select>
               </div>
 
               {isLoading ? (
-                <p className="p-10 text-center text-sm font-semibold text-brand-muted">Loading notification history…</p>
+                <p className="p-12 text-center text-sm font-semibold text-brand-muted">
+                  Loading notifications…
+                </p>
               ) : loadError ? (
-                <div className="p-10 text-center">
+                <div className="p-12 text-center">
                   <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
-                  <button type="button" onClick={reload} className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4">Try again</button>
+                  <button
+                    type="button"
+                    onClick={reload}
+                    className="mt-2 text-xs font-bold text-brand-blue underline underline-offset-4 cursor-pointer"
+                  >
+                    Try again
+                  </button>
                 </div>
               ) : visibleNotifications.length === 0 ? (
                 <div className="flex min-h-[300px] flex-col items-center justify-center p-8 text-center">
                   <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-[#e5e9f6] text-brand-blue">
                     <Bell className="size-7" />
                   </div>
-                  <h2 className="font-bold text-brand-navy">No notification history</h2>
-                  <p className="mt-1 max-w-sm text-sm text-brand-muted">Report status updates and manual messages will appear here for delivery review.</p>
+                  <h2 className="text-base font-bold text-brand-navy">No notifications</h2>
+                  <p className="mt-1 max-w-sm text-xs leading-5 text-brand-muted">
+                    New resident outage reports and dispatch activity will appear here in real time.
+                  </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                  <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                     <thead>
-                      <tr className="bg-[#f4f6fb] text-[11px] font-bold uppercase tracking-[.08em] text-brand-muted">
-                        <th className="px-5 py-3">Message</th>
-                        <th className="px-5 py-3">Recipient</th>
-                        <th className="px-5 py-3">Type</th>
-                        <th className="px-5 py-3">Status</th>
-                        <th className="px-5 py-3">Sent</th>
-                        <th className="px-5 py-3 text-right">Actions</th>
+                      <tr className="border-b border-brand-line bg-brand-paper/80 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
+                        <th className="h-11 px-5">Event</th>
+                        <th className="h-11 px-5">Type</th>
+                        <th className="h-11 px-5">Status</th>
+                        <th className="h-11 px-5">Time</th>
+                        <th className="h-11 px-5 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-brand-line">
-                      {visibleNotifications.map((row) => (
-                        <tr key={row.id} className="hover:bg-brand-paper/60">
-                          <td className="max-w-[420px] px-5 py-3">
-                            <p className="font-semibold text-brand-ink">{row.title}</p>
-                            <p className="mt-0.5 truncate text-xs text-brand-muted">{row.body}</p>
+                      {paginatedNotifications.map((row) => (
+                        <tr key={row.id} className="transition-colors hover:bg-brand-paper/70">
+                          <td className="max-w-[460px] px-5 py-3.5">
+                            <div className="flex items-start gap-2.5">
+                              {row.type === 'new_report' ? (
+                                <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-700">
+                                  <AlertTriangle className="size-3.5" />
+                                </span>
+                              ) : (
+                                <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-lg bg-[#e5e9f6] text-brand-blue">
+                                  <Bell className="size-3.5" />
+                                </span>
+                              )}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="truncate font-bold text-brand-ink">{row.title}</p>
+                                  {row.reportReference && (
+                                    <a
+                                      href="/admin/reports"
+                                      className="inline-flex items-center gap-1 font-mono text-[11px] font-bold text-brand-blue hover:underline"
+                                      title="Open in reports review"
+                                    >
+                                      <span>{row.reportReference}</span>
+                                      <ExternalLink className="size-3" />
+                                    </a>
+                                  )}
+                                </div>
+                                <p className="mt-0.5 text-xs text-brand-muted line-clamp-2">
+                                  {row.body}
+                                </p>
+                              </div>
+                            </div>
                           </td>
-                          <td className="px-5 py-3 text-brand-ink">
-                            <p className="font-semibold">{row.recipientName}</p>
-                            <p className="text-xs text-brand-muted capitalize">{row.recipientRole || 'user'}</p>
+                          <td className="whitespace-nowrap px-5 py-4">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                                row.type === 'new_report'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : row.type === 'assignment'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-[#e5e9f6] text-brand-blue'
+                              }`}
+                            >
+                              {row.type === 'new_report'
+                                ? 'New Report'
+                                : row.type === 'assignment'
+                                  ? 'Dispatch'
+                                  : 'Status Update'}
+                            </span>
                           </td>
-                          <td className="px-5 py-3"><span className="rounded-full bg-[#e5e9f6] px-2 py-0.5 text-[11px] font-bold text-brand-blue">{row.type}</span></td>
-                          <td className="px-5 py-3 font-semibold text-brand-ink">{row.readAt ? `Read ${formatDate(row.readAt)}` : 'Unread'}</td>
-                          <td className="whitespace-nowrap px-5 py-3 text-brand-muted">{formatDate(row.createdAt)}</td>
-                          <td className="px-5 py-3">
-                            <div className="flex justify-end gap-2">
+                          <td className="whitespace-nowrap px-5 py-4">
+                            <span
+                              className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
+                                row.readAt ? 'text-brand-muted' : 'text-emerald-700'
+                              }`}
+                            >
+                              {!row.readAt && <span className="size-1.5 rounded-full bg-emerald-600" />}
+                              {row.readAt ? 'Reviewed' : 'Unread'}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-4 text-xs tabular-nums text-brand-muted">
+                            {formatDate(row.createdAt)}
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
                               {!row.readAt && (
-                                <button type="button" onClick={() => markRead(row.id)} title="Mark read" aria-label="Mark read" className="grid size-9 place-items-center rounded-lg border border-brand-line bg-white text-brand-muted hover:bg-brand-paper hover:text-brand-navy">
+                                <button
+                                  type="button"
+                                  onClick={() => markRead(row)}
+                                  title="Mark as reviewed"
+                                  aria-label="Mark as reviewed"
+                                  className="grid size-9 place-items-center rounded-lg border border-brand-line bg-white text-brand-muted transition-colors hover:bg-brand-paper hover:text-brand-navy cursor-pointer"
+                                >
                                   <Check className="size-4" />
                                 </button>
                               )}
-                              <button type="button" onClick={() => removeNotification(row.id)} title="Delete" aria-label="Delete notification" className="grid size-9 place-items-center rounded-lg border border-[#f3c7c3] bg-white text-[#b42318] hover:bg-red-50">
+                              <button
+                                type="button"
+                                onClick={() => removeNotification(row)}
+                                title="Dismiss notification"
+                                aria-label="Dismiss notification"
+                                className="grid size-9 place-items-center rounded-lg border border-[#f3c7c3] bg-white text-[#b42318] transition-colors hover:bg-red-50 cursor-pointer"
+                              >
                                 <Trash2 className="size-4" />
                               </button>
                             </div>
@@ -259,67 +407,23 @@ export default function AdminNotifications() {
                   </table>
                 </div>
               )}
+
+              {!isLoading && !loadError && (
+                <Pagination
+                  page={safePage}
+                  pageSize={pageSize}
+                  total={visibleNotifications.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size)
+                    setPage(1)
+                  }}
+                />
+              )}
             </section>
           </div>
         </main>
       </SidebarInset>
-
-      {isComposing && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4">
-          <form onSubmit={sendNotification} className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-label="New notification">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-bold text-brand-navy">New notification</h2>
-                <p className="mt-1 text-xs text-brand-muted">Send an in-app message to active users.</p>
-              </div>
-              <button type="button" onClick={() => setIsComposing(false)} className="rounded-lg border border-brand-line px-3 py-1.5 text-xs font-semibold text-brand-muted hover:bg-brand-paper">Close</button>
-            </div>
-
-            <div className="mt-5 space-y-4">
-              <label className="space-y-1.5 text-xs font-semibold text-brand-muted">
-                Recipients
-                <select value={form.recipients} onChange={(event) => setForm({ ...form, recipients: event.target.value })} className="h-10 w-full rounded-lg border border-brand-line bg-white px-3 text-sm font-normal text-brand-ink outline-none focus:border-brand-blue">
-                  <option value="all">All active users</option>
-                  <option value="resident">Residents</option>
-                  <option value="staff">Staff</option>
-                  <option value="one">One user</option>
-                </select>
-              </label>
-
-              {form.recipients === 'one' && (
-                <label className="space-y-1.5 text-xs font-semibold text-brand-muted">
-                  User
-                  <select value={form.selectedUserId} onChange={(event) => setForm({ ...form, selectedUserId: event.target.value })} className="h-10 w-full rounded-lg border border-brand-line bg-white px-3 text-sm font-normal text-brand-ink outline-none focus:border-brand-blue">
-                    <option value="">Select a user</option>
-                    {recipients.filter((recipient) => recipient.isActive).map((recipient) => <option key={recipient.id} value={recipient.id}>{recipient.fullName} · {recipient.email} · {recipient.role}</option>)}
-                  </select>
-                </label>
-              )}
-
-              <p className="text-xs text-brand-muted">{selectedRecipients.length} active recipient{selectedRecipients.length === 1 ? '' : 's'} selected.</p>
-
-              <label className="space-y-1.5 text-xs font-semibold text-brand-muted">
-                Title
-                <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required className="h-10 w-full rounded-lg border border-brand-line bg-white px-3 text-sm font-normal text-brand-ink outline-none focus:border-brand-blue" />
-              </label>
-              <label className="space-y-1.5 text-xs font-semibold text-brand-muted">
-                Message
-                <textarea value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} required rows={4} className="w-full resize-none rounded-lg border border-brand-line bg-white px-3 py-2 text-sm font-normal text-brand-ink outline-none focus:border-brand-blue" />
-              </label>
-
-              {formError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-[#b42318]">{formError}</p>}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setIsComposing(false)} disabled={isSending} className="h-10 rounded-lg border border-brand-line px-4 text-sm font-semibold text-brand-muted hover:bg-brand-paper">Cancel</button>
-                <button type="submit" disabled={isSending || selectedRecipients.length === 0} className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-blue px-4 text-sm font-semibold text-white hover:bg-brand-navy disabled:opacity-60">
-                  <Send className="size-4" />
-                  {isSending ? 'Sending…' : `Send to ${selectedRecipients.length}`}
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      )}
     </SidebarProvider>
   )
 }

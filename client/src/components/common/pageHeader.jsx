@@ -1,7 +1,6 @@
 export function PageHeader({
   title,
   description,
-  eyebrow,
   icon: Icon,
   actions,
   children,
@@ -14,12 +13,8 @@ export function PageHeader({
       className={`flex flex-wrap items-end justify-between gap-4 ${className}`}
     >
       <div>
-        {eyebrow && (
-          <p className="mb-1 text-[10px] font-extrabold uppercase tracking-[.18em] text-brand-muted">
-            {eyebrow}
-          </p>
-        )}
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-[-.03em] text-brand-navy sm:text-3xl">
+        
+        <h1 className="flex items-center gap-2 text-xl font-bold tracking-[-.03em] text-brand-navy sm:text-3xl">
           {Icon && <Icon className="size-6 shrink-0 text-brand-blue" aria-hidden="true" />}
           <span>{title}</span>
         </h1>

@@ -2,6 +2,7 @@ import { Activity, AlertTriangle, FileText, MapPin, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
 import AdminSidebar from '../../components/admin/sidebar'
+import PageHeader from '../../components/common/pageHeader'
 import { SidebarInset, SidebarProvider } from '../../components/ui/sidebar'
 import { loadAnalyticsOverview } from '../../lib/analytics'
 
@@ -41,14 +42,11 @@ export default function AdminDashboard() {
         <AdminNavbar section="Overview" />
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-[1400px]">
-            <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="mb-2 text-xs font-bold uppercase tracking-[.16em] text-brand-blue">Operations overview</p>
-                <h2 className="text-3xl font-bold tracking-[-.04em] text-brand-navy">Good morning, administrator.</h2>
-                <p className="mt-2 text-sm text-brand-muted">A live view of outage activity across Valencia City.</p>
-              </div>
-              <a href="/admin/reports" className="inline-flex h-10 items-center rounded-lg bg-brand-blue px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-navy">Review reports</a>
-            </div>
+            <PageHeader
+              className="mb-7"
+              title="Good morning, administrator."
+              description="A live view of outage activity across Valencia City."
+            />
 
             {loadError && <p className="mb-5 rounded-xl border border-[#f3c7c3] bg-white px-4 py-3 text-sm font-semibold text-[#b42318]">{loadError}</p>}
 

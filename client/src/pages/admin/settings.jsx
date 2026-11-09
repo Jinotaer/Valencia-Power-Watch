@@ -2,6 +2,7 @@ import { Check, Settings2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
 import AdminSidebar from '../../components/admin/sidebar'
+import PageHeader from '../../components/common/pageHeader'
 import { SidebarInset, SidebarProvider } from '../../components/ui/sidebar'
 import {
   loadReportCategories,
@@ -131,10 +132,11 @@ export default function AdminSettings() {
 
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-[1400px]">
-            <header className="mb-6">
-              <h1 className="text-2xl font-bold tracking-[-.03em] text-brand-navy">System settings and access control</h1>
-              <p className="mt-1 max-w-xl text-sm text-brand-muted">Manage application values, role permissions, report categories and built-in report statuses.</p>
-            </header>
+            <PageHeader
+              className="mb-6"
+              title="System settings and access control"
+              description="Manage application values, role permissions, report categories and built-in report statuses."
+            />
 
             {formError && <p role="alert" className="mb-5 rounded-xl border border-[#f3c7c3] bg-white px-4 py-3 text-sm font-semibold text-[#b42318]">{formError}</p>}
 

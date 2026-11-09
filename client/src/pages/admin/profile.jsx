@@ -2,6 +2,7 @@ import { Check, Lock, Mail, ShieldCheck, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
 import AdminSidebar from '../../components/admin/sidebar'
+import PageHeader from '../../components/common/pageHeader'
 import { SidebarInset, SidebarProvider } from '../../components/ui/sidebar'
 import { supabase } from '../../lib/supabase'
 
@@ -182,10 +183,11 @@ export default function AdminProfile() {
 
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-3xl">
-            <header className="mb-6">
-              <h1 className="text-2xl font-bold tracking-[-.03em] text-brand-navy">Admin profile</h1>
-              <p className="mt-1 text-sm text-brand-muted">Manage your administrator details and account security.</p>
-            </header>
+            <PageHeader
+              className="mb-6"
+              title="Admin profile"
+              description="Manage your administrator details and account security."
+            />
 
             {isLoading ? (
               <p className="rounded-2xl border border-brand-line bg-white p-10 text-center text-sm font-semibold text-brand-muted">Loading profile…</p>

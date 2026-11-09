@@ -14,6 +14,10 @@ export function Pagination({
   const resolvedPage = currentPage ?? page
   const resolvedTotal = totalItems ?? total
 
+  if (resolvedTotal < 10) {
+    return null
+  }
+
   const totalPages = Math.max(1, Math.ceil(resolvedTotal / pageSize))
   const safePage = Math.min(Math.max(1, resolvedPage), totalPages)
 

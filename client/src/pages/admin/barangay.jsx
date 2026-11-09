@@ -1,5 +1,4 @@
 import {
-  Building2,
   Check,
   ChevronDown,
   ChevronUp,
@@ -17,6 +16,7 @@ import AdminNavbar from '../../components/admin/navbar'
 import { BarangayCreateDialog, BarangayEditDialog } from '../../components/admin/barangayModals'
 import { createBarangay, deleteBarangay, loadActiveReportCounts, loadBarangays, updateBarangay } from '../../lib/barangays'
 import Pagination from '../../components/common/pagination'
+import PageHeader from '../../components/common/pageHeader'
 import AdminSidebar from '../../components/admin/sidebar'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'
@@ -249,18 +249,10 @@ function AdminBarangay() {
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-[1400px] space-y-6">
             {/* Header: Title + Action Buttons */}
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-brand-ink flex items-center gap-2">
-                  <Building2 className="size-6 text-brand-blue" />
-                  Barangays
-                </h1>
-                <p className="mt-1 text-xs sm:text-sm text-brand-muted">
-                  Valencia City barangay liaison directory with live outage-report counts across all 31 barangays.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2.5">
+            <PageHeader
+              title="Barangays"
+              description="Valencia City barangay liaison directory with live outage-report counts across all 31 barangays."
+              actions={
                 <Button
                   onClick={() => {
                     setActionError('')
@@ -271,8 +263,8 @@ function AdminBarangay() {
                   <Plus className="size-4" />
                   <span>Add Barangay</span>
                 </Button>
-              </div>
-            </div>
+              }
+            />
 
             {/* Main Table Card */}
             <section className="overflow-hidden rounded-2xl border border-brand-line/80 bg-white shadow-xs">
@@ -526,7 +518,6 @@ function AdminBarangay() {
                   setPageSize(newSize)
                   setPage(1)
                 }}
-                pageSizeOptions={[5, 10, 20, 50]}
               />
             </section>
           </div>

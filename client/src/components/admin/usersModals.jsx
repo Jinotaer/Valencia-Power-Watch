@@ -6,10 +6,29 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog'
+
+const dialogContentClass =
+  'gap-0 overflow-hidden rounded-2xl border border-brand-line bg-white p-0 shadow-2xl ring-0 sm:max-w-[540px]'
+const dialogHeaderClass = 'border-b border-brand-line px-6 py-5'
+const dialogTitleClass = 'text-lg font-bold tracking-[-0.02em] text-brand-navy'
+const dialogDescriptionClass = 'text-xs leading-5 text-brand-muted'
+const dialogBodyClass = 'max-h-[calc(85vh-140px)] space-y-4 overflow-y-auto px-6 py-5'
+const dialogFooterClass =
+  'flex items-center justify-end gap-2.5 border-t border-brand-line bg-brand-paper/60 px-6 py-4'
+const labelClass = 'block text-xs font-semibold text-brand-ink'
+const inputClass =
+  'h-10 rounded-xl border-brand-line !bg-white px-3.5 text-sm text-brand-ink placeholder:text-brand-muted focus-visible:border-brand-blue'
+const selectClass =
+  'h-10 w-full cursor-pointer rounded-xl border border-brand-line !bg-white px-3 text-sm text-brand-ink outline-none transition-colors focus:border-brand-blue'
+const errorClass =
+  'rounded-xl border border-[#f3c7c3] bg-red-50/80 px-3.5 py-2.5 text-xs font-semibold text-[#b42318]'
+const cancelClass =
+  'h-10 cursor-pointer rounded-xl border-brand-line bg-white px-4 text-xs font-semibold text-brand-ink hover:bg-brand-paper'
+const submitClass =
+  'h-10 cursor-pointer rounded-xl bg-brand-blue px-4 text-xs font-semibold text-white hover:bg-brand-navy'
 
 export function AdminUsersCreateDialog({
   open,
@@ -24,147 +43,147 @@ export function AdminUsersCreateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] rounded-2xl bg-white p-6 max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <span className="grid size-8 place-items-center rounded-xl bg-amber-100 text-amber-700">
-              <HardHat className="size-4.5" />
+      <DialogContent className={dialogContentClass}>
+        <DialogHeader className={dialogHeaderClass}>
+          <div className="flex items-center gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700">
+              <HardHat className="size-5" />
             </span>
             <div>
-              <DialogTitle className="text-xl font-bold text-brand-ink">
-                Create Staff Account
-              </DialogTitle>
-              <DialogDescription className="text-xs text-brand-muted">
+              <DialogTitle className={dialogTitleClass}>Create Staff Account</DialogTitle>
+              <DialogDescription className={dialogDescriptionClass}>
                 Register a new field responder, technician, or utility crew member.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        {errorMessage && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">
-            {errorMessage}
-          </div>
-        )}
+        <form onSubmit={onCreateUser}>
+          <div className={dialogBodyClass}>
+            {errorMessage && (
+              <p className={errorClass} role="alert">
+                {errorMessage}
+              </p>
+            )}
 
-        <form onSubmit={onCreateUser} className="space-y-4 py-2">
-          {/* Role Indicator Banner */}
-          <div className="flex items-center justify-between rounded-xl border border-amber-200/80 bg-amber-50/60 px-3.5 py-2 text-xs">
-            <span className="font-medium text-amber-900">Account Type</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100/80 px-2.5 py-0.5 font-bold text-amber-800">
-              <span className="size-1.5 rounded-full bg-amber-600" />
-              Field Staff
-            </span>
-          </div>
+            <div className="flex items-center justify-between rounded-xl border border-amber-200/80 bg-amber-50/60 px-3.5 py-2 text-xs">
+              <span className="font-medium text-amber-900">Account Type</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100/80 px-2.5 py-0.5 font-bold text-amber-800">
+                <span className="size-1.5 rounded-full bg-amber-600" />
+                Field Staff
+              </span>
+            </div>
 
-          {/* Full Name */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-brand-muted">Full Name *</label>
-            <Input
-              required
-              placeholder="e.g. Maria Santos"
-              value={newUser.name}
-              onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-              className="h-10 text-sm rounded-xl"
-            />
-          </div>
-
-          {/* Email Address */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-brand-muted">Email Address *</label>
-            <Input
-              required
-              type="email"
-              placeholder="e.g. maria.santos@gmail.com"
-              value={newUser.email}
-              onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-              className="h-10 text-sm rounded-xl"
-            />
-          </div>
-
-          {/* Initial Password */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-brand-muted">Temporary Password *</label>
-            <div className="relative">
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="user-full-name">Full Name *</label>
               <Input
+                id="user-full-name"
                 required
-                type={showPassword ? 'text' : 'password'}
-                placeholder="At least 6 characters"
-                value={newUser.password}
-                onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                className="h-10 text-sm rounded-xl pr-10"
+                placeholder="e.g. Maria Santos"
+                value={newUser.name}
+                onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                className={inputClass}
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-muted hover:text-brand-muted cursor-pointer p-1"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="user-email">Email Address *</label>
+              <Input
+                id="user-email"
+                required
+                type="email"
+                placeholder="e.g. maria.santos@gmail.com"
+                value={newUser.email}
+                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                className={inputClass}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="user-password">Temporary Password *</label>
+              <div className="relative">
+                <Input
+                  id="user-password"
+                  required
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="At least 6 characters"
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  className={`${inputClass} pr-10`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer p-1 text-brand-muted hover:text-brand-ink"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              <p className="text-[11px] text-brand-muted">The staff member will sign in with this temporary password.</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3.5">
+              <div className="space-y-1.5">
+                <label className={labelClass} htmlFor="user-id-number">Staff ID Number</label>
+                <Input
+                  id="user-id-number"
+                  value={newUser.idNumber}
+                  onChange={(e) => setNewUser({ ...newUser, idNumber: e.target.value })}
+                  placeholder="STF-101"
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className={labelClass} htmlFor="user-contact">Contact Number</label>
+                <Input
+                  id="user-contact"
+                  value={newUser.contactNumber}
+                  onChange={(e) => setNewUser({ ...newUser, contactNumber: e.target.value })}
+                  placeholder="+63 917 123 4567"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="user-position">Staff Position / Designation</label>
+              <select
+                id="user-position"
+                value={newUser.position}
+                onChange={(e) => setNewUser({ ...newUser, position: e.target.value })}
+                className={selectClass}
               >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            <p className="text-[11px] text-brand-muted">The staff member will sign in with this temporary password.</p>
-          </div>
-
-          {/* Staff ID Number and Contact Number */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-brand-muted">Staff ID Number</label>
-              <Input
-                value={newUser.idNumber}
-                onChange={(e) => setNewUser({ ...newUser, idNumber: e.target.value })}
-                placeholder="STF-101"
-                className="h-10 text-sm rounded-xl"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-brand-muted">Contact Number</label>
-              <Input
-                value={newUser.contactNumber}
-                onChange={(e) => setNewUser({ ...newUser, contactNumber: e.target.value })}
-                placeholder="+63 917 123 4567"
-                className="h-10 text-sm rounded-xl"
-              />
+                <option value="Line Crew / Responder">Line Crew / Responder</option>
+                <option value="Substation Technician">Substation Technician</option>
+                <option value="Grid Maintenance Specialist">Grid Maintenance Specialist</option>
+                <option value="Control Room Dispatcher">Control Room Dispatcher</option>
+                <option value="Emergency Response Lead">Emergency Response Lead</option>
+                <option value="Field Support Crew">Field Support Crew</option>
+              </select>
             </div>
           </div>
 
-          {/* Position / Designation */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-brand-muted">Staff Position / Designation</label>
-            <select
-              value={newUser.position}
-              onChange={(e) => setNewUser({ ...newUser, position: e.target.value })}
-              className="h-10 w-full rounded-xl border border-brand-line bg-white px-3 text-sm text-brand-ink outline-none focus:border-brand-navy focus:ring-1 focus:ring-brand-navy"
-            >
-              <option value="Line Crew / Responder">Line Crew / Responder</option>
-              <option value="Substation Technician">Substation Technician</option>
-              <option value="Grid Maintenance Specialist">Grid Maintenance Specialist</option>
-              <option value="Control Room Dispatcher">Control Room Dispatcher</option>
-              <option value="Emergency Response Lead">Emergency Response Lead</option>
-              <option value="Field Support Crew">Field Support Crew</option>
-            </select>
-          </div>
-
-          <DialogFooter className="pt-3 gap-2">
+          <div className={dialogFooterClass}>
             <Button
               type="button"
               variant="outline"
               disabled={isSubmitting}
               onClick={() => onOpenChange(false)}
-              className="rounded-xl text-xs font-semibold"
+              className={cancelClass}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="bg-brand-navy hover:bg-brand-navy text-white rounded-xl text-xs font-semibold flex items-center gap-2 cursor-pointer"
+              className={`${submitClass} flex items-center gap-2`}
             >
               {isSubmitting && <LoaderCircle className="size-4 animate-spin" />}
               <span>{isSubmitting ? 'Creating Staff...' : 'Create Staff Account'}</span>
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
@@ -196,82 +215,85 @@ export function AdminUsersEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] rounded-2xl bg-white p-6 max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-brand-ink">Edit Staff Account</DialogTitle>
-          <DialogDescription className="text-xs text-brand-muted">
+      <DialogContent className={dialogContentClass}>
+        <DialogHeader className={dialogHeaderClass}>
+          <DialogTitle className={dialogTitleClass}>Edit Staff Account</DialogTitle>
+          <DialogDescription className={dialogDescriptionClass}>
             {user?.email ? `Update ${user.email}'s details. Email changes are made by the staff member, not here.` : 'Update staff details.'}
           </DialogDescription>
         </DialogHeader>
 
-        {errorMessage && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700" role="alert">
-            {errorMessage}
-          </div>
-        )}
+        <form onSubmit={onSave}>
+          <div className={dialogBodyClass}>
+            {errorMessage && (
+              <p className={errorClass} role="alert">
+                {errorMessage}
+              </p>
+            )}
 
-        <form onSubmit={onSave} className="space-y-4 py-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-brand-muted">Full Name *</label>
-              <Input required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className="h-10 text-sm rounded-xl" />
+            <div className="grid grid-cols-2 gap-3.5">
+              <div className="space-y-1.5">
+                <label className={labelClass} htmlFor="edit-full-name">Full Name *</label>
+                <Input id="edit-full-name" required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className={inputClass} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelClass} htmlFor="edit-id-number">Staff ID Number</label>
+                <Input id="edit-id-number" value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value })} className={inputClass} />
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-brand-muted">Staff ID Number</label>
-              <Input value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value })} className="h-10 text-sm rounded-xl" />
+            <div className="grid grid-cols-2 gap-3.5">
+              <div className="space-y-1.5">
+                <label className={labelClass} htmlFor="edit-contact">Contact Number</label>
+                <Input id="edit-contact" value={form.contactNumber} onChange={(e) => setForm({ ...form, contactNumber: e.target.value })} className={inputClass} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelClass} htmlFor="edit-position">Position</label>
+                <select
+                  id="edit-position"
+                  value={form.position}
+                  onChange={(e) => setForm({ ...form, position: e.target.value })}
+                  className={selectClass}
+                >
+                  {positionOptions.map((position) => <option key={position}>{position}</option>)}
+                </select>
+              </div>
             </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-brand-muted">Contact Number</label>
-              <Input value={form.contactNumber} onChange={(e) => setForm({ ...form, contactNumber: e.target.value })} className="h-10 text-sm rounded-xl" />
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="edit-address">Address / Coverage</label>
+              <Input id="edit-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={inputClass} />
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-brand-muted">Position</label>
-              <select
-                value={form.position}
-                onChange={(e) => setForm({ ...form, position: e.target.value })}
-                className="h-10 w-full rounded-xl border border-brand-line bg-white px-3 text-sm text-brand-ink outline-none focus:border-brand-navy focus:ring-1 focus:ring-brand-navy"
+
+            <div className="grid gap-2 border-t border-brand-line pt-4 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isWorking}
+                onClick={() => onToggleActive()}
+                className={`${cancelClass} w-full`}
               >
-                {positionOptions.map((position) => <option key={position}>{position}</option>)}
-              </select>
+                {user?.isActive === false ? 'Reactivate account' : 'Deactivate account'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isWorking}
+                onClick={() => onResetAccess()}
+                className={`${cancelClass} w-full`}
+              >
+                Send password reset link
+              </Button>
             </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-brand-muted">Address / Coverage</label>
-            <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="h-10 text-sm rounded-xl" />
-          </div>
 
-          <div className="grid gap-2 border-t border-brand-line pt-4 sm:grid-cols-2">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isWorking}
-              onClick={() => onToggleActive()}
-              className="rounded-xl text-xs font-semibold"
-            >
-              {user?.isActive === false ? 'Reactivate account' : 'Deactivate account'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isWorking}
-              onClick={() => onResetAccess()}
-              className="rounded-xl text-xs font-semibold"
-            >
-              Send password reset link
-            </Button>
-          </div>
-
-          <DialogFooter className="pt-2 gap-2">
-            <Button type="button" variant="outline" disabled={isSubmitting} onClick={() => onOpenChange(false)} className="rounded-xl text-xs font-semibold">
+          <div className={dialogFooterClass}>
+            <Button type="button" variant="outline" disabled={isSubmitting} onClick={() => onOpenChange(false)} className={cancelClass}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting} className="bg-brand-navy hover:bg-brand-navy text-white rounded-xl text-xs font-semibold flex items-center gap-2 cursor-pointer">
+            <Button type="submit" disabled={isSubmitting} className={`${submitClass} flex items-center gap-2`}>
               {isSubmitting && <LoaderCircle className="size-4 animate-spin" />}
               <span>{isSubmitting ? 'Saving...' : 'Save changes'}</span>
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

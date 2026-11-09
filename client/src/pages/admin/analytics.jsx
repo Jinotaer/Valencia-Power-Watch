@@ -2,6 +2,7 @@ import { Activity, BarChart3, Download, FileText, MapPin, Trash2, Users } from '
 import { useEffect, useMemo, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
 import AdminSidebar from '../../components/admin/sidebar'
+import PageHeader from '../../components/common/pageHeader'
 import { SidebarInset, SidebarProvider } from '../../components/ui/sidebar'
 import { loadAnalyticsOverview } from '../../lib/analytics'
 import { downloadCsv } from '../../lib/adminUsers'
@@ -79,16 +80,17 @@ export default function AdminAnalytics() {
         <AdminNavbar title="Administration" section="Analytics" />
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-[1400px]">
-            <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold tracking-[-.03em] text-brand-navy">Analytics</h1>
-                <p className="mt-1 text-sm text-brand-muted">Live totals and distributions from reports, users, schedules, barangays and announcements.</p>
-              </div>
-              <button type="button" onClick={exportReports} disabled={!overview} className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-blue px-4 text-sm font-semibold text-white hover:bg-brand-navy disabled:opacity-60">
-                <Download className="size-4" />
-                Export report CSV
-              </button>
-            </header>
+            <PageHeader
+              className="mb-6"
+              title="Analytics"
+              description="Live totals and distributions from reports, users, schedules, barangays and announcements."
+              actions={
+                <button type="button" onClick={exportReports} disabled={!overview} className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-blue px-4 text-sm font-semibold text-white hover:bg-brand-navy disabled:opacity-60">
+                  <Download className="size-4" />
+                  Export report CSV
+                </button>
+              }
+            />
 
             {isLoading && <p className="rounded-2xl border border-brand-line bg-white p-10 text-center text-sm font-semibold text-brand-muted">Loading analytics…</p>}
             {loadError && <p className="rounded-2xl border border-[#f3c7c3] bg-white p-10 text-center text-sm font-bold text-[#b42318]">{loadError}</p>}

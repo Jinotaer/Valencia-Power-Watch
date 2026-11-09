@@ -1,6 +1,7 @@
-import { ChevronDown, ChevronUp, MapPin, Search, UsersRound } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDown, ChevronUp, Search, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
+import PageHeader from '../../components/common/pageHeader'
 import Pagination from '../../components/common/pagination'
 import AdminSidebar from '../../components/admin/sidebar'
 import { Button } from '../../components/ui/button'
@@ -41,8 +42,6 @@ function AdminResidents() {
   const [barangayNames, setBarangayNames] = useState([])
   const [query, setQuery] = useState('')
   const [barangayFilter, setBarangayFilter] = useState('All barangays')
-  const [isBarangayMenuOpen, setIsBarangayMenuOpen] = useState(false)
-  const barangayMenuRef = useRef(null)
   const [sortField, setSortField] = useState('name')
   const [sortOrder, setSortOrder] = useState('asc')
   const [page, setPage] = useState(1)
@@ -53,21 +52,6 @@ function AdminResidents() {
     setIsLoading(true)
     setReloadKey((value) => value + 1)
   }
-
-  // Close the barangay dropdown when clicking outside of it
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (barangayMenuRef.current && !barangayMenuRef.current.contains(event.target)) {
-        setIsBarangayMenuOpen(false)
-      }
-    }
-    if (isBarangayMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [isBarangayMenuOpen])
 
   useEffect(() => {
     let active = true
@@ -161,121 +145,72 @@ function AdminResidents() {
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-[1400px]">
             {/* Page Header */}
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-brand-ink flex items-center gap-2.5">
-                  <UsersRound className="size-6 text-brand-navy" />
-                  <span>Resident Directory</span>
-                </h1>
-                <p className="mt-1 text-xs sm:text-sm text-brand-muted">
-                  Community member accounts only — field staff and administrators are on the{' '}
-                  <a href="/admin/users" className="font-semibold text-brand-blue underline-offset-2 hover:underline">
-                    staff directory
-                  </a>
-                  .
-                </p>
-              </div>
-            </div>
+            <PageHeader
+              className="mb-6"
+              title="Resident Directory"
+              description="Registered Valencia City community members and their registered residential barangays."
+            />
 
             {/* Table Container Card */}
-            <section className="overflow-hidden rounded-2xl border border-brand-line/80 bg-white shadow-xs">
+            <section className="overflow-hidden rounded-2xl border border-brand-line bg-white shadow-sm shadow-slate-200/50">
               {/* Search & Filter Toolbar */}
-              <div className="flex flex-col gap-3 p-4 border-b border-brand-line sm:flex-row sm:items-center sm:justify-between">
-                {/* Search Bar */}
-                <div className="relative w-full sm:w-72">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-brand-muted" />
-                  <Input
-                    className="h-10 rounded-xl border-brand-line bg-white pl-9 text-xs sm:text-sm text-brand-ink placeholder:text-brand-muted focus:border-brand-navy focus:ring-1 focus:ring-brand-navy"
-                    placeholder="Search by name, email, or ID num..."
-                    value={query}
-                    onChange={(e) => {
-                      setQuery(e.target.value)
-                      setPage(1)
-                    }}
-                    aria-label="Search residents"
-                  />
-                </div>
-
-                {/* Barangay Filter Dropdown */}
-                <div className="flex items-center gap-2" ref={barangayMenuRef}>
-                  <div className="relative">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsBarangayMenuOpen((prev) => !prev)}
-                      className={`h-9 shrink-0 gap-2 rounded-xl border px-3 transition-all cursor-pointer ${
-                        barangayFilter !== 'All barangays' || isBarangayMenuOpen
-                          ? 'border-brand-navy bg-brand-navy/10 text-brand-navy ring-2 ring-brand-navy/20'
-                          : 'border-brand-line text-brand-muted hover:border-brand-line hover:bg-brand-paper'
-                      }`}
-                      title={`Filter by barangay (Current: ${barangayFilter === 'All barangays' ? 'All' : barangayFilter})`}
-                      aria-label="Filter by barangay"
-                      aria-expanded={isBarangayMenuOpen}
-                    >
-                      <MapPin className="size-4" />
-                      <span className="text-xs font-semibold">
-                        Barangay: {barangayFilter === 'All barangays' ? 'All' : barangayFilter}
-                      </span>
-                      <ChevronDown className={`size-3.5 transition-transform ${isBarangayMenuOpen ? 'rotate-180' : ''}`} />
-                      {barangayFilter !== 'All barangays' && (
-                        <span className="size-2 rounded-full bg-brand-navy" />
-                      )}
-                    </Button>
-
-                    {isBarangayMenuOpen && (
-                      <div className="absolute right-0 top-full mt-2 z-50 w-56 rounded-2xl border border-brand-line bg-white p-2 shadow-xl animate-in fade-in zoom-in-95 duration-100">
-                        <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-brand-line mb-1">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                            Filter by Barangay
-                          </span>
-                          {barangayFilter !== 'All barangays' && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setBarangayFilter('All barangays')
-                                setPage(1)
-                              }}
-                              className="text-[10px] font-semibold text-brand-navy hover:underline cursor-pointer"
-                            >
-                              Reset
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="max-h-72 space-y-0.5 overflow-y-auto">
-                          {['All barangays', ...barangayNames, 'Unassigned'].map((barangay) => {
-                            const isSelected = barangayFilter === barangay
-                            return (
-                              <button
-                                key={barangay}
-                                type="button"
-                                onClick={() => {
-                                  setBarangayFilter(barangay)
-                                  setPage(1)
-                                  setIsBarangayMenuOpen(false)
-                                }}
-                                className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs font-semibold transition-colors cursor-pointer ${
-                                  isSelected
-                                    ? 'bg-[#e5e9f6] text-brand-ink font-bold'
-                                    : 'text-brand-muted hover:bg-brand-paper hover:text-brand-ink'
-                                }`}
-                              >
-                                <span className="truncate">{barangay}</span>
-                                {isSelected && <span className="size-1.5 rounded-full bg-brand-navy" />}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
+              <div className="border-b border-brand-line p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="relative min-w-0 flex-1 lg:max-w-md">
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-brand-muted" />
+                    <Input
+                      type="text"
+                      className="h-10 w-full rounded-xl border-brand-line bg-white pl-9 pr-9 text-xs font-medium text-brand-ink placeholder:text-brand-muted focus-visible:border-brand-line focus-visible:ring-0 sm:text-sm"
+                      placeholder="Search by name, email, or ID num..."
+                      value={query}
+                      onChange={(e) => {
+                        setQuery(e.target.value)
+                        setPage(1)
+                      }}
+                      aria-label="Search residents"
+                    />
+                    {query && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => {
+                          setQuery('')
+                          setPage(1)
+                        }}
+                        aria-label="Clear search query"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full text-brand-muted hover:bg-brand-line/50 hover:text-brand-ink cursor-pointer"
+                      >
+                        <X className="size-3.5" aria-hidden="true" />
+                      </Button>
                     )}
                   </div>
+
+                  {/* Barangay Filter Dropdown */}
+                  <select
+                    value={barangayFilter}
+                    onChange={(e) => {
+                      setBarangayFilter(e.target.value)
+                      setPage(1)
+                    }}
+                    aria-label="Filter by barangay"
+                    className="h-10 rounded-xl border border-brand-line bg-white px-3 text-xs font-semibold text-brand-ink focus:border-brand-blue focus:outline-none cursor-pointer"
+                  >
+                    <option value="All barangays">All barangays</option>
+                    {barangayNames.map((name) => (
+                      <option key={name} value={name}>
+                        Brgy. {name}
+                      </option>
+                    ))}
+                    <option value="Unassigned">Unassigned</option>
+                  </select>
                 </div>
               </div>
 
               {/* Data Table */}
               <div className="overflow-x-auto">
                 <Table>
-                  <TableHeader className="bg-brand-paper/60">
+                  <TableHeader className="border-b border-brand-line bg-brand-paper/80">
                     <TableRow className="border-b border-brand-line hover:bg-transparent">
                       <TableHead
                         onClick={() => toggleSort('name')}
@@ -308,7 +243,7 @@ function AdminResidents() {
                               <ChevronDown className="size-3.5 text-brand-navy" />
                             )
                           ) : (
-                            <ChevronUp className="size-3.5 opacity-30" />
+                            <ChevronDown className="size-3.5 opacity-30" />
                           )}
                         </div>
                       </TableHead>
@@ -398,7 +333,6 @@ function AdminResidents() {
                   setPageSize(newSize)
                   setPage(1)
                 }}
-                pageSizeOptions={[5, 10, 20, 50]}
               />
             </section>
           </div>

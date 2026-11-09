@@ -5,12 +5,12 @@ import {
   Pencil,
   Plus,
   Search,
-  SlidersHorizontal,
-  Users as UsersIcon,
+  X,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
 import { AdminUsersCreateDialog, AdminUsersEditDialog } from '../../components/admin/usersModals'
+import PageHeader from '../../components/common/pageHeader'
 import Pagination from '../../components/common/pagination'
 import AdminSidebar from '../../components/admin/sidebar'
 import { Button } from '../../components/ui/button'
@@ -19,14 +19,6 @@ import {
   SidebarInset,
   SidebarProvider,
 } from '../../components/ui/sidebar'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../../components/ui/table'
 import { createUnpersistedClient, supabase } from '../../lib/supabase'
 import { sendStaffPasswordReset, setUserActive, updateAdminUser } from '../../lib/adminUsers'
 
@@ -83,8 +75,6 @@ function AdminUsers() {
   const [reloadKey, setReloadKey] = useState(0)
   const [query, setQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('All') // 'All' | 'Staff' | 'Admin'
-  const [openFilterMenu, setOpenFilterMenu] = useState(null) // 'role' | null
-  const filterMenuRef = useRef(null)
 
   const reload = () => {
     setLoadError('')
@@ -92,20 +82,6 @@ function AdminUsers() {
     setReloadKey((value) => value + 1)
   }
 
-  // Close whichever filter dropdown is open when clicking outside of it
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
-        setOpenFilterMenu(null)
-      }
-    }
-    if (openFilterMenu) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [openFilterMenu])
   const [sortField, setSortField] = useState('name')
   const [sortOrder, setSortOrder] = useState('asc')
   const [page, setPage] = useState(1)
@@ -168,17 +144,6 @@ function AdminUsers() {
       active = false
     }
   }, [reloadKey])
-
-  // Calculate counts per role for the filter chips
-  const roleCounts = useMemo(() => {
-    const counts = { all: usersList.length, staff: 0, admin: 0 }
-    usersList.forEach((u) => {
-      const r = (u.role || '').toLowerCase()
-      if (r === 'staff') counts.staff++
-      else if (r === 'admin') counts.admin++
-    })
-    return counts
-  }, [usersList])
 
   // Handle column sorting
   function toggleSort(field) {
@@ -374,303 +339,175 @@ function AdminUsers() {
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-[1400px]">
             {/* Page Header: Title + Create User Button */}
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-brand-ink flex items-center gap-2.5">
-                  <UsersIcon className="size-6 text-brand-navy" />
-                  <span>Users Directory</span>
-                </h1>
-                <p className="mt-1 text-xs sm:text-sm text-brand-muted">
+            <PageHeader
+              className="mb-6"
+              title="Users Directory"
+              description={
+                <>
                   Field response staff and administrator accounts — resident accounts are on the{' '}
                   <a href="/admin/residents" className="font-semibold text-brand-blue underline-offset-2 hover:underline">
                     resident directory
                   </a>
                   .
-                </p>
-              </div>
-
-              <Button
-                onClick={() => {
-                  setCreateError('')
-                  setIsCreateOpen(true)
-                }}
-                className="h-10 gap-2 bg-brand-navy hover:bg-brand-navy active:bg-brand-navy px-4 font-semibold text-white shadow-xs rounded-xl transition-all cursor-pointer"
-              >
-                <Plus className="size-4" />
-                <span>Create user</span>
-              </Button>
-            </div>
+                </>
+              }
+              actions={
+                <Button
+                  onClick={() => {
+                    setCreateError('')
+                    setIsCreateOpen(true)
+                  }}
+                  className="h-10 gap-2 rounded-lg bg-brand-blue px-4 text-sm font-semibold text-white shadow-sm hover:bg-brand-navy"
+                >
+                  <Plus className="size-4" />
+                  <span>New User</span>
+                </Button>
+              }
+            />
 
             {/* Table Container Card */}
-            <section className="overflow-hidden rounded-2xl border border-brand-line/80 bg-white shadow-xs">
-              {/* Search & Filter Toolbar */}
-              <div className="flex flex-col gap-3 p-4 border-b border-brand-line sm:flex-row sm:items-center sm:justify-between">
-                {/* Search Bar + Active Role Badge */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="relative w-full sm:w-72">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-brand-muted" />
+            <section className="overflow-hidden rounded-2xl border border-brand-line bg-white shadow-sm shadow-slate-200/50">
+              <div className="border-b border-brand-line p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="relative min-w-0 flex-1 lg:max-w-md">
+                    <Search
+                      className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-brand-muted"
+                      aria-hidden="true"
+                    />
                     <Input
-                      className="h-10 rounded-xl border-brand-line bg-white pl-9 text-xs sm:text-sm text-brand-ink placeholder:text-brand-muted focus:border-brand-navy focus:ring-1 focus:ring-brand-navy"
-                      placeholder="Search by name, email, or ID num..."
+                      type="text"
                       value={query}
                       onChange={(e) => {
                         setQuery(e.target.value)
                         setPage(1)
                       }}
+                      placeholder="Search by name, email, or ID number..."
                       aria-label="Search users"
+                      className="h-10 w-full rounded-xl border-brand-line bg-white pl-9 pr-9 text-xs font-medium text-brand-ink placeholder:text-brand-muted focus-visible:border-brand-line focus-visible:ring-0 sm:text-sm"
                     />
-                  </div>
-
-                  {/* Active Role Filter Chip */}
-                  {roleFilter !== 'All' && (
-                    <div className="inline-flex items-center gap-1.5 rounded-xl border border-brand-line bg-brand-paper px-2.5 py-1 text-xs font-bold text-brand-ink shadow-2xs animate-in fade-in">
-                      <span
-                        className={`size-2 rounded-full ${roleFilter === 'Staff' ? 'bg-amber-500' : 'bg-brand-blue'}`}
-                      />
-                      <span>Role: {roleFilter}</span>
-                      <button
+                    {query && (
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon-xs"
                         onClick={() => {
-                          setRoleFilter('All')
+                          setQuery('')
                           setPage(1)
                         }}
-                        className="ml-1 text-brand-muted hover:text-brand-ink font-bold cursor-pointer"
-                        title="Clear role filter"
-                        aria-label="Clear role filter"
+                        aria-label="Clear search query"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full text-brand-muted hover:bg-brand-line/50 hover:text-brand-ink cursor-pointer"
                       >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Role + Barangay Filter Dropdowns */}
-                <div className="flex items-center gap-2" ref={filterMenuRef}>
-                  {/* Role Filter Dropdown */}
-                  <div className="relative">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setOpenFilterMenu((prev) => (prev === 'role' ? null : 'role'))}
-                      className={`h-9 shrink-0 gap-2 rounded-xl border px-3 transition-all cursor-pointer ${
-                        roleFilter !== 'All' || openFilterMenu === 'role'
-                          ? 'border-brand-navy bg-brand-navy/10 text-brand-navy ring-2 ring-brand-navy/20'
-                          : 'border-brand-line text-brand-muted hover:border-brand-line hover:bg-brand-paper'
-                      }`}
-                      title={`Filter by role (Current: ${roleFilter === 'All' ? 'All Roles' : roleFilter})`}
-                      aria-label="Filter by role"
-                      aria-expanded={openFilterMenu === 'role'}
-                    >
-                      <SlidersHorizontal className="size-4" />
-                      <span className="text-xs font-semibold">
-                        Role: {roleFilter === 'All' ? 'All' : roleFilter}
-                      </span>
-                      <ChevronDown className={`size-3.5 transition-transform ${openFilterMenu === 'role' ? 'rotate-180' : ''}`} />
-                      {roleFilter !== 'All' && (
-                        <span className="size-2 rounded-full bg-brand-navy" />
-                      )}
-                    </Button>
-
-                    {openFilterMenu === 'role' && (
-                      <div className="absolute right-0 top-full mt-2 z-50 w-56 rounded-2xl border border-brand-line bg-white p-2 shadow-xl animate-in fade-in zoom-in-95 duration-100">
-                        <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-brand-line mb-1">
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                            Filter by Role
-                          </span>
-                          {roleFilter !== 'All' && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setRoleFilter('All')
-                                setPage(1)
-                              }}
-                              className="text-[10px] font-semibold text-brand-navy hover:underline cursor-pointer"
-                            >
-                              Reset
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="space-y-0.5">
-                          {[
-                            { label: 'All Roles', value: 'All', count: roleCounts.all, dot: 'bg-brand-muted' },
-                            { label: 'Field Staff', value: 'Staff', count: roleCounts.staff, dot: 'bg-amber-500' },
-                            { label: 'Administrators', value: 'Admin', count: roleCounts.admin, dot: 'bg-brand-blue' },
-                          ].map((item) => {
-                            const isSelected = roleFilter === item.value
-                            return (
-                              <button
-                                key={item.value}
-                                type="button"
-                                onClick={() => {
-                                  setRoleFilter(item.value)
-                                  setPage(1)
-                                  setOpenFilterMenu(null)
-                                }}
-                                className={`flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs font-semibold transition-colors cursor-pointer ${
-                                  isSelected
-                                    ? 'bg-[#e5e9f6] text-brand-ink font-bold'
-                                    : 'text-brand-muted hover:bg-brand-paper hover:text-brand-ink'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className={`size-2 rounded-full ${item.dot}`} />
-                                  <span>{item.label}</span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="rounded-full bg-brand-line/80 px-1.5 py-0.5 text-[10px] text-brand-muted font-medium">
-                                    {item.count}
-                                  </span>
-                                  {isSelected && <Check className="size-3.5 text-brand-navy" />}
-                                </div>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
+                        <X className="size-3.5" aria-hidden="true" />
+                      </Button>
                     )}
                   </div>
+
+                  {/* Role Filter Dropdown */}
+                  <select
+                    value={roleFilter}
+                    onChange={(e) => {
+                      setRoleFilter(e.target.value)
+                      setPage(1)
+                    }}
+                    aria-label="Filter by role"
+                    className="h-10 rounded-xl border border-brand-line bg-white px-3 text-xs font-semibold text-brand-ink focus:border-brand-blue focus:outline-none cursor-pointer"
+                  >
+                    <option value="All">All roles</option>
+                    <option value="Staff">Field Staff</option>
+                    <option value="Admin">Administrators</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Data Table */}
               <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-brand-paper/60">
-                    <TableRow className="border-b border-brand-line hover:bg-transparent">
-                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                        ID NUMBER
-                      </TableHead>
-
-                      <TableHead
-                        onClick={() => toggleSort('name')}
-                        className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted cursor-pointer select-none hover:text-brand-ink"
-                      >
-                        <div className="flex items-center gap-1">
-                          <span>NAME</span>
+                <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-brand-line bg-brand-paper/80 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
+                      <th className="h-11 px-5">ID number</th>
+                      <th className="h-11 px-5">
+                        <button type="button" onClick={() => toggleSort('name')} className="inline-flex items-center gap-1 cursor-pointer hover:text-brand-ink">
+                          <span>Name</span>
                           {sortField === 'name' ? (
-                            sortOrder === 'asc' ? (
-                              <ChevronUp className="size-3.5 text-brand-navy" />
-                            ) : (
-                              <ChevronDown className="size-3.5 text-brand-navy" />
-                            )
+                            sortOrder === 'asc' ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />
                           ) : (
                             <ChevronUp className="size-3.5 opacity-30" />
                           )}
-                        </div>
-                      </TableHead>
-
-                      <TableHead
-                        onClick={() => toggleSort('email')}
-                        className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted cursor-pointer select-none hover:text-brand-ink"
-                      >
-                        <div className="flex items-center gap-1">
-                          <span>EMAIL</span>
+                        </button>
+                      </th>
+                      <th className="h-11 px-5">
+                        <button type="button" onClick={() => toggleSort('email')} className="inline-flex items-center gap-1 cursor-pointer hover:text-brand-ink">
+                          <span>Email</span>
                           {sortField === 'email' ? (
-                            sortOrder === 'asc' ? (
-                              <ChevronUp className="size-3.5 text-brand-navy" />
-                            ) : (
-                              <ChevronDown className="size-3.5 text-brand-navy" />
-                            )
+                            sortOrder === 'asc' ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />
                           ) : (
                             <ChevronDown className="size-3.5 opacity-30" />
                           )}
-                        </div>
-                      </TableHead>
-
-                      <TableHead
-                        onClick={() => toggleSort('role')}
-                        className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted cursor-pointer select-none hover:text-brand-ink"
-                      >
-                        <div className="flex items-center gap-1">
-                          <span>ROLE</span>
+                        </button>
+                      </th>
+                      <th className="h-11 px-5">
+                        <button type="button" onClick={() => toggleSort('role')} className="inline-flex items-center gap-1 cursor-pointer hover:text-brand-ink">
+                          <span>Role</span>
                           {sortField === 'role' ? (
-                            sortOrder === 'asc' ? (
-                              <ChevronUp className="size-3.5 text-brand-navy" />
-                            ) : (
-                              <ChevronDown className="size-3.5 text-brand-navy" />
-                            )
+                            sortOrder === 'asc' ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />
                           ) : (
                             <ChevronDown className="size-3.5 opacity-30" />
                           )}
-                        </div>
-                      </TableHead>
+                        </button>
+                      </th>
+                      <th className="h-11 px-5">Contact</th>
+                      <th className="h-11 px-5">Status</th>
+                      <th className="h-11 px-5">Position</th>
+                      <th className="h-11 px-5">Joined</th>
+                      <th className="h-11 px-5 text-right">Action</th>
+                    </tr>
+                  </thead>
 
-                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                        CONTACT
-                      </TableHead>
-                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                        STATUS
-                      </TableHead>
-                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                        POSITION
-                      </TableHead>
-                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted text-right">
-                        ACTIONS
-                      </TableHead>
-
-                      <TableHead className="h-11 px-5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                        JOINED
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-
-                  <TableBody>
+                  <tbody className="divide-y divide-brand-line">
                     {!isLoading && !loadError && visibleUsers.map((user) => (
-                      <TableRow
+                      <tr
                         key={user.idNumber + user.email}
-                        className="border-b border-brand-line hover:bg-brand-paper/60 transition-colors"
+                        className="transition-colors hover:bg-brand-paper/70"
                       >
-                        <TableCell className="px-5 py-4">
-                          <span className="rounded-md bg-brand-paper border border-brand-line/60 px-2.5 py-1 text-xs font-semibold text-brand-muted inline-block tracking-tight">
+                        <td className="px-5 py-4">
+                          <span className="inline-block rounded-md border border-brand-line bg-brand-paper px-2 py-0.5 text-xs font-semibold tracking-tight text-brand-muted">
                             {user.idNumber}
                           </span>
-                        </TableCell>
-                        <TableCell className="px-5 py-4 font-semibold text-brand-ink text-sm">
-                          {user.name}
-                        </TableCell>
-                        <TableCell className="px-5 py-4 text-brand-muted text-xs sm:text-sm">
-                          {user.email}
-                        </TableCell>
-                        <TableCell className="px-5 py-4">
-                          <RoleBadge role={user.role} />
-                        </TableCell>
-                        <TableCell className="px-5 py-4 text-brand-muted text-xs sm:text-sm whitespace-nowrap">
-                          {user.contactNumber}
-                        </TableCell>
-                        <TableCell className="px-5 py-4">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-bold ${user.isActive === false ? 'border-red-200 bg-red-50 text-[#b42318]' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
-                            <span className={`size-1.5 rounded-full ${user.isActive === false ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                        </td>
+                        <td className="px-5 py-4 font-semibold text-brand-ink">{user.name}</td>
+                        <td className="px-5 py-4 text-xs text-brand-muted sm:text-sm">{user.email}</td>
+                        <td className="px-5 py-4"><RoleBadge role={user.role} /></td>
+                        <td className="whitespace-nowrap px-5 py-4 text-xs text-brand-muted sm:text-sm">{user.contactNumber}</td>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${user.isActive === false ? 'border-[#f3c7c3] bg-red-50 text-[#b42318]' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
+                            <span className={`size-1.5 rounded-full ${user.isActive === false ? 'bg-[#b42318]' : 'bg-emerald-500'}`} />
                             {user.isActive === false ? 'Deactivated' : 'Active'}
                           </span>
-                        </TableCell>
-                        <TableCell className="px-5 py-4 text-xs font-medium text-brand-muted whitespace-nowrap">
-                          {user.position || '\u2014'}
-                        </TableCell>
-                        <TableCell className="px-5 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button type="button" onClick={() => openEdit(user)} aria-label={`Edit ${user.name}`} title="Edit" className="grid size-9 place-items-center rounded-lg border border-brand-line bg-white text-brand-muted hover:bg-brand-paper hover:text-brand-navy">
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4 text-xs font-medium text-brand-muted">
+                          {user.position || '—'}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4 text-xs text-brand-muted">{user.joined}</td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <button type="button" onClick={() => openEdit(user)} aria-label={`Edit ${user.name}`} title="Edit" className="grid size-9 place-items-center rounded-lg border border-brand-line bg-white text-brand-muted transition-colors hover:bg-brand-paper hover:text-brand-navy">
                               <Pencil className="size-4" />
                             </button>
                           </div>
-                        </TableCell>
-                        <TableCell className="px-5 py-4 text-xs text-brand-muted whitespace-nowrap">
-                          {user.joined}
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     ))}
 
                     {isLoading && (
-                      <TableRow>
-                        <TableCell colSpan={9} className="h-36 text-center text-sm font-semibold text-brand-muted">
+                      <tr>
+                        <td colSpan={9} className="px-5 py-12 text-center text-sm font-semibold text-brand-muted">
                           Loading users…
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     )}
 
                     {!isLoading && loadError && (
-                      <TableRow>
-                        <TableCell colSpan={9} className="h-36 text-center">
+                      <tr>
+                        <td colSpan={9} className="px-5 py-12 text-center">
                           <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
                           <button
                             type="button"
@@ -679,22 +516,19 @@ function AdminUsers() {
                           >
                             Try again
                           </button>
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     )}
 
                     {!isLoading && !loadError && visibleUsers.length === 0 && (
-                      <TableRow>
-                        <TableCell
-                          colSpan={9}
-                          className="h-36 text-center text-sm text-brand-muted"
-                        >
+                      <tr>
+                        <td colSpan={9} className="px-5 py-12 text-center text-sm text-brand-muted">
                           No users found matching this filter combination.
-                        </TableCell>
-                      </TableRow>
+                        </td>
+                      </tr>
                     )}
-                  </TableBody>
-                </Table>
+                  </tbody>
+                </table>
               </div>
 
               {/* Common Pagination Component */}
@@ -707,7 +541,6 @@ function AdminUsers() {
                   setPageSize(newSize)
                   setPage(1)
                 }}
-                pageSizeOptions={[5, 10, 20, 50]}
               />
             </section>
           </div>

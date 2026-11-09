@@ -12,6 +12,7 @@ import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import AdminNavbar from '../../components/admin/navbar'
 import AdminSidebar from '../../components/admin/sidebar'
+import PageHeader from '../../components/common/pageHeader'
 import {
   SidebarInset,
   SidebarProvider,
@@ -221,15 +222,10 @@ export default function AdminMap() {
 
         <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:overflow-hidden">
           <div className="mx-auto flex h-full max-w-[1600px] flex-col gap-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-brand-muted">Operations</p>
-                <h1 className="mt-0.5 text-xl font-black tracking-tight text-brand-navy sm:text-2xl">Report location map</h1>
-                <p className="mt-1 text-xs text-brand-muted">
-                  Every resident outage report plotted from its captured pin.
-                </p>
-              </div>
-            </div>
+            <PageHeader
+              title="Report location map"
+              description="Every resident outage report plotted from its captured pin."
+            />
 
             <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
               <div

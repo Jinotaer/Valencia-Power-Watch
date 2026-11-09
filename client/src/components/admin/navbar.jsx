@@ -1,9 +1,30 @@
-import { Bell, ChevronRight, LogOut, Settings, UserRound } from 'lucide-react'
+import {
+  AlertTriangle,
+  Bell,
+  ChevronRight,
+  ExternalLink,
+  LogOut,
+  Settings,
+  UserRound,
+} from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { SidebarTrigger } from '../ui/sidebar'
 import { loadAdminNotifications } from '../../lib/notifications'
+import { loadAllReports } from '../../lib/reports'
 import { supabase } from '../../lib/supabase'
+
+function formatShortTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
 
 function NavDropdown({ button, label, children, width = 'w-56', buttonClassName = '' }) {
   const [open, setOpen] = useState(false)
@@ -69,15 +90,41 @@ function MenuLink({ href, icon: Icon, children }) {
 }
 
 function AdminNavbar({ title = 'Dashboard', section = 'Overview' }) {
+  const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
     let active = true
-    loadAdminNotifications(200)
-      .then((rows) => {
-        if (active) setUnreadCount(rows.filter((row) => !row.readAt).length)
+
+    Promise.all([
+      loadAdminNotifications(50).catch(() => []),
+      loadAllReports().catch(() => []),
+    ])
+      .then(([notifRows, reportRows]) => {
+        if (!active) return
+
+        const reportNotifs = (reportRows || []).map((report) => ({
+          id: `report-${report.id}`,
+          type: 'new_report',
+          title: `New Report: ${report.id}`,
+          body: `${report.outageType} · Brgy. ${report.barangay}`,
+          reportReference: report.id,
+          readAt: report.status !== 'pending' ? report.updatedAt : null,
+          createdAt: report.createdAt,
+          priority: report.priority,
+        }))
+
+        const dbNotifs = (notifRows || []).filter((r) => r.type !== 'manual')
+
+        const merged = [...reportNotifs, ...dbNotifs].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )
+
+        setNotifications(merged)
+        setUnreadCount(merged.filter((r) => !r.readAt).length)
       })
       .catch(() => {})
+
     return () => {
       active = false
     }
@@ -87,6 +134,8 @@ function AdminNavbar({ title = 'Dashboard', section = 'Overview' }) {
     if (supabase) await supabase.auth.signOut()
     window.location.href = '/admin/login'
   }
+
+  const recentNotifications = notifications.slice(0, 5)
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b border-brand-line bg-white px-4 sm:px-6">
@@ -106,19 +155,87 @@ function AdminNavbar({ title = 'Dashboard', section = 'Overview' }) {
         </div>
         <NavDropdown
           label="Notifications"
+          width="w-80 sm:w-96"
+          buttonClassName="border border-brand-line/80 rounded-xl bg-white hover:bg-brand-paper hover:border-brand-line"
           button={
             <span className="relative grid size-8 place-items-center">
-              <Bell className="size-4" />
+              <Bell className="size-4 text-brand-ink" />
               {unreadCount > 0 && (
-                <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-brand-yellow px-0.5 text-[9px] font-black text-brand-navy ring-2 ring-white">
+                <span className="absolute -right-1.5 -top-1.5 grid min-w-4.5 h-4.5 place-items-center rounded-full bg-brand-yellow px-1 text-[10px] font-black text-brand-navy shadow-xs ring-2 ring-white">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </span>
           }
         >
-          <MenuLink href="/admin/notifications" icon={Bell}>All notifications</MenuLink>
-          <MenuLink href="/admin/notifications" icon={Settings}>Notification settings</MenuLink>
+          <div className="flex items-center justify-between border-b border-brand-line px-3.5 py-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-brand-navy">Notifications</span>
+              {unreadCount > 0 && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-800">
+                  {unreadCount} unread
+                </span>
+              )}
+            </div>
+            <a
+              href="/admin/notifications"
+              className="text-[11px] font-semibold text-brand-blue hover:underline"
+            >
+              View all
+            </a>
+          </div>
+
+          <div className="max-h-80 divide-y divide-brand-line/60 overflow-y-auto">
+            {recentNotifications.length === 0 ? (
+              <div className="py-6 text-center text-xs text-brand-muted">
+                No recent notifications
+              </div>
+            ) : (
+              recentNotifications.map((n) => (
+                <a
+                  key={n.id}
+                  href="/admin/notifications"
+                  className={`block px-3.5 py-2.5 transition-colors hover:bg-brand-paper ${
+                    !n.readAt ? 'bg-[#e5e9f6]/30' : ''
+                  }`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    {n.type === 'new_report' ? (
+                      <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-lg bg-amber-100 text-amber-700">
+                        <AlertTriangle className="size-3.5" />
+                      </span>
+                    ) : (
+                      <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-lg bg-[#e5e9f6] text-brand-blue">
+                        <Bell className="size-3.5" />
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="truncate text-xs font-bold text-brand-ink">{n.title}</p>
+                        {!n.readAt && (
+                          <span className="size-1.5 shrink-0 rounded-full bg-brand-blue" />
+                        )}
+                      </div>
+                      <p className="line-clamp-1 text-[11px] text-brand-muted">{n.body}</p>
+                      <p className="mt-1 text-[10px] tabular-nums text-brand-muted">
+                        {formatShortTime(n.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                </a>
+              ))
+            )}
+          </div>
+
+          <div className="border-t border-brand-line p-1.5">
+            <a
+              href="/admin/notifications"
+              className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold text-brand-blue transition-colors hover:bg-brand-paper hover:text-brand-navy"
+            >
+              <span>Go to notification center</span>
+              <ExternalLink className="size-3.5" />
+            </a>
+          </div>
         </NavDropdown>
         <NavDropdown
           label="Profile"
