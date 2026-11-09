@@ -20,8 +20,7 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       devOptions: {
-        enabled: true,
-        suppressWarnings: true,
+        enabled: false,
       },
       manifest: false,
       workbox: {

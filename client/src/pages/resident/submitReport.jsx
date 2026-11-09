@@ -10,6 +10,7 @@ import {
   Maximize2,
   Plus,
   Send,
+  Sparkles,
   Video,
   X,
 } from 'lucide-react'
@@ -21,6 +22,7 @@ import { addReport, priorityLabels, reportPriorities } from '../../lib/reports'
 import { useLanguage } from '../../lib/i18n'
 import { VALENCIA_CENTER } from '../../components/resident/mapData'
 import { SubmitReportSuccess } from '../../components/resident/submitReportSuccess'
+import { analyzeEvidenceWithAI } from '../../lib/evidenceAiAnalyzer'
 
 const valenciaBarangays = [
   'Guinoyuran',
@@ -260,11 +262,16 @@ export default function SubmitReport() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [reportReference, setReportReference] = useState('')
+  const [isAnalyzingAi, setIsAnalyzingAi] = useState(false)
+  const [aiAnalysisResult, setAiAnalysisResult] = useState(null)
+  const [aiError, setAiError] = useState('')
+  const [isWebImageDetected, setIsWebImageDetected] = useState(false)
+  const [safetyWarning, setSafetyWarning] = useState('')
 
   const stepTitles = {
-    1: 'Details',
-    2: 'Location',
-    3: 'Evidence',
+    1: 'Evidence',
+    2: 'Details',
+    3: 'Location',
     4: 'Review',
   }
 
@@ -371,10 +378,10 @@ export default function SubmitReport() {
     )
   }
 
-  const handlePickPin = (lat, lng) => {
+  const handlePickPin = (lat, lng, source = 'manual') => {
     setPinPosition({ lat, lng })
     setCoordinates({ latitude: lat, longitude: lng, accuracy: null })
-    setPinSource('manual')
+    setPinSource(source)
     setLocationMessage('')
     setIsLocationError(false)
     resolvePinnedLocation(lat, lng)
@@ -413,7 +420,7 @@ export default function SubmitReport() {
         setPhotos((current) => (
           current.length >= 3
             ? current
-            : [...current, { id: `${Date.now()}-${current.length}`, label: file.name, type: 'image/jpeg', kind: 'image', dataUrl, previewUrl: dataUrl }]
+            : [...current, { id: `${Date.now()}-${current.length}`, label: file.name, type: 'image/jpeg', kind: 'image', sourceFile: file, dataUrl, previewUrl: dataUrl }]
         ))
       } else {
         const previewUrl = URL.createObjectURL(file)
@@ -434,6 +441,41 @@ export default function SubmitReport() {
     const photo = photos.find((item) => item.id === id)
     if (photo?.kind === 'video') URL.revokeObjectURL(photo.previewUrl)
     setPhotos((current) => current.filter((item) => item.id !== id))
+  }
+
+  // AI Analysis of uploaded evidence (photos or video)
+  const handleRunAiAnalysis = async () => {
+    if (photos.length === 0 || isAnalyzingAi) return
+    setIsAnalyzingAi(true)
+    setAiError('')
+
+    try {
+      const result = await analyzeEvidenceWithAI({
+        photos,
+        userLocation: barangay,
+      })
+
+      if (result) {
+        setAiAnalysisResult(result)
+        if (result.outageType) setOutageType(result.outageType)
+        if (result.priority) setPriority(result.priority)
+        if (result.noticedAt) setNoticedAt(result.noticedAt)
+        if (result.description) setDescription(result.description)
+        if (result.suggestedLandmark && !landmark) setLandmark(result.suggestedLandmark)
+        if (result.isWebOrStockImage) setIsWebImageDetected(true)
+        if (result.safetyWarning) setSafetyWarning(result.safetyWarning)
+
+        if (result.coordinates?.lat && result.coordinates?.lng) {
+          handlePickPin(result.coordinates.lat, result.coordinates.lng, 'gps')
+        }
+
+        setStep(2)
+      }
+    } catch {
+      setAiError('Could not complete AI scan. You can continue filling details manually.')
+    } finally {
+      setIsAnalyzingAi(false)
+    }
   }
 
   // Handle Submission
@@ -592,9 +634,190 @@ export default function SubmitReport() {
 
       {/* FORM CONTENT CONTAINER */}
       <main className="mx-auto w-full max-w-md px-4 py-5 flex-1">
-        {/* STEP 1: DETAILS */}
+        {/* STEP 1: EVIDENCE */}
         {step === 1 && (
+          <div className="space-y-4 animate-in fade-in">
+            <p className="text-xs text-brand-muted leading-relaxed">
+              {t('Photos or a short video help the team verify your report faster. This step is optional.')}
+            </p>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={isProcessingPhoto || isAnalyzingAi || photos.length >= 3}
+                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-line bg-white p-5 text-center transition-all hover:bg-brand-paper active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <div className="grid size-10 place-items-center rounded-xl bg-[#e5e9f6] text-brand-blue">
+                  <Camera className="size-5" />
+                </div>
+                <span className="text-xs font-bold text-brand-blue">{t('Take photo')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                disabled={isProcessingPhoto || isAnalyzingAi || photos.length >= 3}
+                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-line bg-white p-5 text-center transition-all hover:bg-brand-paper active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <div className="grid size-10 place-items-center rounded-xl bg-[#e5e9f6] text-brand-blue">
+                  <Video className="size-5" />
+                </div>
+                <span className="text-xs font-bold text-brand-blue">{t('Record video')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessingPhoto || isAnalyzingAi || photos.length >= 3}
+                className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-line bg-white text-xs font-bold text-brand-blue transition-all hover:bg-brand-paper active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ImageIcon className="size-4" />
+                {t('Upload photo or video')}
+              </button>
+            </div>
+
+            {photoError && <p className="text-[11px] font-semibold text-[#b42318]">{t(photoError)}</p>}
+            {aiError && <p className="text-[11px] font-semibold text-[#9a6500]">{t(aiError)}</p>}
+
+            {/* Added Evidence Grid */}
+            <section>
+              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-muted">
+                {t('Added ({count} of 3)', { count: photos.length })}{isProcessingPhoto ? ` · ${t('Processing…')}` : ''}
+              </h2>
+              <div className="flex flex-wrap items-center gap-3">
+                {photos.map((photo) => (
+                  <div
+                    key={photo.id}
+                    className="relative flex size-20 items-center justify-center rounded-2xl border border-brand-line bg-[#e5e9f6] text-brand-blue shadow-xs"
+                  >
+                    {photo.kind === 'video' ? (
+                      <>
+                        <video
+                          src={photo.previewUrl}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="size-full rounded-2xl object-cover"
+                        />
+                        <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-2xl bg-black/25">
+                          <Video className="size-5 text-white" />
+                        </span>
+                      </>
+                    ) : (
+                      <img
+                        src={photo.previewUrl}
+                        alt={photo.label || t('Uploaded evidence')}
+                        className="size-full rounded-2xl object-cover"
+                      />
+                    )}
+
+                    {/* Remove Evidence Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePhoto(photo.id)}
+                      className="absolute -right-1.5 -top-1.5 z-10 grid size-5 place-items-center rounded-full border border-brand-line bg-white text-brand-muted shadow-xs hover:bg-red-50 hover:text-red-600"
+                      aria-label={photo.label ? t('Remove {label}', { label: photo.label }) : t('Remove attachment')}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Add Another Slot */}
+                {photos.length < 3 && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessingPhoto}
+                    className="grid size-20 place-items-center rounded-2xl border-2 border-dashed border-brand-line text-brand-blue hover:bg-brand-paper cursor-pointer disabled:cursor-wait disabled:opacity-50"
+                    aria-label={t('Add photo or video')}
+                  >
+                    <Plus className="size-6" />
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {/* AI auto-fill card (shown once evidence is attached) */}
+            {photos.length > 0 && (
+              <div className="rounded-2xl border border-brand-yellow/60 bg-brand-yellow/10 p-3.5 shadow-xs">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-brand-yellow text-brand-navy shadow-xs">
+                    <Sparkles className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black text-brand-navy">{t('Auto-fill report details with AI')}</p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-brand-muted">
+                      {t('AI will scan your evidence to detect the interruption type, priority, time and location. You can review and edit everything.')}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleRunAiAnalysis}
+                      disabled={isAnalyzingAi || isProcessingPhoto}
+                      className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl bg-brand-navy px-3.5 py-2 text-xs font-black text-white shadow-xs transition-all hover:bg-brand-blue cursor-pointer disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <Sparkles className={`size-3.5 text-brand-yellow ${isAnalyzingAi ? 'animate-pulse' : ''}`} />
+                      <span>{isAnalyzingAi ? t('Analyzing evidence…') : t('Analyze with AI')}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Privacy Guidance Box */}
+            <div className="flex items-start gap-2.5 rounded-2xl border border-brand-line bg-[#e5e9f6] p-3.5 text-[11px] leading-relaxed text-brand-blue">
+              <Info className="size-4 shrink-0 text-brand-blue mt-0.5" />
+              <span>
+                {t('Show the transformer, lines or your meter if you can. Avoid faces and license plates.')}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: DETAILS */}
+        {step === 2 && (
           <div className="space-y-5 animate-in fade-in">
+            {/* AI result banner */}
+            {aiAnalysisResult && (
+              <div className="rounded-2xl border border-brand-blue/30 bg-[#f4f7ff] p-3 shadow-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-black text-brand-blue">
+                    <Sparkles className="size-3.5 text-[#b88a00]" />
+                    {t('Filled in by AI — please review')}
+                  </span>
+                  <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[10px] font-extrabold text-brand-blue">
+                    {t('{percent}% match', { percent: Math.round((aiAnalysisResult.confidence || 0.9) * 100) })}
+                  </span>
+                </div>
+                {aiAnalysisResult.detectedComponents?.length > 0 && (
+                  <p className="mt-1 text-[11px] text-brand-muted">
+                    {t('Detected:')} {aiAnalysisResult.detectedComponents.join(', ')}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Web / stock image notice */}
+            {isWebImageDetected && (
+              <div className="flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                <span>
+                  <strong>{t('Possible internet image.')}</strong>{' '}
+                  {t('This photo has no camera details. If it is safe, a live photo of the actual damage helps crews verify faster.')}
+                </span>
+              </div>
+            )}
+
+            {/* AI safety warning */}
+            {safetyWarning && (
+              <div className="flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 p-3 text-[11px] font-bold leading-relaxed text-red-900">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-red-600" />
+                <span>{safetyWarning}</span>
+              </div>
+            )}
+
             {/* Interruption Type */}
             <section>
               <label htmlFor="interruption-type" className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-muted">
@@ -672,7 +895,7 @@ export default function SubmitReport() {
             </section>
 
             {/* Safety Caution Box */}
-            <div className="flex items-start gap-2.5 rounded-2xl border border-[fff1a8] bg-[fff1a8] p-3.5 text-[11px] leading-relaxed text-[#744210]">
+            <div className="flex items-start gap-2.5 rounded-2xl border border-[#fff1a8] bg-[#fff1a8] p-3.5 text-[11px] leading-relaxed text-[#744210]">
               <AlertTriangle className="size-4 shrink-0 text-[#b45309] mt-0.5" />
               <span>
                 {t('Fallen wire or sparks? Keep away from it and call your local emergency number.')}
@@ -681,11 +904,11 @@ export default function SubmitReport() {
           </div>
         )}
 
-        {/* STEP 2: LOCATION */}
-        {step === 2 && (
+        {/* STEP 3: LOCATION */}
+        {step === 3 && (
           <div className="space-y-4 animate-in fade-in">
             {/* Real OpenStreetMap location picker */}
-            <div className="relative z-0 h-44 w-full overflow-hidden rounded-2xl border border-brand-line bg-[e5e9f6] shadow-inner">
+            <div className="relative z-0 h-44 w-full overflow-hidden rounded-2xl border border-brand-line bg-[#e5e9f6] shadow-inner">
               <LocationMap pin={pinPosition} onPick={handlePickPin} mapRef={mapRef} />
 
               <span className="pointer-events-none absolute left-2 top-2 z-[1000] rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-bold text-brand-navy shadow-sm backdrop-blur-xs">
@@ -784,121 +1007,6 @@ export default function SubmitReport() {
           </div>
         )}
 
-        {/* STEP 3: EVIDENCE */}
-        {step === 3 && (
-          <div className="space-y-4 animate-in fade-in">
-            <p className="text-xs text-brand-muted leading-relaxed">
-              {t('Photos or a short video help the team verify your report faster. This step is optional.')}
-            </p>
-
-            {/* Action Buttons */}
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                disabled={isProcessingPhoto || photos.length >= 3}
-                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-line bg-white p-5 text-center transition-all hover:bg-brand-paper active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <div className="grid size-10 place-items-center rounded-xl bg-[e5e9f6] text-brand-blue">
-                  <Camera className="size-5" />
-                </div>
-                <span className="text-xs font-bold text-brand-blue">{t('Take photo')}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => videoInputRef.current?.click()}
-                disabled={isProcessingPhoto || photos.length >= 3}
-                className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-line bg-white p-5 text-center transition-all hover:bg-brand-paper active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <div className="grid size-10 place-items-center rounded-xl bg-[e5e9f6] text-brand-blue">
-                  <Video className="size-5" />
-                </div>
-                <span className="text-xs font-bold text-brand-blue">{t('Record video')}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isProcessingPhoto || photos.length >= 3}
-                className="col-span-2 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-brand-line bg-white text-xs font-bold text-brand-blue transition-all hover:bg-brand-paper active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <ImageIcon className="size-4" />
-                {t('Upload photo or video')}
-              </button>
-            </div>
-
-            {photoError && <p className="text-[11px] font-semibold text-[#b42318]">{t(photoError)}</p>}
-
-            {/* Added Evidence Grid */}
-            <section>
-              <h2 className="mb-2 text-xs font-bold uppercase tracking-wider text-brand-muted">
-                {t('Added ({count} of 3)', { count: photos.length })}{isProcessingPhoto ? ` · ${t('Processing…')}` : ''}
-              </h2>
-              <div className="flex flex-wrap items-center gap-3">
-                {photos.map((photo) => (
-                  <div
-                    key={photo.id}
-                    className="relative flex size-20 items-center justify-center rounded-2xl border border-brand-line bg-[e5e9f6] text-brand-blue shadow-xs"
-                  >
-                    {photo.kind === 'video' ? (
-                      <>
-                        <video
-                          src={photo.previewUrl}
-                          muted
-                          playsInline
-                          preload="metadata"
-                          className="size-full rounded-2xl object-cover"
-                        />
-                        <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-2xl bg-black/25">
-                          <Video className="size-5 text-white" />
-                        </span>
-                      </>
-                    ) : (
-                      <img
-                        src={photo.previewUrl}
-                        alt={photo.label || t('Uploaded evidence')}
-                        className="size-full rounded-2xl object-cover"
-                      />
-                    )}
-
-                    {/* Remove Evidence Button */}
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePhoto(photo.id)}
-                      className="absolute -right-1.5 -top-1.5 z-10 grid size-5 place-items-center rounded-full border border-brand-line bg-white text-brand-muted shadow-xs hover:bg-red-50 hover:text-red-600"
-                      aria-label={photo.label ? t('Remove {label}', { label: photo.label }) : t('Remove attachment')}
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </div>
-                ))}
-
-                {/* Add Another Slot */}
-                {photos.length < 3 && (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isProcessingPhoto}
-                    className="grid size-20 place-items-center rounded-2xl border-2 border-dashed border-brand-line text-brand-blue hover:bg-brand-paper cursor-pointer disabled:cursor-wait disabled:opacity-50"
-                    aria-label={t('Add photo or video')}
-                  >
-                    <Plus className="size-6" />
-                  </button>
-                )}
-              </div>
-            </section>
-
-            {/* Privacy Guidance Box */}
-            <div className="flex items-start gap-2.5 rounded-2xl border border-brand-line bg-[e5e9f6] p-3.5 text-[11px] leading-relaxed text-brand-blue">
-              <Info className="size-4 shrink-0 text-brand-blue mt-0.5" />
-              <span>
-                {t('Show the transformer, lines or your meter if you can. Avoid faces and license plates.')}
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* STEP 4: REVIEW */}
         {step === 4 && (
           <div className="space-y-4 animate-in fade-in">
@@ -908,7 +1016,7 @@ export default function SubmitReport() {
                 <h3 className="text-sm font-extrabold text-brand-navy">{t('Details')}</h3>
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(2)}
                   className="text-xs font-bold text-brand-blue hover:underline"
                 >
                   {t('Edit')}
@@ -922,6 +1030,10 @@ export default function SubmitReport() {
                       ? t(outageTypes.find((type) => type.id === outageType)?.label)
                       : t('Not selected')}
                   </strong>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-brand-muted">{t('Priority')}</span>
+                  <strong className="text-right text-brand-ink">{t(priorityLabels[priority] ?? priority)}</strong>
                 </div>
                 <div className="flex justify-between gap-3">
                   <span className="text-brand-muted">{t('Noticed')}</span>
@@ -942,7 +1054,7 @@ export default function SubmitReport() {
                 <h3 className="text-sm font-extrabold text-brand-navy">{t('Location')}</h3>
                 <button
                   type="button"
-                  onClick={() => setStep(2)}
+                  onClick={() => setStep(3)}
                   className="text-xs font-bold text-brand-blue hover:underline"
                 >
                   {t('Edit')}
@@ -981,10 +1093,17 @@ export default function SubmitReport() {
             {/* Evidence Summary Card */}
             <div className="rounded-2xl border border-brand-line bg-white p-4 shadow-xs">
               <div className="flex items-center justify-between border-b border-brand-line pb-2">
-                <h3 className="text-sm font-extrabold text-brand-navy">{t('Evidence')}</h3>
+                <h3 className="flex items-center gap-2 text-sm font-extrabold text-brand-navy">
+                  {t('Evidence')}
+                  {isWebImageDetected && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-800">
+                      {t('Internet image?')}
+                    </span>
+                  )}
+                </h3>
                 <button
                   type="button"
-                  onClick={() => setStep(3)}
+                  onClick={() => setStep(1)}
                   className="text-xs font-bold text-brand-blue hover:underline"
                 >
                   {t('Edit')}
@@ -993,7 +1112,7 @@ export default function SubmitReport() {
               <div className="mt-3 flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
                   {photos.map((photo) => (
-                    <div key={photo.id} className="grid size-9 place-items-center overflow-hidden rounded-xl bg-[e5e9f6] text-brand-blue">
+                    <div key={photo.id} className="grid size-9 place-items-center overflow-hidden rounded-xl bg-[#e5e9f6] text-brand-blue">
                       {photo.kind === 'video' ? (
                         <Video className="size-4" aria-hidden="true" />
                       ) : (
@@ -1045,10 +1164,10 @@ export default function SubmitReport() {
             <button
               type="button"
               onClick={() => setStep(step + 1)}
-              disabled={isProcessingPhoto || (step === 1 && (!outageType || !noticedAt)) || (step >= 2 && !pinnedLocation)}
+              disabled={isProcessingPhoto || isAnalyzingAi || (step === 2 && (!outageType || !noticedAt)) || (step === 3 && !pinnedLocation)}
               className="flex-1 rounded-2xl bg-brand-blue py-3 text-xs font-bold text-white shadow-xs hover:bg-brand-navy active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-1 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span>{t('Next')}</span>
+              <span>{step === 1 && photos.length === 0 ? t('Skip photo') : t('Next')}</span>
               <ChevronRight className="size-4" />
             </button>
           ) : (
