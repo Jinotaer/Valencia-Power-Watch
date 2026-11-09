@@ -31,7 +31,7 @@ stable
 as $$
   select exists (
     select 1 from public.users
-    where id = auth.uid() and role = 'admin'
+    where id = (select auth.uid()) and role = 'admin'
   );
 $$;
 
@@ -91,7 +91,7 @@ begin
       when new.raw_user_meta_data->>'id_number' is not null
         then new.raw_user_meta_data->>'id_number'
       when new.raw_user_meta_data->>'role' = 'staff'
-        then 'VP-' || to_char(now(), 'YYMM') || '-' || substr(new.id::text, 1, 6)
+        then 'STF-' || substr(new.id::text, 1, 4)
       else null
     end,
     new.email,
@@ -99,7 +99,11 @@ begin
     -- Signup metadata may only grant 'staff'; 'admin' is promoted by SQL (see §4)
     case when new.raw_user_meta_data->>'role' = 'staff' then 'staff' else 'resident' end,
     new.raw_user_meta_data->>'contact_number',
-    coalesce(new.raw_user_meta_data->>'barangay', new.raw_user_meta_data->>'address', '')
+    -- Staff have no assigned barangay
+    case
+      when new.raw_user_meta_data->>'role' = 'staff' then null
+      else coalesce(new.raw_user_meta_data->>'barangay', new.raw_user_meta_data->>'address', '')
+    end
   )
   on conflict (id) do update set
     email = excluded.email,

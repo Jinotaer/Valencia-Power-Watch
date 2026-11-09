@@ -1,29 +1,60 @@
--- Valencia PowerWatch — Admin seed
+-- Valencia PowerWatch: Admin seed
 -- Run in the Supabase SQL Editor after supabase/user.sql.
 --
--- 1. Create the admin user first:
---    Supabase Dashboard -> Authentication -> Users -> Add user,
---    or sign up through the app. Do not store the password in this repo.
---    NOTE: run supabase/user.sql (or at least the alter below) BEFORE
---    creating the auth user, otherwise the signup trigger inserts a NULL
---    id_number into the old NOT NULL column and the user creation fails.
--- 2. Replace admin@example.com below with that user's email.
--- 3. Run this file. It promotes the matching auth user to admin.
+-- 1. Change the email and the temporary password below.
+-- 2. Run this file. It creates the auth user (if missing), then promotes
+--    the matching user to admin in public.users.
+-- 3. Sign in and change the password right away.
+-- Do not commit the real password to the repo.
 
--- Compatibility for older user.sql versions: id_number used to be NOT NULL.
-alter table public.users alter column id_number drop not null;
+create extension if not exists pgcrypto with schema extensions;
+
+do $$
+declare
+  admin_email    text := 'admin@gmail.com';
+  admin_password text := 'qwertyuiop12345';   -- temporary, change after first login
+  admin_name     text := 'System Administrator';
+  admin_id_num   text := 'ADM-0001';
+  new_id         uuid := gen_random_uuid();
+begin
+  if not exists (select 1 from auth.users where email = admin_email) then
+    insert into auth.users (
+      instance_id, id, aud, role, email, encrypted_password,
+      email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+      created_at, updated_at,
+      confirmation_token, email_change, email_change_token_new, recovery_token
+    ) values (
+      '00000000-0000-0000-0000-000000000000', new_id, 'authenticated', 'authenticated',
+      admin_email, extensions.crypt(admin_password, extensions.gen_salt('bf')),
+      now(),
+      '{"provider":"email","providers":["email"],"role":"admin"}'::jsonb,
+      jsonb_build_object('full_name', admin_name, 'role', 'admin', 'id_number', admin_id_num),
+      now(), now(),
+      '', '', '', ''
+    );
+
+    insert into auth.identities (
+      id, user_id, provider_id, identity_data, provider,
+      last_sign_in_at, created_at, updated_at
+    ) values (
+      gen_random_uuid(), new_id, new_id::text,
+      jsonb_build_object('sub', new_id::text, 'email', admin_email, 'email_verified', true),
+      'email', now(), now(), now()
+    );
+  end if;
+end $$;
 
 insert into public.users (id, id_number, email, full_name, role, contact_number, address)
 select
-  u.id,
-  'VP-ADMIN-' || substr(u.id::text, 1, 6),
-  u.email,
-  coalesce(u.raw_user_meta_data->>'full_name', split_part(u.email, '@', 1)),
+  id,
+  'ADM-0001',
+  email,
+  coalesce(raw_user_meta_data->>'full_name', split_part(email, '@', 1)),
   'admin',
-  u.raw_user_meta_data->>'contact_number',
-  coalesce(u.raw_user_meta_data->>'barangay', u.raw_user_meta_data->>'address', '')
-from auth.users u
-where u.email = 'admin@example.com'
+  raw_user_meta_data->>'contact_number',
+  null
+from auth.users
+where email = 'admin@gmail.com'
 on conflict (id) do update
 set
   id_number = coalesce(public.users.id_number, excluded.id_number),
@@ -31,5 +62,5 @@ set
   full_name = coalesce(excluded.full_name, public.users.full_name),
   role = 'admin',
   contact_number = coalesce(excluded.contact_number, public.users.contact_number),
-  address = coalesce(excluded.address, public.users.address)
-returning id, email, role;
+  address = null
+returning id, id_number, email, role;

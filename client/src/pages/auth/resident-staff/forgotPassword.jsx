@@ -1,4 +1,4 @@
-import { ArrowLeft, LoaderCircle, Mail, ShieldCheck, Users, Zap } from 'lucide-react'
+import { ArrowLeft, LoaderCircle, Mail, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { PortalAuthLayout } from '../../../components/auth/PortalAuthLayout'
 import { supabase } from '../../../lib/supabase'
@@ -8,7 +8,6 @@ export default function PortalForgotPassword({ role = 'resident' }) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState({ type: '', message: '' })
   const [loading, setLoading] = useState(false)
-  const Icon = isResident ? Users : ShieldCheck
   const portal = isResident ? 'community' : 'staff'
 
   async function handleSubmit(event) {
@@ -31,7 +30,7 @@ export default function PortalForgotPassword({ role = 'resident' }) {
     <PortalAuthLayout>
       <div className="w-full rounded-xl border border-brand-line bg-white p-6 shadow-[0_12px_30px_rgba(27,48,119,0.06)] sm:p-7">
         <div className="mb-5 flex items-center justify-center gap-2"><span className="grid size-7 place-items-center rounded-lg bg-brand-yellow text-brand-navy"><Zap className="size-4 fill-current" /></span><span className="text-[15px] font-bold text-brand-navy">PowerWatch</span></div>
-        <div className="mb-6 text-center"><div className="mx-auto mb-3 grid size-9 place-items-center rounded-full bg-[e5e9f6] text-brand-blue"><Icon className="size-4" /></div><h1 className="text-[22px] font-bold text-brand-navy">Reset password</h1><p className="mt-1 text-[10px] text-brand-muted">Enter your email to receive a recovery link</p></div>
+        <div className="mb-6 text-center"><h1 className="text-[22px] font-bold text-brand-navy">Reset password</h1><p className="mt-1 text-[10px] text-brand-muted">Enter your email to receive a recovery link</p></div>
         {status.type === 'success' ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-center text-xs text-emerald-800" role="status">{status.message}</div> : <form className="space-y-4" onSubmit={handleSubmit}><label className="block text-[9px] font-bold uppercase tracking-[0.08em] text-brand-muted" htmlFor={`${role}-reset-email`}>EMAIL</label><div className="relative"><Mail className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-brand-muted" /><input className="h-10 w-full rounded-lg border border-brand-line pl-10 pr-4 text-xs focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/20" id={`${role}-reset-email`} type="email" placeholder="Enter your email" value={email} onChange={(event) => setEmail(event.target.value)} required /></div>{status.message && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">{status.message}</div>}<button className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-brand-blue text-xs font-semibold text-white" type="submit" disabled={loading}>{loading ? <><LoaderCircle className="size-4 animate-spin" />Sending link...</> : 'Send reset link'}</button></form>}
         <a href="/login" className="mt-5 flex items-center justify-center gap-1 text-[10px] font-semibold text-brand-blue hover:underline"><ArrowLeft className="size-3" /> Back to sign in</a>
       </div>

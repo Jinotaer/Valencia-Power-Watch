@@ -21,9 +21,9 @@ declare
 begin
   for s in
     select * from (values
-      ('staff1@example.com', 'Ramon Santos'),
-      ('staff2@example.com', 'Carlo Mendoza')
-    ) as t(email, full_name)
+      ('staff1@example.com', 'Ramon Santos', 'STF-0101'),
+      ('staff2@example.com', 'Carlo Mendoza', 'STF-0102')
+    ) as t(email, full_name, id_number)
   loop
     if not exists (select 1 from auth.users where email = s.email) then
       new_id := gen_random_uuid();
@@ -36,8 +36,9 @@ begin
       ) values (
         '00000000-0000-0000-0000-000000000000', new_id, 'authenticated', 'authenticated',
         s.email, extensions.crypt(temp_password, extensions.gen_salt('bf')),
-        now(), '{"provider":"email","providers":["email"]}',
-        jsonb_build_object('full_name', s.full_name),
+        now(),
+        '{"provider":"email","providers":["email"],"role":"staff"}'::jsonb,
+        jsonb_build_object('full_name', s.full_name, 'role', 'staff', 'id_number', s.id_number),
         now(), now(),
         '', '', '', ''
       );
@@ -57,12 +58,12 @@ end $$;
 insert into public.users (id, id_number, email, full_name, role, contact_number, address)
 select
   u.id,
-  'VP-' || to_char(now(), 'YYMM') || '-' || substr(u.id::text, 1, 6),
+  coalesce(u.raw_user_meta_data->>'id_number', 'STF-' || substr(u.id::text, 1, 4)),
   u.email,
   coalesce(u.raw_user_meta_data->>'full_name', split_part(u.email, '@', 1)),
   'staff',
   u.raw_user_meta_data->>'contact_number',
-  coalesce(u.raw_user_meta_data->>'barangay', u.raw_user_meta_data->>'address', '')
+  null
 from auth.users u
 where u.email in ('staff1@example.com', 'staff2@example.com')
 on conflict (id) do update
@@ -72,5 +73,5 @@ set
   full_name = coalesce(excluded.full_name, public.users.full_name),
   role = 'staff',
   contact_number = coalesce(excluded.contact_number, public.users.contact_number),
-  address = coalesce(excluded.address, public.users.address)
+  address = null
 returning id, id_number, email, role;

@@ -71,7 +71,7 @@ stable
 as $$
   select exists (
     select 1 from public.users
-    where id = auth.uid() and role = 'admin'
+    where id = (select auth.uid()) and role = 'admin'
   );
 $$;
 

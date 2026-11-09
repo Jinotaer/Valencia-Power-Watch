@@ -97,7 +97,7 @@ function AdminResetPassword() {
                   />
                   <button
                     type="button"
-                    className="absolute right-3.5 top-1/2 rounded p-1 text-brand-muted transition-colors hover:text-brand-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue cursor-pointer z-10"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded p-1 text-brand-muted transition-colors hover:text-brand-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue cursor-pointer z-10"
                     onClick={() => setShowPassword((prev) => !prev)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
@@ -124,7 +124,7 @@ function AdminResetPassword() {
                   />
                   <button
                     type="button"
-                    className="absolute right-3.5 top-1/2 rounded p-1 text-brand-muted transition-colors hover:text-brand-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue cursor-pointer z-10"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded p-1 text-brand-muted transition-colors hover:text-brand-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue cursor-pointer z-10"
                     onClick={() => setShowConfirmPassword((prev) => !prev)}
                     aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
                   >

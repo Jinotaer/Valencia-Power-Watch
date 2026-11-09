@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, LoaderCircle, Lock, ShieldCheck, Users, Zap } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, LoaderCircle, Lock, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { PortalAuthLayout } from '../../../components/auth/PortalAuthLayout'
 import { Input } from '../../../components/ui/input'
@@ -74,10 +74,7 @@ function PortalResetPassword({ role = 'resident' }) {
         ) : (
           <>
             <div className="mb-6 text-center sm:mb-7">
-              <div className="mx-auto mb-3 grid size-9 place-items-center rounded-full bg-[e5e9f6] text-brand-blue">
-                {isResident ? <Users className="size-4" /> : <ShieldCheck className="size-4" />}
-              </div>
-              <h1 className="text-2xl font-extrabold tracking-tight text-brand-navy sm:text-3xl">{isResident ? 'Reset password' : 'Reset password'}</h1>
+              <h1 className="text-2xl font-extrabold tracking-tight text-brand-navy sm:text-3xl">Reset password</h1>
               <p className="mt-1.5 text-xs leading-relaxed text-brand-muted sm:mt-2 sm:text-sm">
                 {isResident ? 'Enter a new password for your resident account' : 'Enter a new password for your staff account'}
               </p>
@@ -102,7 +99,7 @@ function PortalResetPassword({ role = 'resident' }) {
                   />
                   <button
                     type="button"
-                    className="absolute right-3.5 top-1/2 rounded p-1 text-brand-muted transition-colors hover:text-brand-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue z-10"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded p-1 text-brand-muted transition-colors hover:text-brand-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue z-10"
                     onClick={() => setShowPassword((prev) => !prev)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
@@ -129,7 +126,7 @@ function PortalResetPassword({ role = 'resident' }) {
                   />
                   <button
                     type="button"
-                    className="absolute right-3.5 top-1/2 rounded p-1 text-brand-muted transition-colors hover:text-brand-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue z-10"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded p-1 text-brand-muted transition-colors hover:text-brand-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue z-10"
                     onClick={() => setShowConfirmPassword((prev) => !prev)}
                     aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
                   >

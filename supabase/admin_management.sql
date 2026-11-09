@@ -13,7 +13,7 @@ alter table public.users add column if not exists position text;
 create index if not exists users_role_active_idx
   on public.users (role, is_active);
 
--- Signup trigger: keep staff position from auth metadata.
+-- Signup trigger: keep staff position from auth metadata; staff have no barangay.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -28,20 +28,26 @@ begin
       when new.raw_user_meta_data->>'id_number' is not null
         then new.raw_user_meta_data->>'id_number'
       when new.raw_user_meta_data->>'role' = 'staff'
-        then 'VP-' || to_char(now(), 'YYMM') || '-' || substr(new.id::text, 1, 6)
+        then 'STF-' || substr(new.id::text, 1, 4)
       else null
     end,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
     case when new.raw_user_meta_data->>'role' = 'staff' then 'staff' else 'resident' end,
     new.raw_user_meta_data->>'contact_number',
-    coalesce(new.raw_user_meta_data->>'barangay', new.raw_user_meta_data->>'address', ''),
+    case
+      when new.raw_user_meta_data->>'role' = 'staff' then null
+      else coalesce(new.raw_user_meta_data->>'barangay', new.raw_user_meta_data->>'address', '')
+    end,
     nullif(new.raw_user_meta_data->>'position', '')
   )
   on conflict (id) do update set
     email = excluded.email,
     full_name = coalesce(excluded.full_name, public.users.full_name),
-    address = coalesce(excluded.address, public.users.address),
+    address = case
+      when public.users.role = 'staff' then null
+      else coalesce(excluded.address, public.users.address)
+    end,
     position = coalesce(excluded.position, public.users.position);
   return new;
 end;
@@ -268,6 +274,7 @@ create table if not exists public.audit_logs (
 
 create index if not exists audit_logs_created_idx on public.audit_logs (created_at desc);
 create index if not exists audit_logs_entity_idx on public.audit_logs (entity_type, entity_id);
+create index if not exists audit_logs_actor_idx on public.audit_logs (actor_id);
 
 alter table public.audit_logs enable row level security;
 
@@ -284,7 +291,7 @@ security definer
 set search_path = public
 as $$
 declare
-  v_actor_id uuid := auth.uid();
+  v_actor_id uuid := (select auth.uid());
   v_actor_email text;
   v_entity_id text;
   v_metadata jsonb := '{}'::jsonb;

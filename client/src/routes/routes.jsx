@@ -49,9 +49,11 @@ export const authRoutes = [
   '/staff/login',
   '/login',
   '/community/register',
+  '/forgot-password',
   '/community/forgot-password',
   '/staff/forgot-password',
   '/admin/forgot-password',
+  '/reset-password',
   '/admin/reset-password',
   '/community/reset-password',
   '/staff/reset-password',
@@ -60,6 +62,7 @@ export const authRoutes = [
 // Users arriving from a password-recovery email hold a temporary session.
 // They must be allowed to stay on these pages to set a new password.
 export const resetRoutes = [
+  '/reset-password',
   '/admin/reset-password',
   '/community/reset-password',
   '/staff/reset-password',
@@ -129,9 +132,11 @@ const pageRoutes = new Map([
   ['/community/login', <Redirect to="/login" />],
   ['/staff/login', <Redirect to="/login" />],
   ['/community/register', <ResidentRegister />],
+  ['/forgot-password', <PortalForgotPassword role="resident" />],
   ['/community/forgot-password', <PortalForgotPassword role="resident" />],
   ['/staff/forgot-password', <PortalForgotPassword role="staff" />],
   ['/admin/forgot-password', <AdminForgotPassword />],
+  ['/reset-password', <ResidentResetPassword />],
   ['/community/reset-password', <ResidentResetPassword />],
   ['/staff/reset-password', <StaffResetPassword />],
   ['/admin/reset-password', <AdminResetPassword />],
