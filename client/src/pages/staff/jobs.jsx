@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  Bell,
   Check,
   ExternalLink,
   MapPin,
@@ -11,8 +10,11 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { loadAssignedReports, priorityLabels, updateReportStatus } from '../../lib/reports'
-import { ResolutionEvidenceInput } from './evidenceInput'
-import { ReportPriorityBadge, ReportStatusBadge } from '../resident/reportView'
+import { ResolutionEvidenceInput } from '../../components/staff/evidenceInput'
+import { StaffNotificationsButton } from '../../components/staff/notificationsModal'
+import { StaffUpdateFields } from '../../components/staff/updateFields'
+import { EvidenceGallery, LinkedReports, StaffActivityRecord } from '../../components/staff/jobDetails'
+import { ReportPriorityBadge, ReportStatusBadge } from '../../components/resident/reportView'
 
 // Staff milestones map onto the shared report statuses (see supabase/report.sql):
 // a pending assignment is still new, "verified" means work started, "resolved" is done.
@@ -38,6 +40,7 @@ export default function StaffJobs() {
   const [statusJob, setStatusJob] = useState(null)
   const [navJob, setNavJob] = useState(null)
   const [evidenceFile, setEvidenceFile] = useState(null)
+  const [updateForm, setUpdateForm] = useState({ remarks: '', eta: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
@@ -104,8 +107,10 @@ export default function StaffJobs() {
         statusKey === 'resolved' && evidenceFile
           ? [{ file: evidenceFile, label: 'Resolution evidence', type: evidenceFile.type }]
           : [],
+        { staffRemarks: updateForm.remarks.trim(), restorationEta: updateForm.eta.trim() },
       )
       setEvidenceFile(null)
+      setUpdateForm({ remarks: '', eta: '' })
       setStatusJob(null)
       reload()
       showToast(statusKey === 'resolved' ? 'Marked as resolved. Great work!' : 'Status updated: In progress.')
@@ -117,6 +122,10 @@ export default function StaffJobs() {
   }
 
   const jobs = filteredJobs
+  const openStatus = (report) => {
+    setUpdateForm({ remarks: report.staffRemarks || '', eta: report.restorationEta || '' })
+    setStatusJob(report)
+  }
   const destination = (report) =>
     report.coordinates
       ? `${report.coordinates.latitude},${report.coordinates.longitude}`
@@ -151,14 +160,7 @@ export default function StaffJobs() {
           </a>
 
           {/* Notification Button */}
-          <button
-            type="button"
-            className="relative grid size-10 place-items-center rounded-2xl border border-brand-line bg-white text-brand-navy shadow-xs transition-colors hover:bg-brand-paper cursor-pointer"
-            aria-label="Notifications"
-          >
-            <Bell className="size-5 text-brand-blue" />
-            <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-brand-yellow ring-2 ring-white" />
-          </button>
+          <StaffNotificationsButton assignedReports={reports} />
         </div>
       </header>
 
@@ -290,7 +292,7 @@ export default function StaffJobs() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setStatusJob(report)}
+                      onClick={() => openStatus(report)}
                       className="flex h-11 items-center justify-center rounded-2xl bg-brand-blue text-xs font-bold text-white shadow-xs hover:bg-brand-navy active:scale-[0.98] transition-all cursor-pointer"
                     >
                       <span>Status</span>
@@ -369,11 +371,15 @@ export default function StaffJobs() {
               </p>
             )}
 
+            <EvidenceGallery photos={reviewJob.photos} />
+            <StaffActivityRecord report={reviewJob} />
+            <LinkedReports report={reviewJob} reports={reports} />
+
             {reviewJob.tone !== 'resolved' && (
               <button
                 type="button"
                 onClick={() => {
-                  setStatusJob(reviewJob)
+                  openStatus(reviewJob)
                   setReviewJob(null)
                 }}
                 className="mt-4 flex h-10 w-full items-center justify-center rounded-xl bg-brand-blue text-xs font-bold text-white hover:bg-brand-navy cursor-pointer"
@@ -408,7 +414,8 @@ export default function StaffJobs() {
               </button>
             </div>
 
-            <div className="space-y-2 pt-4">
+            <div className="max-h-[70vh] overflow-y-auto space-y-2 pt-4">
+              <StaffUpdateFields value={updateForm} onChange={setUpdateForm} disabled={isSubmitting} />
               {STATUS_OPTIONS.map((option) => {
                 const current = option.key === stageKey(statusJob.tone)
                 return (

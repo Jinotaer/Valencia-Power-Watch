@@ -15,7 +15,7 @@ import {
 import { useState } from 'react'
 import { PortalAuthLayout } from '../../../components/auth/PortalAuthLayout'
 import { supabase } from '../../../lib/supabase'
-import { valenciaBarangays, passwordRules } from './registerData'
+import { valenciaBarangays, passwordRules } from '../../../components/auth/registerData'
 
 export default function ResidentRegister() {
   const [form, setForm] = useState({

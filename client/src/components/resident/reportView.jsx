@@ -1,34 +1,41 @@
 import { Check } from 'lucide-react'
+import { Badge } from '../ui/badge'
 import { priorityLabels } from '../../lib/reports'
 
 const toneClasses = {
-  verified: 'bg-[#d9f9e8] text-[#137a48]',
-  pending: 'bg-[#fff1a8] text-[#9a6500]',
-  resolved: 'bg-[#e5e9f6] text-brand-blue',
-  rejected: 'bg-red-50 text-[#b42318]',
+  verified: 'bg-[#d9f9e8] text-[#137a48] border-[#b6f0d1]',
+  pending: 'bg-[#fff1a8] text-[#9a6500] border-[#fde067]',
+  resolved: 'bg-[#e5e9f6] text-brand-blue border-brand-line',
+  rejected: 'bg-red-50 text-[#b42318] border-red-200',
 }
 
 export function ReportStatusBadge({ tone, status }) {
   return (
-    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${toneClasses[tone] ?? 'bg-[#e5e9f6] text-brand-muted'}`}>
+    <Badge
+      variant="outline"
+      className={`h-auto shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${toneClasses[tone] ?? 'bg-[#e5e9f6] text-brand-muted border-brand-line'}`}
+    >
       {tone === 'verified' && <Check className="mr-0.5 inline size-3" strokeWidth={3} aria-hidden="true" />}
       {status}
-    </span>
+    </Badge>
   )
 }
 
 const priorityClasses = {
-  high: 'bg-red-50 text-[#b42318]',
-  medium: 'bg-[#fff1a8] text-[#9a6500]',
-  low: 'bg-[#e5e9f6] text-brand-muted',
+  high: 'bg-red-50 text-[#b42318] border-red-200',
+  medium: 'bg-[#fff1a8] text-[#9a6500] border-[#fde067]',
+  low: 'bg-[#e5e9f6] text-brand-muted border-brand-line',
 }
 
 export function ReportPriorityBadge({ priority = 'medium' }) {
   const key = String(priority).toLowerCase()
   return (
-    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${priorityClasses[key] ?? priorityClasses.medium}`}>
+    <Badge
+      variant="outline"
+      className={`h-auto shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${priorityClasses[key] ?? priorityClasses.medium}`}
+    >
       {priorityLabels[key] ?? key}
-    </span>
+    </Badge>
   )
 }
 
@@ -48,7 +55,7 @@ export function ReportTimeline({ progress }) {
               <span className={`grid size-4 place-items-center rounded-full border-2 ${complete ? 'border-brand-blue bg-brand-blue text-white' : current ? 'border-brand-line bg-white' : 'border-brand-line bg-white'}`}>
                 {complete && <Check className="size-2.5" strokeWidth={3} aria-hidden="true" />}
               </span>
-              <span className={`text-[9px] font-semibold ${complete ? 'text-brand-muted' : 'text-brand-muted'}`}>{step}</span>
+              <span className="text-[9px] font-semibold text-brand-muted">{step}</span>
             </div>
           )
         })}

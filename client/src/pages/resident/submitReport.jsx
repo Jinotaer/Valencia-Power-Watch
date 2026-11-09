@@ -18,8 +18,8 @@ import { useEffect, useRef, useState } from 'react'
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { addReport, priorityLabels, reportPriorities } from '../../lib/reports'
-import { VALENCIA_CENTER } from './mapData'
-import { SubmitReportSuccess } from './submitReportSuccess'
+import { VALENCIA_CENTER } from '../../components/resident/mapData'
+import { SubmitReportSuccess } from '../../components/resident/submitReportSuccess'
 
 const valenciaBarangays = [
   'Guinoyuran',

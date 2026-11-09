@@ -1,5 +1,4 @@
 import {
-  Bell,
   Check,
   ClipboardList,
   ExternalLink,
@@ -15,8 +14,10 @@ import {
   updateReportStatus,
 } from '../../lib/reports'
 import { supabase } from '../../lib/supabase'
-import { ReportPriorityBadge, ReportStatusBadge } from '../resident/reportView'
-import { ResolutionEvidenceInput } from './evidenceInput'
+import { ReportPriorityBadge, ReportStatusBadge } from '../../components/resident/reportView'
+import { ResolutionEvidenceInput } from '../../components/staff/evidenceInput'
+import { StaffNotificationsButton } from '../../components/staff/notificationsModal'
+import { StaffUpdateFields } from '../../components/staff/updateFields'
 
 // Real report statuses power the stepper (see supabase/report.sql):
 // pending = assigned and awaiting start, verified = work started, resolved = done.
@@ -38,6 +39,7 @@ export default function StaffHome() {
   const [showStatusModal, setShowStatusModal] = useState(false)
   const [showNavModal, setShowNavModal] = useState(false)
   const [evidenceFile, setEvidenceFile] = useState(null)
+  const [updateForm, setUpdateForm] = useState({ remarks: '', eta: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
@@ -102,8 +104,10 @@ export default function StaffHome() {
         statusKey === 'resolved' && evidenceFile
           ? [{ file: evidenceFile, label: 'Resolution evidence', type: evidenceFile.type }]
           : [],
+        { staffRemarks: updateForm.remarks.trim(), restorationEta: updateForm.eta.trim() },
       )
       setEvidenceFile(null)
+      setUpdateForm({ remarks: '', eta: '' })
       setShowStatusModal(false)
       reload()
       showToast(statusKey === 'resolved' ? 'Marked as resolved. Great work!' : 'Status updated: In progress.')
@@ -149,14 +153,7 @@ export default function StaffHome() {
           </a>
 
           {/* Notification Button */}
-          <button
-            type="button"
-            className="relative grid size-10 place-items-center rounded-2xl border border-brand-line bg-white text-brand-navy shadow-xs transition-colors hover:bg-brand-paper cursor-pointer"
-            aria-label="Notifications"
-          >
-            <Bell className="size-5 text-brand-blue" />
-            <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-brand-yellow ring-2 ring-white" />
-          </button>
+          <StaffNotificationsButton assignedReports={reports} />
         </div>
       </header>
 
@@ -321,7 +318,10 @@ export default function StaffHome() {
               {/* Update Status Button */}
               <button
                 type="button"
-                onClick={() => setShowStatusModal(true)}
+                onClick={() => {
+                  setUpdateForm({ remarks: currentJob.staffRemarks || '', eta: currentJob.restorationEta || '' })
+                  setShowStatusModal(true)
+                }}
                 className="flex h-11 items-center justify-center gap-1.5 rounded-2xl bg-brand-yellow text-xs sm:text-sm font-black text-brand-navy shadow-xs hover:bg-brand-yellow active:scale-[0.98] transition-all cursor-pointer"
               >
                 <span>Update status</span>
@@ -411,6 +411,7 @@ export default function StaffHome() {
             </div>
 
             <div className="space-y-2 pt-4">
+              <StaffUpdateFields value={updateForm} onChange={setUpdateForm} disabled={isSubmitting} />
               {STATUS_OPTIONS.map((option) => {
                 const current = currentJob.tone === option.key
                 return (

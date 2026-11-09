@@ -3,17 +3,37 @@ import {
   Check,
   ChevronRight,
   ClipboardList,
+  History,
   Lock,
   LogOut,
   MapPin,
+  Phone,
   X,
   Zap,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
+import { loadAssignedReports } from '../../lib/reports'
 import { supabase } from '../../lib/supabase'
+import { StaffNotificationsButton } from '../../components/staff/notificationsModal'
+
+const STAFF_PREF_DEFAULTS = {
+  onDuty: true,
+  shareLocation: true,
+  newAssignments: true,
+  dispatchUpdates: true,
+}
+
+const initialsOf = (name) =>
+  (name || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'ST'
 
 export default function StaffProfile() {
+  const [userId, setUserId] = useState(null)
   const [staff, setStaff] = useState({
     name: '',
     role: '',
@@ -21,29 +41,83 @@ export default function StaffProfile() {
     phone: '',
     email: '',
   })
+  const [prefs, setPrefs] = useState(STAFF_PREF_DEFAULTS)
+  const [savedPrefs, setSavedPrefs] = useState({})
+  const [reports, setReports] = useState([])
 
-  // Load the real user data from the Supabase session
+  // Load the real profile row from public.users (auth metadata as fallback)
   useEffect(() => {
     if (!supabase) return
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) {
-        const meta = data.user.user_metadata || {}
-        setStaff({
-          name: meta.full_name || data.user.email?.split('@')[0] || '',
-          role: meta.staff_role || 'Field staff',
-          staffId: meta.staff_id ? `Staff ID ${meta.staff_id}` : '',
-          phone: meta.contact_number || '',
-          email: data.user.email || '',
-        })
-      }
+    let active = true
+
+    supabase.auth.getUser().then(async ({ data }) => {
+      const user = data?.user
+      if (!user || !active) return
+      const meta = user.user_metadata || {}
+      setUserId(user.id)
+
+      const { data: row } = await supabase
+        .from('users')
+        .select('full_name, id_number, position, contact_number, email, notification_preferences')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (!active) return
+      setStaff({
+        name: row?.full_name || meta.full_name || user.email?.split('@')[0] || '',
+        role: row?.position || meta.position || 'Field staff',
+        staffId: row?.id_number || meta.id_number ? `Staff ID ${row?.id_number || meta.id_number}` : '',
+        phone: row?.contact_number || meta.contact_number || '',
+        email: row?.email || user.email || '',
+      })
+      const stored = row?.notification_preferences || {}
+      setSavedPrefs(stored)
+      setPrefs({ ...STAFF_PREF_DEFAULTS, ...(stored.staff || {}) })
     })
+
+    loadAssignedReports()
+      .then((rows) => {
+        if (active) setReports(rows)
+      })
+      .catch(() => {})
+
+    return () => {
+      active = false
+    }
   }, [])
 
-  // Toggles matching the screenshot
-  const [onDuty, setOnDuty] = useState(true)
-  const [shareLocation, setShareLocation] = useState(true)
-  const [newAssignments, setNewAssignments] = useState(true)
-  const [dispatchUpdates, setDispatchUpdates] = useState(true)
+  const history = useMemo(() => {
+    const done = reports.filter((r) => r.tone === 'resolved')
+    return {
+      completed: done.length,
+      active: reports.filter((r) => r.tone !== 'resolved').length,
+      recent: done.slice(0, 3),
+    }
+  }, [reports])
+
+  const onDuty = prefs.onDuty
+  const shareLocation = prefs.shareLocation
+  const newAssignments = prefs.newAssignments
+  const dispatchUpdates = prefs.dispatchUpdates
+
+  const updatePref = async (key, value, message) => {
+    const next = { ...prefs, [key]: value }
+    setPrefs(next)
+    showToast(message)
+    if (!supabase || !userId) return
+    const merged = { ...savedPrefs, staff: next }
+    const { error } = await supabase.from('users').update({ notification_preferences: merged }).eq('id', userId)
+    if (error) {
+      showToast('Saved on this device only — could not sync settings.')
+      return
+    }
+    setSavedPrefs(merged)
+  }
+
+  const setOnDuty = (v) => updatePref('onDuty', v, v ? 'Marked ON DUTY' : 'Marked OFF DUTY')
+  const setShareLocation = (v) => updatePref('shareLocation', v, v ? 'Location sharing active' : 'Location sharing paused')
+  const setNewAssignments = (v) => updatePref('newAssignments', v, v ? 'New assignment alerts on' : 'New assignment alerts off')
+  const setDispatchUpdates = (v) => updatePref('dispatchUpdates', v, v ? 'Dispatch updates on' : 'Dispatch updates off')
 
   // Modals state
   const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -112,14 +186,7 @@ export default function StaffProfile() {
           </a>
 
           {/* Notification Button */}
-          <button
-            type="button"
-            className="relative grid size-10 place-items-center rounded-2xl border border-brand-line bg-white text-brand-navy shadow-xs transition-colors hover:bg-brand-paper cursor-pointer"
-            aria-label="Notifications"
-          >
-            <Bell className="size-5 text-brand-blue" />
-            <span className="absolute right-2.5 top-2.5 size-2 rounded-full bg-brand-yellow ring-2 ring-white" />
-          </button>
+          <StaffNotificationsButton assignedReports={reports} />
         </div>
       </header>
 
@@ -135,7 +202,7 @@ export default function StaffProfile() {
         >
           {/* Avatar Circle with Yellow Accent Ring */}
           <div className="relative flex size-14 shrink-0 items-center justify-center rounded-full bg-brand-blue ring-[3.5px] ring-brand-yellow shadow-sm">
-            <span className="text-lg font-black text-white tracking-wider">RS</span>
+            <span className="text-lg font-black text-white tracking-wider">{initialsOf(staff.name)}</span>
           </div>
 
           {/* Staff Meta */}
@@ -145,6 +212,53 @@ export default function StaffProfile() {
             </h2>
             <p className="text-xs text-brand-muted font-medium truncate mt-0.5">{staff.role}</p>
             <p className="text-xs text-brand-muted font-medium truncate">{staff.staffId}</p>
+            {staff.email && <p className="text-xs text-brand-muted font-medium truncate">{staff.email}</p>}
+            {staff.phone && (
+              <p className="mt-0.5 flex items-center gap-1 text-xs text-brand-muted font-medium truncate">
+                <Phone className="size-3" /> {staff.phone}
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* WORK HISTORY SECTION */}
+        <section className="mt-6">
+          <h2 className="mb-2 px-1 text-xs font-bold uppercase tracking-wider text-brand-muted">
+            Work History
+          </h2>
+          <div className="rounded-2xl border border-brand-line bg-white p-3.5 shadow-[0_4px_20px_rgba(23,43,104,0.04)]">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-brand-paper p-3">
+                <span className="block text-[10px] font-bold uppercase text-brand-muted">Completed</span>
+                <span className="text-xl font-black text-brand-navy">{history.completed}</span>
+              </div>
+              <div className="rounded-xl bg-brand-paper p-3">
+                <span className="block text-[10px] font-bold uppercase text-brand-muted">Active</span>
+                <span className="text-xl font-black text-brand-navy">{history.active}</span>
+              </div>
+            </div>
+            {history.recent.length > 0 && (
+              <ul className="mt-3 divide-y divide-brand-paper">
+                {history.recent.map((job) => (
+                  <li key={job.id} className="flex items-center justify-between gap-2 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-bold text-brand-navy">{job.outageType}</p>
+                      <p className="truncate text-[11px] text-brand-muted">
+                        {job.id} · Brgy. {job.barangay}
+                        {job.resolvedAt ? ` · ${new Date(job.resolvedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}
+                      </p>
+                    </div>
+                    <Check className="size-4 shrink-0 text-emerald-500" />
+                  </li>
+                ))}
+              </ul>
+            )}
+            <a
+              href="/staff/jobs"
+              className="mt-3 flex items-center justify-center gap-1.5 rounded-xl border border-brand-line py-2 text-xs font-bold text-brand-blue no-underline hover:bg-brand-paper"
+            >
+              <History className="size-3.5" /> View all completed jobs
+            </a>
           </div>
         </section>
 
@@ -166,11 +280,7 @@ export default function StaffProfile() {
                 type="button"
                 role="switch"
                 aria-checked={onDuty}
-                onClick={() => {
-                  const next = !onDuty
-                  setOnDuty(next)
-                  showToast(next ? 'Marked ON DUTY' : 'Marked OFF DUTY')
-                }}
+                onClick={() => setOnDuty(!onDuty)}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                   onDuty ? 'bg-brand-blue' : 'bg-brand-line'
                 }`}
@@ -195,11 +305,7 @@ export default function StaffProfile() {
                 type="button"
                 role="switch"
                 aria-checked={shareLocation}
-                onClick={() => {
-                  const next = !shareLocation
-                  setShareLocation(next)
-                  showToast(next ? 'Location sharing active' : 'Location sharing paused')
-                }}
+                onClick={() => setShareLocation(!shareLocation)}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                   shareLocation ? 'bg-brand-blue' : 'bg-brand-line'
                 }`}
@@ -232,11 +338,7 @@ export default function StaffProfile() {
                 type="button"
                 role="switch"
                 aria-checked={newAssignments}
-                onClick={() => {
-                  const next = !newAssignments
-                  setNewAssignments(next)
-                  showToast(next ? 'New assignment alerts on' : 'New assignment alerts off')
-                }}
+                onClick={() => setNewAssignments(!newAssignments)}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                   newAssignments ? 'bg-brand-blue' : 'bg-brand-line'
                 }`}
@@ -261,11 +363,7 @@ export default function StaffProfile() {
                 type="button"
                 role="switch"
                 aria-checked={dispatchUpdates}
-                onClick={() => {
-                  const next = !dispatchUpdates
-                  setDispatchUpdates(next)
-                  showToast(next ? 'Dispatch updates on' : 'Dispatch updates off')
-                }}
+                onClick={() => setDispatchUpdates(!dispatchUpdates)}
                 className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                   dispatchUpdates ? 'bg-brand-blue' : 'bg-brand-line'
                 }`}

@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../../components/ui/dialog'
-import { valenciaBarangays } from '../auth/resident-staff/registerData'
+import { valenciaBarangays } from '../auth/registerData'
 import { VALENCIA_CENTER } from '../../lib/geo'
 
 // OSM sometimes spells these differently from the barangay list.

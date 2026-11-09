@@ -18,8 +18,8 @@ import {
 } from '../../components/ui/sidebar'
 import { loadAllReports } from '../../lib/reports'
 import { VALENCIA_CENTER, barangayCenters } from '../../lib/geo'
-import { icons } from './mapData'
-import { FlyToControl } from './mapControls'
+import { icons } from '../../components/admin/mapData'
+import { FlyToControl } from '../../components/admin/mapControls'
 
 const STATUS_ORDER = ['pending', 'verified', 'resolved', 'rejected']
 

@@ -25,9 +25,9 @@ import {
   nearestRouteIndex,
   routeProgress,
 } from '../../lib/routing'
-import { ReportStatusBadge } from '../resident/reportView'
-import { icons, STAFF_DEFAULT_GPS } from './mapData'
-import { ResolutionEvidenceInput } from './evidenceInput'
+import { ReportStatusBadge } from '../../components/resident/reportView'
+import { icons, STAFF_DEFAULT_GPS } from '../../components/staff/mapData'
+import { ResolutionEvidenceInput } from '../../components/staff/evidenceInput'
 
 const OFF_ROUTE_METERS = 120
 const REROUTE_COOLDOWN_MS = 15000

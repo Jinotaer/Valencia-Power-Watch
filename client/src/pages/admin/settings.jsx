@@ -46,7 +46,7 @@ export default function AdminSettings() {
         setCategories(nextCategories)
       })
       .catch(() => {
-        if (active) setLoadError('We could not load system settings. Run supabase/admin_management.sql and try again.')
+        if (active) setLoadError('We could not load system settings. Run supabase/system_setting.sql, supabase/role_permission.sql, and supabase/report_category.sql and try again.')
       })
       .finally(() => {
         if (active) setIsLoading(false)

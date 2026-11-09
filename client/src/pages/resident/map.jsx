@@ -6,7 +6,7 @@ import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { VALENCIA_CENTER, barangayCenters } from '../../lib/geo'
 import { loadPublicOutages } from '../../lib/reports'
 import { loadActiveSchedules } from '../../lib/schedules'
-import { icons } from './mapData'
+import { icons } from '../../components/resident/mapData'
 
 const VALENCIA_FALLBACK = VALENCIA_CENTER
 

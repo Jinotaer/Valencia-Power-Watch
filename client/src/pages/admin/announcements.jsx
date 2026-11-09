@@ -230,9 +230,9 @@ export default function AdminAnnouncements() {
     } catch (error) {
       const message = error?.message ?? ''
       if (error?.code === '42501' || /row-level security/i.test(message)) {
-        setFormError(`Your account was rejected by the announcements policy. Sign in as an admin and run supabase/resident_features.sql. (${message})`)
+        setFormError(`Your account was rejected by the announcements policy. Sign in as an admin and run supabase/announcement.sql. (${message})`)
       } else if (['42P01', '42703', '23502', 'PGRST204'].includes(error?.code)) {
-        setFormError(`The announcements table is out of date. Run supabase/resident_features.sql, then try again. (${message})`)
+        setFormError(`The announcements table is out of date. Run supabase/announcement.sql, then try again. (${message})`)
       } else {
         setFormError(`Could not save this announcement: ${message || 'check your connection and try again.'}`)
       }

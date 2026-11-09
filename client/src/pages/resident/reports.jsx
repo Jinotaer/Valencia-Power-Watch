@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { PortalMobileNav, PortalMark } from '../../components/layout/PortalMobileNav'
 import { BellLink } from '../../components/layout/BellLink'
 import { loadReports } from '../../lib/reports'
-import { ReportStatusBadge, ReportTimeline } from './reportView'
+import { ReportStatusBadge, ReportTimeline } from '../../components/resident/reportView'
 
 const filters = [
   { label: 'All', matches: () => true },

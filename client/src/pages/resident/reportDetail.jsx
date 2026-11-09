@@ -2,7 +2,7 @@ import { ChevronLeft, Image as ImageIcon, MapPin, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { loadReport } from '../../lib/reports'
-import { ReportPriorityBadge, ReportStatusBadge, ReportTimeline } from './reportView'
+import { ReportPriorityBadge, ReportStatusBadge, ReportTimeline } from '../../components/resident/reportView'
 
 function submittedAt(report) {
   if (report.createdAt) {

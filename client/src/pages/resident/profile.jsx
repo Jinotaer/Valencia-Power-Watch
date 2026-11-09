@@ -13,7 +13,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import ResidentProfileModals from './profileModals'
+import ResidentProfileModals from '../../components/resident/profileModals'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { BellLink } from '../../components/layout/BellLink'
 import { supabase } from '../../lib/supabase'

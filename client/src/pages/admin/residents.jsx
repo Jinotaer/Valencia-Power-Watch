@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, MapPin, Search, UsersRound } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
-import Pagination from '../../common/pagination'
+import Pagination from '../../components/common/pagination'
 import AdminSidebar from '../../components/admin/sidebar'
 import { Button } from '../../components/ui/button'
 import { Input } from '../../components/ui/input'

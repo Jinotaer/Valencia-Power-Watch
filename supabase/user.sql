@@ -1,4 +1,4 @@
--- Valencia PowerWatch — User module
+-- Valencia PowerWatch — Users table (public.users)
 -- Run in the Supabase SQL Editor (Dashboard -> SQL Editor -> New query)
 
 -- 1. Create public.users table (linked to Supabase auth.users)
@@ -12,16 +12,27 @@ create table if not exists public.users (
     check (role in ('admin', 'staff', 'resident')),
   contact_number text,
   address text,
+  position text,
+  is_active boolean not null default true,
+  notification_preferences jsonb not null
+    default '{"outageAlerts":true,"reportStatusUpdates":true,"scheduledReminders":false}'::jsonb,
   created_at timestamptz not null default now()
 );
 
-create index if not exists users_role_idx on public.users (role);
-
--- Residents are not issued an ID number: allow NULL and clear legacy auto codes
+-- Migrations for existing databases
 alter table public.users alter column id_number drop not null;
+alter table public.users add column if not exists is_active boolean not null default true;
+alter table public.users add column if not exists position text;
+alter table public.users
+  add column if not exists notification_preferences jsonb not null
+  default '{"outageAlerts":true,"reportStatusUpdates":true,"scheduledReminders":false}'::jsonb;
+
 update public.users set id_number = null where role = 'resident' and id_number like 'VP-%';
 
--- Admin check used by RLS policies. security definer avoids recursive RLS on this table.
+create index if not exists users_role_idx on public.users (role);
+create index if not exists users_role_active_idx on public.users (role, is_active);
+
+-- 2. Admin check used by RLS policies across all tables (security definer avoids recursive RLS)
 create or replace function public.is_admin()
 returns boolean
 language sql
@@ -35,34 +46,25 @@ as $$
   );
 $$;
 
--- Prevents unauthenticated calls from probing who claims to be an admin/staff.
--- Authenticated keeps EXECUTE via the default PUBLIC grant; policies run as the
--- calling user, so authenticated must keep execute.
 revoke execute on function public.is_admin() from anon;
 
--- 2. Enable Row Level Security (RLS)
+-- 3. Row Level Security (RLS)
 alter table public.users enable row level security;
 
--- Drop existing policies if re-running
 drop policy if exists "Users can read own profile" on public.users;
-drop policy if exists "Users can update own profile" on public.users;
-
--- RLS Policies: Authenticated users can read and update their own record
 create policy "Users can read own profile"
   on public.users
   for select
   to authenticated
   using ((select auth.uid()) = id);
 
--- `role` is excluded from the column grants below, so nobody can promote
--- themselves to admin by updating their own row.
+drop policy if exists "Users can update own profile" on public.users;
 create policy "Users can update own profile"
   on public.users
   for update
   to authenticated
   using ((select auth.uid()) = id);
 
--- Admins can read every user (needed to assign field staff)
 drop policy if exists "Admins can read all users" on public.users;
 create policy "Admins can read all users"
   on public.users
@@ -70,11 +72,41 @@ create policy "Admins can read all users"
   to authenticated
   using ((select public.is_admin()));
 
--- Editors may only change profile columns, never `role`
-revoke update on public.users from authenticated;
-grant update (id_number, full_name, contact_number, address) on public.users to authenticated;
+drop policy if exists "Admins can update user profiles" on public.users;
+create policy "Admins can update user profiles"
+  on public.users
+  for update
+  to authenticated
+  using ((select public.is_admin()))
+  with check ((select public.is_admin()));
 
--- 3. Automatic Trigger: Whenever a user signs up via auth.signUp(),
+-- Editors may only change profile columns, never `role` or `is_active` directly
+revoke update on public.users from authenticated;
+grant update (id_number, full_name, contact_number, address, position, notification_preferences) on public.users to authenticated;
+
+-- 4. Admin-only activation toggle (is_active is not user-self-editable)
+create or replace function public.set_user_active(p_user_id uuid, p_is_active boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not (select public.is_admin()) then
+    raise exception 'Only administrators can change account status.';
+  end if;
+
+  update public.users set is_active = p_is_active where id = p_user_id;
+  if not found then
+    raise exception 'User not found.';
+  end if;
+end;
+$$;
+
+revoke execute on function public.set_user_active(uuid, boolean) from anon;
+grant execute on function public.set_user_active(uuid, boolean) to authenticated;
+
+-- 5. Automatic Trigger: Whenever a user signs up via auth.signUp(),
 -- copy their information into public.users automatically.
 create or replace function public.handle_new_user()
 returns trigger
@@ -83,10 +115,9 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.users (id, id_number, email, full_name, role, contact_number, address)
+  insert into public.users (id, id_number, email, full_name, role, contact_number, address, position)
   values (
     new.id,
-    -- Only staff carry an ID number; residents are left NULL (no random code)
     case
       when new.raw_user_meta_data->>'id_number' is not null
         then new.raw_user_meta_data->>'id_number'
@@ -96,32 +127,27 @@ begin
     end,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
-    -- Signup metadata may only grant 'staff'; 'admin' is promoted by SQL (see §4)
     case when new.raw_user_meta_data->>'role' = 'staff' then 'staff' else 'resident' end,
     new.raw_user_meta_data->>'contact_number',
-    -- Staff have no assigned barangay
     case
       when new.raw_user_meta_data->>'role' = 'staff' then null
       else coalesce(new.raw_user_meta_data->>'barangay', new.raw_user_meta_data->>'address', '')
-    end
+    end,
+    nullif(new.raw_user_meta_data->>'position', '')
   )
   on conflict (id) do update set
     email = excluded.email,
     full_name = coalesce(excluded.full_name, public.users.full_name),
-    address = coalesce(excluded.address, public.users.address);
+    address = case
+      when public.users.role = 'staff' then null
+      else coalesce(excluded.address, public.users.address)
+    end,
+    position = coalesce(excluded.position, public.users.position);
   return new;
 end;
 $$;
 
--- Recreate trigger cleanly
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
-
--- 4. Promote a trusted user to admin (run as project owner in the SQL Editor):
--- update public.users set role = 'admin' where email = 'your-admin@email.com';
---
--- Signup metadata can never grant 'admin'; the trigger caps it at 'staff'. This
--- file must be at the top of the run order because it defines public.is_admin()
--- used by report.sql, barangay.sql and schedule.sql.

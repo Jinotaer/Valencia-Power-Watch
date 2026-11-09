@@ -52,7 +52,7 @@ export default function AdminAuditLogs() {
       .catch(() => {
         if (active) {
           setLogs([])
-          setLoadError('We could not load audit logs. Run supabase/admin_management.sql and try again.')
+          setLoadError('We could not load audit logs. Run supabase/audit_log.sql and try again.')
         }
       })
       .finally(() => {

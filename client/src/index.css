@@ -9,10 +9,34 @@
   --color-brand-muted: #555b66;
   --color-brand-paper: #f7f8fb;
   --color-brand-line: #d8dce6;
+  --color-background: #ffffff;
+  --color-foreground: #101114;
+  --color-card: #ffffff;
+  --color-card-foreground: #101114;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #101114;
+  --color-primary: #172b68;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f7f8fb;
+  --color-secondary-foreground: #172b68;
+  --color-muted: #f7f8fb;
+  --color-muted-foreground: #555b66;
+  --color-accent: #e5e9f6;
+  --color-accent-foreground: #172b68;
+  --color-destructive: #b42318;
+  --color-border: #d8dce6;
+  --color-input: #d8dce6;
+  --color-ring: #24449a;
   --shadow-brand: 0 18px 45px rgba(23, 43, 104, .14);
 }
 
 @layer base {
+  *,
+  ::after,
+  ::before {
+    border-color: var(--color-brand-line);
+  }
+
   html {
     @apply scroll-smooth bg-brand-paper font-sans text-brand-ink;
   }

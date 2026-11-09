@@ -85,6 +85,9 @@ function toReport(row, urls) {
     }),
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? row.created_at,
+    resolvedAt: row.resolved_at ?? (row.status === 'resolved' ? (row.updated_at ?? row.created_at) : null),
+    staffRemarks: row.staff_remarks ?? '',
+    restorationEta: row.restoration_eta ?? '',
     isDuplicate: Boolean(row.is_duplicate),
     status: meta.label,
     tone: meta.tone,
@@ -319,7 +322,7 @@ export async function loadStaff() {
   return (data ?? []).filter((user) => (user.role || '').toLowerCase() === 'staff')
 }
 
-export async function updateReportStatus(reference, status, assignedStaffId, resolutionFiles = []) {
+export async function updateReportStatus(reference, status, assignedStaffId, resolutionFiles = [], extra = {}) {
   const client = requireClient()
   const userId = await currentUserId()
   const uploaded = await uploadEvidence(userId, resolutionFiles)
@@ -334,16 +337,37 @@ export async function updateReportStatus(reference, status, assignedStaffId, res
     photos = [...(Array.isArray(current?.photos) ? current.photos : []), ...uploaded]
   }
 
-  const { data, error } = await client
+  const basePayload = {
+    status,
+    assigned_staff_id: assignedStaffId ?? null,
+    ...(photos ? { photos } : {}),
+  }
+
+  const extendedPayload = {
+    ...basePayload,
+    ...(extra.staffRemarks !== undefined ? { staff_remarks: extra.staffRemarks || null } : {}),
+    ...(extra.restorationEta !== undefined ? { restoration_eta: extra.restorationEta || null } : {}),
+    ...(status === 'resolved' ? { resolved_at: new Date().toISOString() } : {}),
+  }
+
+  let { data, error } = await client
     .from('reports')
-    .update({
-      status,
-      assigned_staff_id: assignedStaffId ?? null,
-      ...(photos ? { photos } : {}),
-    })
+    .update(extendedPayload)
     .eq('reference', reference)
     .select('*')
     .single()
+
+  // Graceful fallback if optional migration columns (staff_remarks, restoration_eta, resolved_at) aren't in DB yet
+  if (error && (extra.staffRemarks !== undefined || extra.restorationEta !== undefined || status === 'resolved')) {
+    const retry = await client
+      .from('reports')
+      .update(basePayload)
+      .eq('reference', reference)
+      .select('*')
+      .single()
+    data = retry.data
+    error = retry.error
+  }
 
   if (error) {
     if (uploaded.length > 0) {

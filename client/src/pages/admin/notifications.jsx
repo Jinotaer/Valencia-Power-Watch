@@ -57,7 +57,7 @@ export default function AdminNotifications() {
         if (active) {
           setNotifications([])
           setRecipients([])
-          setLoadError('We could not load notifications. Run supabase/admin_management.sql and try again.')
+          setLoadError('We could not load notifications. Run supabase/notification.sql and try again.')
         }
       })
       .finally(() => {
