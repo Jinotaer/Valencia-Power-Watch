@@ -4,6 +4,7 @@ import {
   Flag,
   MapPin,
   ShieldAlert,
+  ShieldCheck,
   Users as UsersIcon,
   XCircle,
 } from 'lucide-react'
@@ -221,6 +222,87 @@ export function ReportReviewDialog({
                         )}
                       </CardContent>
                     </Card>
+                  </section>
+                </>
+              )}
+
+              {selectedReport.aiVerification && (
+                <>
+                  <Separator className="bg-brand-line" />
+                  <section>
+                    <div className="flex items-center justify-between">
+                      <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
+                        <ShieldCheck className="size-3.5 text-brand-blue" />
+                        AI Evidence Security & Forensics
+                      </h3>
+                      <Badge
+                        variant="outline"
+                        className={`h-auto gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          selectedReport.aiVerification.isPowerRelated === false
+                            ? 'border-red-300 bg-red-50 text-red-800'
+                            : selectedReport.aiVerification.isWebOrStockImage
+                            ? 'border-amber-300 bg-amber-50 text-amber-800'
+                            : 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                        }`}
+                      >
+                        {selectedReport.aiVerification.isPowerRelated === false
+                          ? 'Flagged: Non-Utility Media'
+                          : selectedReport.aiVerification.isWebOrStockImage
+                          ? 'Flagged: Web / Stock Photo'
+                          : 'AI Verified Field Photo'}
+                      </Badge>
+                    </div>
+
+                    <div className="mt-2.5 space-y-2.5 rounded-xl border border-brand-line/80 bg-brand-paper/40 p-3">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-brand-muted">Camera Device</span>
+                          <p className="truncate font-semibold text-brand-navy" title={selectedReport.aiVerification.cameraDevice || ''}>
+                            {selectedReport.aiVerification.cameraDevice ||
+                              (selectedReport.aiVerification.hasCameraMetadata
+                                ? 'Live camera detected'
+                                : 'No camera EXIF (Web/App)')}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-brand-muted">AI Match Confidence</span>
+                          <p className="font-semibold text-brand-navy">
+                            {Math.round((selectedReport.aiVerification.confidence || 0.9) * 100)}% match
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-brand-muted">Valencia Geofence</span>
+                          <p className="font-semibold text-brand-navy">
+                            {selectedReport.aiVerification.isWithinValencia === true
+                              ? '✓ Inside Valencia City'
+                              : selectedReport.aiVerification.isWithinValencia === false
+                              ? '⚠️ Outside Valencia City'
+                              : 'No GPS geotag in photo'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase text-brand-muted">Evidence Age</span>
+                          <p className="font-semibold text-brand-navy">
+                            {selectedReport.aiVerification.isStale
+                              ? `⚠️ Stale (${selectedReport.aiVerification.ageHours}h old)`
+                              : '✓ Fresh (<24h)'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {selectedReport.aiVerification.rejectionReason && (
+                        <div className="rounded-lg bg-red-50 p-2 text-[11px] font-medium text-red-800">
+                          ⚠️ {selectedReport.aiVerification.rejectionReason}
+                        </div>
+                      )}
+
+                      {selectedReport.aiVerification.detectedComponents?.length > 0 && (
+                        <p className="text-[11px] text-brand-muted">
+                          <strong className="text-brand-navy">Components:</strong>{' '}
+                          {selectedReport.aiVerification.detectedComponents.join(', ')}
+                        </p>
+                      )}
+                    </div>
                   </section>
                 </>
               )}

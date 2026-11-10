@@ -110,8 +110,10 @@ function toReport(row, urls) {
       label: photo.label,
       kind: photo.kind ?? 'image',
       dataUrl: urls[photo.path],
+      aiVerification: photo.ai_verification ?? null,
     })),
     priority: row.priority ?? 'medium',
+    aiVerification: row.ai_metadata ?? (Array.isArray(row.photos) ? row.photos[0]?.ai_verification : null) ?? null,
   }
 }
 
@@ -265,6 +267,10 @@ export async function addReport(data) {
   if (!userId) throw new Error('You need to sign in again.')
 
   const uploadedPhotos = await uploadEvidence(userId, data.photos ?? [])
+  if (uploadedPhotos.length > 0 && data.aiVerification) {
+    uploadedPhotos[0].ai_verification = data.aiVerification
+  }
+
   const payload = {
     user_id: userId,
     outage_type: data.outageTypeId,
@@ -284,11 +290,28 @@ export async function addReport(data) {
   }
 
   try {
-    const { data: row, error } = await supabase
+    // Attempt insert with optional ai_metadata column if available in schema
+    let insertPayload = { ...payload }
+    if (data.aiVerification) {
+      insertPayload.ai_metadata = data.aiVerification
+    }
+
+    let { data: row, error } = await supabase
       .from('reports')
-      .insert(payload)
+      .insert(insertPayload)
       .select('*')
       .single()
+
+    // If ai_metadata column does not exist on table, fallback to baseline payload
+    if (error && error.message?.includes('ai_metadata')) {
+      const fallback = await supabase
+        .from('reports')
+        .insert(payload)
+        .select('*')
+        .single()
+      row = fallback.data
+      error = fallback.error
+    }
 
     if (error) throw error
     return toReport(row, {})

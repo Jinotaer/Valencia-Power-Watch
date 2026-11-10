@@ -51,6 +51,7 @@ alter table public.reports add column if not exists is_duplicate boolean not nul
 alter table public.reports add column if not exists staff_remarks text;
 alter table public.reports add column if not exists restoration_eta text;
 alter table public.reports add column if not exists resolved_at timestamptz;
+alter table public.reports add column if not exists ai_metadata jsonb;
 alter table public.reports add column if not exists updated_at timestamptz not null default now();
 
 create index if not exists reports_user_created_idx on public.reports (user_id, created_at desc);

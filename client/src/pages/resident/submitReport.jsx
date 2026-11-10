@@ -4,9 +4,11 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Image as ImageIcon,
   Info,
   LocateFixed,
+  MapPinOff,
   Maximize2,
   Plus,
   Send,
@@ -22,7 +24,7 @@ import { addReport, priorityLabels, reportPriorities } from '../../lib/reports'
 import { useLanguage } from '../../lib/i18n'
 import { VALENCIA_CENTER } from '../../components/resident/mapData'
 import { SubmitReportSuccess } from '../../components/resident/submitReportSuccess'
-import { analyzeEvidenceWithAI } from '../../lib/evidenceAiAnalyzer'
+import { analyzeEvidenceWithAI, getAiCooldownRemaining } from '../../lib/evidenceAiAnalyzer'
 
 const valenciaBarangays = [
   'Guinoyuran',
@@ -267,6 +269,19 @@ export default function SubmitReport() {
   const [aiError, setAiError] = useState('')
   const [isWebImageDetected, setIsWebImageDetected] = useState(false)
   const [safetyWarning, setSafetyWarning] = useState('')
+  const [isIrrelevantMedia, setIsIrrelevantMedia] = useState(false)
+  const [rejectionReason, setRejectionReason] = useState('')
+  const [isGeofenceWarning, setIsGeofenceWarning] = useState(false)
+  const [isStalePhoto, setIsStalePhoto] = useState(false)
+  const [cooldownSeconds, setCooldownSeconds] = useState(0)
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return
+    const timer = setTimeout(() => {
+      setCooldownSeconds((prev) => Math.max(0, prev - 1))
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [cooldownSeconds])
 
   const stepTitles = {
     1: 'Evidence',
@@ -446,8 +461,18 @@ export default function SubmitReport() {
   // AI Analysis of uploaded evidence (photos or video)
   const handleRunAiAnalysis = async () => {
     if (photos.length === 0 || isAnalyzingAi) return
+    const remaining = getAiCooldownRemaining()
+    if (remaining > 0) {
+      setCooldownSeconds(remaining)
+      return
+    }
+
     setIsAnalyzingAi(true)
     setAiError('')
+    setIsIrrelevantMedia(false)
+    setRejectionReason('')
+    setIsGeofenceWarning(false)
+    setIsStalePhoto(false)
 
     try {
       const result = await analyzeEvidenceWithAI({
@@ -457,7 +482,16 @@ export default function SubmitReport() {
 
       if (result) {
         setAiAnalysisResult(result)
-        if (result.outageType) setOutageType(result.outageType)
+        setCooldownSeconds(5)
+
+        // Security check: If media is not related to electrical utilities, flag it
+        if (result.isPowerRelated === false) {
+          setIsIrrelevantMedia(true)
+          setRejectionReason(result.rejectionReason || '')
+          return
+        }
+
+        if (result.outageType && result.outageType !== 'unknown') setOutageType(result.outageType)
         if (result.priority) setPriority(result.priority)
         if (result.noticedAt) setNoticedAt(result.noticedAt)
         if (result.description) setDescription(result.description)
@@ -465,14 +499,21 @@ export default function SubmitReport() {
         if (result.isWebOrStockImage) setIsWebImageDetected(true)
         if (result.safetyWarning) setSafetyWarning(result.safetyWarning)
 
+        if (result.isWithinValencia === false) {
+          setIsGeofenceWarning(true)
+        }
+        if (result.isStale) {
+          setIsStalePhoto(true)
+        }
+
         if (result.coordinates?.lat && result.coordinates?.lng) {
           handlePickPin(result.coordinates.lat, result.coordinates.lng, 'gps')
         }
 
         setStep(2)
       }
-    } catch {
-      setAiError('Could not complete AI scan. You can continue filling details manually.')
+    } catch (err) {
+      setAiError(err?.message || 'Could not complete AI scan. You can continue filling details manually.')
     } finally {
       setIsAnalyzingAi(false)
     }
@@ -513,6 +554,26 @@ export default function SubmitReport() {
         pinSource,
         coordinates,
         photos,
+        aiVerification: aiAnalysisResult ? {
+          isPowerRelated: aiAnalysisResult.isPowerRelated,
+          rejectionReason: aiAnalysisResult.rejectionReason,
+          confidence: aiAnalysisResult.confidence,
+          outageType: aiAnalysisResult.outageType,
+          priority: aiAnalysisResult.priority,
+          isWebOrStockImage: aiAnalysisResult.isWebOrStockImage,
+          authenticityRating: aiAnalysisResult.authenticityRating,
+          authenticityNote: aiAnalysisResult.authenticityNote,
+          hazardDetected: aiAnalysisResult.hazardDetected,
+          safetyWarning: aiAnalysisResult.safetyWarning,
+          detectedComponents: aiAnalysisResult.detectedComponents,
+          promptInjectionDetected: aiAnalysisResult.promptInjectionDetected,
+          hasCameraMetadata: aiAnalysisResult.hasCameraMetadata,
+          cameraDevice: aiAnalysisResult.cameraDevice,
+          isWithinValencia: aiAnalysisResult.isWithinValencia,
+          isStale: aiAnalysisResult.isStale,
+          ageHours: aiAnalysisResult.ageHours,
+          scannedAt: new Date().toISOString(),
+        } : null,
       })
 
       setReportReference(report.id)
@@ -755,14 +816,41 @@ export default function SubmitReport() {
                     <button
                       type="button"
                       onClick={handleRunAiAnalysis}
-                      disabled={isAnalyzingAi || isProcessingPhoto}
+                      disabled={isAnalyzingAi || isProcessingPhoto || cooldownSeconds > 0}
                       className="mt-2.5 inline-flex items-center gap-1.5 rounded-xl bg-brand-navy px-3.5 py-2 text-xs font-black text-white shadow-xs transition-all hover:bg-brand-blue cursor-pointer disabled:cursor-wait disabled:opacity-60"
                     >
                       <Sparkles className={`size-3.5 text-brand-yellow ${isAnalyzingAi ? 'animate-pulse' : ''}`} />
-                      <span>{isAnalyzingAi ? t('Analyzing evidence…') : t('Analyze with AI')}</span>
+                      <span>
+                        {isAnalyzingAi
+                          ? t('Analyzing evidence…')
+                          : cooldownSeconds > 0
+                          ? t('Wait {seconds}s', { seconds: cooldownSeconds })
+                          : t('Analyze with AI')}
+                      </span>
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Irrelevant Media Alert */}
+            {isIrrelevantMedia && (
+              <div className="flex items-start gap-2.5 rounded-2xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 shadow-xs">
+                <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold">{t('No electrical infrastructure detected')}</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-amber-800">
+                    {rejectionReason || t('The uploaded photo does not appear to show power lines, poles, transformers, or an outage scene. Please upload a clear photo of the electrical issue, or report without photos.')}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* AI Error Alert */}
+            {aiError && (
+              <div className="flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs text-red-900 shadow-xs">
+                <AlertTriangle className="size-4 shrink-0 text-red-600 mt-0.5" />
+                <span className="text-[11px] leading-relaxed">{aiError}</span>
               </div>
             )}
 
@@ -807,6 +895,32 @@ export default function SubmitReport() {
                   <strong>{t('Possible internet image.')}</strong>{' '}
                   {t('This photo has no camera details. If it is safe, a live photo of the actual damage helps crews verify faster.')}
                 </span>
+              </div>
+            )}
+
+            {/* Location Geofence Warning */}
+            {isGeofenceWarning && (
+              <div className="flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 p-3 text-[11px] leading-relaxed text-red-900">
+                <MapPinOff className="mt-0.5 size-4 shrink-0 text-red-600" />
+                <div>
+                  <p className="font-bold">{t('Location discrepancy detected')}</p>
+                  <p className="text-red-800">
+                    {t('This photo appears to have been taken outside Valencia City bounds. Please confirm your selected barangay and pin.')}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Stale Evidence Warning */}
+            {isStalePhoto && (
+              <div className="flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">
+                <Clock className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                <div>
+                  <p className="font-bold">{t('Stale evidence advisory')}</p>
+                  <p className="text-amber-800">
+                    {t('This photo was captured over 24 hours ago. Please confirm it reflects the current ongoing outage.')}
+                  </p>
+                </div>
               </div>
             )}
 
