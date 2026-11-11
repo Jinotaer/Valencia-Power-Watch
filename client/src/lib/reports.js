@@ -445,7 +445,6 @@ export async function dispatchReportToTeam(reference, teamId, staffId = null) {
     status: 'verified',
     assigned_team_id: teamId || null,
     ...(staffId !== undefined ? { assigned_staff_id: staffId || null } : {}),
-    updated_at: new Date().toISOString(),
   }
 
   const query = client.from('reports').update(payload)
@@ -453,9 +452,23 @@ export async function dispatchReportToTeam(reference, teamId, staffId = null) {
     ? query.eq('id', reference)
     : query.eq('reference', reference)
 
-  const { data, error } = await filterQuery.select('*').single()
+  let { data, error } = await filterQuery.select('*').single()
 
-  if (error) throw error
+  // Fallback to RPC if direct table update has column-level grant or RLS restriction
+  if (error) {
+    const { data: rpcData, error: rpcError } = await client.rpc('dispatch_report_to_team', {
+      p_reference: reference,
+      p_team_id: teamId || null,
+      p_staff_id: staffId || null,
+    })
+    if (!rpcError && rpcData) {
+      data = rpcData
+      error = null
+    } else {
+      throw error
+    }
+  }
+
   const urls = await signedUrls(photoPaths([data]))
   return toReport(data, urls)
 }
