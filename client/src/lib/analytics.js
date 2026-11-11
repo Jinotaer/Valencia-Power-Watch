@@ -13,6 +13,26 @@ function countBy(rows, key) {
   return counts
 }
 
+function computeDailyTrends(reports, days = 30) {
+  const result = []
+  const now = new Date()
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().slice(0, 10)
+    const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    const dayReports = reports.filter((r) => (r.createdAt || '').slice(0, 10) === dateStr)
+    result.push({
+      date: label,
+      rawDate: dateStr,
+      reports: dayReports.length,
+      active: dayReports.filter((r) => ['pending', 'verified'].includes(r.tone)).length,
+      resolved: dayReports.filter((r) => r.tone === 'resolved').length,
+    })
+  }
+  return result
+}
+
 // Admin overview aggregates: live totals and distributions.
 export async function loadAnalyticsOverview() {
   const [reports, allUsers, staff, barangays, schedules, announcements] = await Promise.all([
@@ -60,6 +80,25 @@ export async function loadAnalyticsOverview() {
     .sort((a, b) => new Date(b.when) - new Date(a.when))
     .slice(0, 30)
 
+  const dailyTrends = computeDailyTrends(reports, 30)
+
+  const statusDistribution = [
+    { status: 'pending', label: 'Pending', count: byStatus.pending ?? 0, fill: '#f59e0b' },
+    { status: 'verified', label: 'Verified', count: byStatus.verified ?? 0, fill: '#24449a' },
+    { status: 'resolved', label: 'Resolved', count: byStatus.resolved ?? 0, fill: '#10b981' },
+    { status: 'rejected', label: 'Rejected', count: byStatus.rejected ?? 0, fill: '#94a3b8' },
+  ]
+
+  const topBarangays = Object.entries(byBarangay)
+    .map(([barangay, count]) => ({ barangay, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6)
+
+  const topTypes = Object.entries(byType)
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
+
   return {
     totalUsers: allUsers.length,
     residentUsers: allUsers.filter((user) => user.role.toLowerCase() === 'resident').length,
@@ -80,5 +119,9 @@ export async function loadAnalyticsOverview() {
     byBarangay,
     byStaff,
     recent,
+    dailyTrends,
+    statusDistribution,
+    topBarangays,
+    topTypes,
   }
 }

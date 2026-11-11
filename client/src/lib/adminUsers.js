@@ -16,6 +16,7 @@ function toAdminUser(row) {
     contactNumber: row.contact_number ?? '',
     address: row.address ?? '',
     position: row.position ?? '',
+    teamId: row.team_id ?? null,
     isActive: row.is_active !== false,
     raw: row,
   }
@@ -28,7 +29,7 @@ export async function loadAdminUsers() {
 
   const { data, error } = await client
     .from('users')
-    .select('id, email, full_name, role, id_number, contact_number, address, position, is_active, created_at')
+    .select('id, email, full_name, role, id_number, contact_number, address, position, team_id, is_active, created_at')
     .neq('role', 'resident')
     .order('created_at', { ascending: false })
 
@@ -42,7 +43,7 @@ export async function loadAllAdminUsers() {
 
   const { data, error } = await client
     .from('users')
-    .select('id, email, full_name, role, id_number, contact_number, address, position, is_active, created_at')
+    .select('id, email, full_name, role, id_number, contact_number, address, position, team_id, is_active, created_at')
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -57,15 +58,48 @@ export async function updateAdminUser(id, fields) {
   if ('address' in fields) payload.address = (fields.address || '').trim() || null
   if ('idNumber' in fields) payload.id_number = (fields.idNumber || '').trim() || null
   if ('position' in fields) payload.position = (fields.position || '').trim() || null
+  if ('teamId' in fields) payload.team_id = fields.teamId || null
 
   if (Object.keys(payload).length === 0) throw new Error('Nothing to update.')
 
-  const { data, error } = await client
+  let { data, error } = await client
     .from('users')
     .update(payload)
     .eq('id', id)
-    .select('id, email, full_name, role, id_number, contact_number, address, position, is_active, created_at')
+    .select('id, email, full_name, role, id_number, contact_number, address, position, team_id, is_active, created_at')
     .single()
+
+  // If column update privilege on team_id fails, update the other profile fields and try assign_staff_team RPC
+  if (error && 'team_id' in payload) {
+    const fallbackPayload = { ...payload }
+    delete fallbackPayload.team_id
+
+    if (Object.keys(fallbackPayload).length > 0) {
+      const retry = await client
+        .from('users')
+        .update(fallbackPayload)
+        .eq('id', id)
+        .select('id, email, full_name, role, id_number, contact_number, address, position, team_id, is_active, created_at')
+        .single()
+      if (!retry.error) {
+        data = retry.data
+        error = null
+      }
+    }
+
+    try {
+      const rpc = await client.rpc('assign_staff_team', {
+        p_user_id: id,
+        p_team_id: payload.team_id || null,
+      })
+      if (!rpc.error) {
+        if (data) data.team_id = payload.team_id || null
+        error = null
+      }
+    } catch {
+      // RPC fallback failed, keep error
+    }
+  }
 
   if (error) throw error
   return toAdminUser(data)

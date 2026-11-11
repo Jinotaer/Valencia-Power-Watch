@@ -5,7 +5,7 @@ export function FlyToControl({ target }) {
   const map = useMap()
   useEffect(() => {
     if (target) {
-      map.flyTo([target.lat, target.lng], 14, { duration: 1.2 })
+      map.flyTo([target.lat, target.lng], target.zoom || 14, { duration: 1.2 })
     }
   }, [target, map])
   return null

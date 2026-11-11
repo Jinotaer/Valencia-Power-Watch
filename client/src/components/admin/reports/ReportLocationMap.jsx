@@ -32,11 +32,18 @@ const reportIcons = Object.fromEntries(
   STATUS_ORDER.map((status) => [status, makeReportIcon(statusMeta[status].color)]),
 )
 
-function MapSizeFix() {
+function MapSizeFix({ lat, lng }) {
   const map = useMap()
   useEffect(() => {
     map.invalidateSize()
-  }, [map])
+    const timer = setTimeout(() => {
+      map.invalidateSize()
+      if (lat != null && lng != null) {
+        map.setView([lat, lng], 15, { animate: false })
+      }
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [map, lat, lng])
   return null
 }
 
@@ -138,7 +145,7 @@ export function ReportLocationMap({ report, fill = false }) {
         style={fill ? { height: '100%', width: '100%' } : { height: '240px', width: '100%' }}
       >
         <TileLayer url={tileUrl} attribution={tileAttribution} />
-        <MapSizeFix />
+        <MapSizeFix lat={position?.[0]} lng={position?.[1]} />
 
         {position && (
           <Marker

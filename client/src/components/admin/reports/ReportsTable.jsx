@@ -5,6 +5,7 @@ import {
   FilterX,
   Flag,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react'
 import { ReportPriorityBadge, ReportStatusBadge } from '../../resident/reportView'
 import { Badge } from '../../ui/badge'
@@ -25,8 +26,10 @@ export function ReportsTable({
   reports,
   visibleReports,
   staffNames,
+  teamNames = {},
   hasActiveFilters,
   access,
+  detectedClusters = [],
   onReload,
   onClearFilters,
   onOpenReview,
@@ -195,7 +198,7 @@ export function ReportsTable({
                     <p className="text-sm font-bold text-brand-navy transition-colors group-hover:text-brand-blue">
                       {report.outageType}
                     </p>
-                    {report.isDuplicate && (
+                    {report.isDuplicate ? (
                       <Badge
                         variant="outline"
                         className="h-auto gap-1 rounded-full border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800"
@@ -203,7 +206,16 @@ export function ReportsTable({
                         <Flag className="size-2.5" aria-hidden="true" />
                         Duplicate
                       </Badge>
-                    )}
+                    ) : detectedClusters.some((c) => c.duplicateIds?.includes(report.id)) ? (
+                      <Badge
+                        variant="outline"
+                        className="h-auto gap-1 rounded-full border-amber-300 bg-amber-100/90 px-2 py-0.5 text-[10px] font-bold text-amber-900 animate-in fade-in"
+                        title="AI detected this report as a potential duplicate"
+                      >
+                        <Sparkles className="size-2.5 text-amber-700" aria-hidden="true" />
+                        AI Duplicate
+                      </Badge>
+                    ) : null}
                   </div>
                 </TableCell>
 
@@ -233,7 +245,14 @@ export function ReportsTable({
                 </TableCell>
 
                 <TableCell className="hidden px-3 md:table-cell">
-                  {assignedName ? (
+                  {report.assignedTeamId && teamNames[report.assignedTeamId] ? (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-bold text-brand-blue"
+                      title={teamNames[report.assignedTeamId]}
+                    >
+                      {teamNames[report.assignedTeamId]}
+                    </span>
+                  ) : assignedName ? (
                     <span className="block max-w-[18ch] truncate text-sm font-semibold text-brand-ink" title={assignedName}>
                       {assignedName}
                     </span>

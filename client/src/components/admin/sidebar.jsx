@@ -5,6 +5,7 @@ import {
   CalendarClock,
   FileText,
   FileSearch,
+  HardHat,
   LayoutDashboard,
   Map,
   Megaphone,
@@ -32,6 +33,7 @@ const primaryItems = [
   { label: 'Incident map', icon: Map, href: '/admin/map' },
   { label: 'Scheduled outages', icon: CalendarClock, href: '/admin/schedules' },
   { label: 'Barangays', icon: Building2, href: '/admin/barangay' },
+  { label: 'Field teams', icon: HardHat, href: '/admin/teams' },
   { label: 'Announcements', icon: Megaphone, href: '/admin/announcements' },
   
 ]

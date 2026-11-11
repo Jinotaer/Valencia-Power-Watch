@@ -93,6 +93,8 @@ function toReport(row, urls) {
     tone: meta.tone,
     progress: meta.progress,
     assignedStaffId: row.assigned_staff_id ?? null,
+    assignedTeamId: row.assigned_team_id ?? null,
+    resolvedByStaffId: row.resolved_by_staff_id ?? null,
     description: `Reported at ${createdAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}. ${meta.summary}`,
     outageType: typeLabel,
     startedTime: row.started_time,
@@ -110,6 +112,10 @@ function toReport(row, urls) {
       label: photo.label,
       kind: photo.kind ?? 'image',
       dataUrl: urls[photo.path],
+      uploadedBy: photo.uploadedBy,
+      uploadedByName: photo.uploaded_by_name || photo.uploadedByName || null,
+      teamName: photo.team_name || photo.teamName || null,
+      uploadedAt: photo.uploaded_at || photo.uploadedAt || null,
       aiVerification: photo.ai_verification ?? null,
     })),
     priority: row.priority ?? 'medium',
@@ -192,24 +198,34 @@ async function residentNames(rows) {
   return Object.fromEntries((users ?? []).map((user) => [user.id, user.full_name || user.email || '']))
 }
 
-// Staff: the reports assigned to this account, newest first. Resident evidence
-// is not signed here (staff cannot read it); files in the staff member's own
-// folder can be, so their resolution evidence shows back to them.
+// Staff: reports assigned directly or to their team, newest first.
 export async function loadAssignedReports() {
   if (!supabase) return []
   const userId = await currentUserId()
   if (!userId) return []
 
-  const { data, error } = await supabase
-    .from('reports')
-    .select('*')
-    .eq('assigned_staff_id', userId)
-    .order('created_at', { ascending: false })
+  // Check if staff belongs to a team
+  const { data: userRow } = await supabase
+    .from('users')
+    .select('team_id')
+    .eq('id', userId)
+    .maybeSingle()
+
+  const teamId = userRow?.team_id
+
+  let query = supabase.from('reports').select('*')
+  if (teamId) {
+    query = query.or(`assigned_staff_id.eq.${userId},assigned_team_id.eq.${teamId}`)
+  } else {
+    query = query.eq('assigned_staff_id', userId)
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false })
 
   if (error) throw error
 
   const rows = data ?? []
-    // Rejected reports never reach the field crew.
+  // Rejected reports never reach the field crew.
   const assigned = rows.filter((row) => row.status !== 'rejected')
   const names = await residentNames(assigned)
   const urls = await signedUrls(photoPaths(assigned))
@@ -350,6 +366,17 @@ export async function updateReportStatus(reference, status, assignedStaffId, res
   const userId = await currentUserId()
   const uploaded = await uploadEvidence(userId, resolutionFiles)
 
+  // Tag resolution evidence with uploader attribution
+  if (uploaded.length > 0) {
+    uploaded.forEach((u) => {
+      u.uploadedBy = 'staff'
+      u.uploaded_by_id = userId
+      if (extra.staffName) u.uploaded_by_name = extra.staffName
+      if (extra.teamName) u.team_name = extra.teamName
+      u.uploaded_at = new Date().toISOString()
+    })
+  }
+
   let photos
   if (uploaded.length > 0) {
     const { data: current } = await client
@@ -362,7 +389,9 @@ export async function updateReportStatus(reference, status, assignedStaffId, res
 
   const basePayload = {
     status,
-    assigned_staff_id: assignedStaffId ?? null,
+    ...(assignedStaffId !== undefined ? { assigned_staff_id: assignedStaffId ?? null } : {}),
+    ...(extra.assignedTeamId !== undefined ? { assigned_team_id: extra.assignedTeamId || null } : {}),
+    ...(status === 'resolved' ? { resolved_by_staff_id: userId } : {}),
     ...(photos ? { photos } : {}),
   }
 
@@ -380,8 +409,8 @@ export async function updateReportStatus(reference, status, assignedStaffId, res
     .select('*')
     .single()
 
-  // Graceful fallback if optional migration columns (staff_remarks, restoration_eta, resolved_at) aren't in DB yet
-  if (error && (extra.staffRemarks !== undefined || extra.restorationEta !== undefined || status === 'resolved')) {
+  // Graceful fallback if optional migration columns aren't in DB yet
+  if (error && (extra.staffRemarks !== undefined || extra.restorationEta !== undefined || status === 'resolved' || extra.assignedTeamId !== undefined)) {
     const retry = await client
       .from('reports')
       .update(basePayload)
@@ -399,6 +428,34 @@ export async function updateReportStatus(reference, status, assignedStaffId, res
     throw error
   }
 
+  const urls = await signedUrls(photoPaths([data]))
+  return toReport(data, urls)
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isUuid(val) {
+  return typeof val === 'string' && UUID_REGEX.test(val.trim())
+}
+
+// Dispatch a report directly to a field team
+export async function dispatchReportToTeam(reference, teamId, staffId = null) {
+  const client = requireClient()
+  const payload = {
+    status: 'verified',
+    assigned_team_id: teamId || null,
+    ...(staffId !== undefined ? { assigned_staff_id: staffId || null } : {}),
+    updated_at: new Date().toISOString(),
+  }
+
+  const query = client.from('reports').update(payload)
+  const filterQuery = isUuid(reference)
+    ? query.eq('id', reference)
+    : query.eq('reference', reference)
+
+  const { data, error } = await filterQuery.select('*').single()
+
+  if (error) throw error
   const urls = await signedUrls(photoPaths([data]))
   return toReport(data, urls)
 }

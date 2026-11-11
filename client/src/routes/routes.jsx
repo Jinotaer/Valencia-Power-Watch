@@ -14,6 +14,7 @@ import AdminResidents from '../pages/admin/residents'
 import AdminSchedules from '../pages/admin/schedules'
 import AdminAnnouncements from '../pages/admin/announcements'
 import AdminBarangay from '../pages/admin/barangay'
+import AdminTeams from '../pages/admin/teams'
 import AdminMap from '../pages/admin/map'
 import AdminReports from '../pages/admin/reports'
 import PortalLogin from '../pages/auth/resident-staff/login'
@@ -179,6 +180,7 @@ const pageRoutes = new Map([
   ['/admin/announcements', <AdminAnnouncements />],
   ['/admin/barangay', <AdminBarangay />],
   ['/admin/barangays', <AdminBarangay />],
+  ['/admin/teams', <AdminTeams />],
   ['/admin/map', <AdminMap />],
   ['/admin/reports', <AdminReports />],
 ])

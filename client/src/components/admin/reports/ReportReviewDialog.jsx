@@ -1,14 +1,20 @@
 import {
+  AlertCircle,
   Check,
   CheckCircle2,
+  Clock,
   Flag,
   MapPin,
+  Megaphone,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
+  Truck,
+  User,
   Users as UsersIcon,
   XCircle,
 } from 'lucide-react'
-import { priorityLabels } from '../../../lib/reports'
+import { useState } from 'react'
 import {
   ReportPriorityBadge,
   ReportStatusBadge,
@@ -16,7 +22,6 @@ import {
 } from '../../resident/reportView'
 import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
-import { Card, CardContent } from '../../ui/card'
 import {
   Dialog,
   DialogContent,
@@ -26,8 +31,9 @@ import {
 import { Separator } from '../../ui/separator'
 import { ReportEvidenceGallery } from './ReportEvidenceGallery'
 import { ReportLocationMap } from './ReportLocationMap'
+import { recommendDispatchAndEta } from '../../../lib/adminAiAssistant'
 
-export function ReportDetailsGrid({ report, assignedStaffName }) {
+export function ReportDetailsGrid({ report, assignedStaffName, assignedTeamName }) {
   const submittedFormatted = report.createdAt
     ? new Date(report.createdAt).toLocaleString('en-US', {
         month: 'short',
@@ -38,37 +44,93 @@ export function ReportDetailsGrid({ report, assignedStaffName }) {
       })
     : report.date || 'Unknown'
 
-  const rows = [
-    ['Reported by', report.residentName || 'Unknown resident'],
-    ['Barangay', report.barangay ? `Brgy. ${report.barangay}` : 'Not specified'],
-    ['Outage type', report.outageType || 'Power interruption'],
-    ['Priority level', priorityLabels[report.priority] ?? report.priority ?? 'Medium'],
-    ['First noticed', report.startedTime || report.date || 'Not provided'],
-    ['Submitted on', submittedFormatted],
-    ['Pinned address', report.pinnedLocation || 'Not provided'],
-    ['Nearest landmark', report.landmark || 'Not provided'],
-    [
-      'Location source',
-      report.pinSource === 'gps'
-        ? `GPS (${report.coordinates?.accuracy ? `±${Math.round(report.coordinates.accuracy)} m` : 'verified'})`
-        : 'Placed manually on map',
-    ],
-    ['Assigned field staff', assignedStaffName || 'Unassigned'],
-  ]
+  const isGps = report.pinSource === 'gps'
+  const gpsAccuracy = report.coordinates?.accuracy ? Math.round(report.coordinates.accuracy) : null
 
   return (
-    <dl className="grid grid-cols-1 gap-x-4 gap-y-3 rounded-xl border border-brand-line/80 bg-brand-paper/40 p-3.5 sm:grid-cols-2">
-      {rows.map(([label, value]) => (
-        <div key={label} className="min-w-0">
-          <dt className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
-            {label}
-          </dt>
-          <dd className="mt-0.5 truncate text-xs font-semibold text-brand-ink" title={String(value)}>
-            {value}
-          </dd>
+    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+      {/* 1. Reporter & Time */}
+      <div className="flex flex-col justify-between rounded-xl border border-brand-line/80 bg-brand-paper/50 p-3 transition-colors hover:border-brand-line">
+        <div>
+          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+            <User className="size-3.5 text-brand-blue" aria-hidden="true" />
+            <span>Reporter</span>
+          </div>
+          <p className="mt-1.5 truncate text-xs font-bold text-brand-navy" title={report.residentName || 'Unknown resident'}>
+            {report.residentName || 'Unknown resident'}
+          </p>
         </div>
-      ))}
-    </dl>
+        <div className="mt-2.5 space-y-1 border-t border-brand-line/50 pt-2 text-[11px]">
+          <div className="flex items-center justify-between text-brand-muted">
+            <span>Noticed:</span>
+            <span className="font-medium text-brand-ink truncate ml-1">{report.startedTime || report.date || 'Not specified'}</span>
+          </div>
+          <div className="flex items-center justify-between text-brand-muted">
+            <span>Submitted:</span>
+            <span className="font-medium text-brand-ink truncate ml-1">{submittedFormatted}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Location & Geotag */}
+      <div className="flex flex-col justify-between rounded-xl border border-brand-line/80 bg-brand-paper/50 p-3 transition-colors hover:border-brand-line">
+        <div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+              <MapPin className="size-3.5 text-brand-blue" aria-hidden="true" />
+              <span>Location</span>
+            </div>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                isGps
+                  ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border border-slate-200 bg-slate-100 text-slate-700'
+              }`}
+            >
+              <span className={`size-1.5 rounded-full ${isGps ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+              {isGps ? (gpsAccuracy ? `GPS ±${gpsAccuracy}m` : 'GPS Verified') : 'Manual Pin'}
+            </span>
+          </div>
+          <p className="mt-1.5 truncate text-xs font-bold text-brand-navy" title={report.barangay ? `Brgy. ${report.barangay}` : 'Barangay not specified'}>
+            {report.barangay ? `Brgy. ${report.barangay}` : 'Barangay not specified'}
+          </p>
+        </div>
+        <div className="mt-2.5 space-y-1 border-t border-brand-line/50 pt-2 text-[11px]">
+          <div className="text-brand-muted truncate" title={report.landmark || 'No landmark specified'}>
+            <span className="font-semibold text-brand-ink">Landmark:</span> {report.landmark || 'None provided'}
+          </div>
+          <div className="text-brand-muted break-words leading-tight" title={report.pinnedLocation || 'Not provided'}>
+            <span className="font-semibold text-brand-ink">Address:</span> {report.pinnedLocation || 'Not provided'}
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Field & Crew Assignment */}
+      <div className="flex flex-col justify-between rounded-xl border border-brand-line/80 bg-brand-paper/50 p-3 transition-colors hover:border-brand-line">
+        <div>
+          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+            <Truck className="size-3.5 text-brand-blue" aria-hidden="true" />
+            <span>Assignment</span>
+          </div>
+          <div className="mt-1.5">
+            {assignedTeamName ? (
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 bg-brand-blue/10 px-2 py-0.5 text-xs font-bold text-brand-blue">
+                <UsersIcon className="size-3" aria-hidden="true" />
+                {assignedTeamName}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                Awaiting Team Dispatch
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="mt-2.5 border-t border-brand-line/50 pt-2 text-[11px] text-brand-muted">
+          <span className="font-semibold text-brand-ink">Assigned Lineman:</span>{' '}
+          <span className="font-medium text-brand-navy">{assignedStaffName || 'Team-wide'}</span>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -79,18 +141,49 @@ export function ReportReviewDialog({
   staffNames,
   staffId,
   setStaffId,
+  teams = [],
+  teamNames = {},
+  teamId = '',
+  setTeamId,
   isSubmitting,
   actionError,
   confirmingReject,
   setConfirmingReject,
+  detectedClusters = [],
   onVerify,
   onReject,
   onAssignStaff,
+  onDispatchTeam,
   onToggleDuplicateFlag,
 }) {
+  const [isGeneratingDispatch, setIsGeneratingDispatch] = useState(false)
+  const [dispatchRecommendation, setDispatchRecommendation] = useState(null)
+
   if (!selectedReport) return null
 
   const statusKey = String(selectedReport.status ?? 'pending').toLowerCase()
+  const matchedCluster = detectedClusters.find(
+    (c) => c.masterReportId === selectedReport.id || c.duplicateIds?.includes(selectedReport.id),
+  )
+  const isMaster = matchedCluster?.masterReportId === selectedReport.id
+
+  const handleGetAiDispatch = async () => {
+    if (isGeneratingDispatch || !selectedReport) return
+    setIsGeneratingDispatch(true)
+    try {
+      const rec = await recommendDispatchAndEta({ report: selectedReport, availableStaff: staff })
+      if (rec) {
+        setDispatchRecommendation(rec)
+        if (rec.recommendedStaffId && !staffId) {
+          setStaffId(rec.recommendedStaffId)
+        }
+      }
+    } catch {
+      // Graceful fallback
+    } finally {
+      setIsGeneratingDispatch(false)
+    }
+  }
 
   return (
     <Dialog
@@ -99,14 +192,17 @@ export function ReportReviewDialog({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="max-h-[92vh] w-[calc(100%-1rem)] overflow-y-auto rounded-2xl border border-brand-line bg-white p-0 shadow-2xl ring-0 sm:max-w-[1080px] md:overflow-hidden">
-        <div className="grid min-h-[620px] grid-cols-1 md:h-[min(720px,92vh)] md:grid-cols-[1.15fr_0.85fr]">
-          <div className="relative z-0 h-72 w-full overflow-hidden border-b border-brand-line bg-[#e5e9f6] md:h-full md:border-b-0 md:border-r">
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[94vw] md:max-w-[1240px] lg:max-w-[1280px] h-[min(820px,90vh)] max-h-[90vh] p-0 gap-0 overflow-hidden rounded-2xl border border-brand-line bg-white shadow-2xl ring-0 flex flex-col">
+        <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 md:grid-cols-[52%_48%] overflow-hidden">
+          {/* Left Column: Interactive Map & Incident Geolocation */}
+          <div className="relative z-0 h-64 md:h-full min-h-0 w-full overflow-hidden border-b border-brand-line bg-[#e5e9f6] md:border-b-0 md:border-r">
             <ReportLocationMap report={selectedReport} fill />
           </div>
 
-          <div className="flex min-h-0 flex-col md:h-full">
-            <header className="shrink-0 border-b border-brand-line bg-brand-paper/40 px-5 py-4 pr-12">
+          {/* Right Column: Incident Dossier, Operations & Dispatch Console */}
+          <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
+            {/* Header: Core Ticket Identity & Status Lifecycle */}
+            <header className="shrink-0 border-b border-brand-line bg-brand-paper/40 px-5 py-3.5 pr-12">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Badge
@@ -131,28 +227,66 @@ export function ReportReviewDialog({
                   )}
                 </div>
 
-                <DialogTitle className="mt-2 text-lg font-bold leading-tight text-brand-navy">
+                <DialogTitle className="mt-2 text-xl font-bold leading-tight tracking-tight text-brand-navy">
                   {selectedReport.outageType}
                 </DialogTitle>
                 <DialogDescription className="mt-1 flex items-center gap-1.5 text-xs font-medium text-brand-muted">
                   <MapPin className="size-3.5 shrink-0 text-brand-blue" aria-hidden="true" />
                   <span className="truncate">
-                    {selectedReport.location} · Noticed{' '}
+                    {selectedReport.location} · First noticed{' '}
                     {selectedReport.startedTime || selectedReport.date}
                   </span>
                 </DialogDescription>
 
                 {statusKey !== 'rejected' && (
-                  <ReportTimeline progress={selectedReport.progress ?? 1} />
+                  <div className="mt-1">
+                    <ReportTimeline progress={selectedReport.progress ?? 1} />
+                  </div>
                 )}
               </div>
             </header>
 
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            {/* Scrollable Dossier Body: Liberated from footer chokehold */}
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
+              {/* Duplicate Cluster Banner */}
+              {matchedCluster && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-3.5 text-xs space-y-2 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-bold text-amber-900 text-xs">
+                      <Sparkles className="size-3.5 text-amber-600" aria-hidden="true" />
+                      AI Auto-Detected Duplicate Cluster ({Math.round(matchedCluster.confidence * 100)}% match)
+                    </span>
+                    <Badge className="bg-amber-200 text-amber-900 border-0 text-[10px] font-bold">
+                      {isMaster ? 'Master Incident' : 'Duplicate Candidate'}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-800">
+                    {matchedCluster.reason}
+                  </p>
+                  {!selectedReport.isDuplicate && !isMaster && (
+                    <div className="flex items-center justify-between pt-1 border-t border-amber-200/60">
+                      <span className="font-mono text-[10px] text-amber-700">
+                        Primary Incident: #{matchedCluster.masterReportId}
+                      </span>
+                      <Button
+                        type="button"
+                        size="xs"
+                        onClick={onToggleDuplicateFlag}
+                        disabled={isSubmitting}
+                        className="h-6 rounded-md bg-amber-600 px-2.5 text-[10px] font-bold text-white hover:bg-amber-700 cursor-pointer"
+                      >
+                        Flag as Duplicate
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Section 1: Incident Dossier Metadata */}
               <section>
                 <div className="flex items-center justify-between">
                   <h3 className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                    Incident Metadata
+                    Incident Dossier
                   </h3>
                   <Button
                     type="button"
@@ -176,28 +310,176 @@ export function ReportReviewDialog({
                   <ReportDetailsGrid
                     report={selectedReport}
                     assignedStaffName={staffNames[selectedReport.assignedStaffId]}
+                    assignedTeamName={teamNames[selectedReport.assignedTeamId]}
                   />
                 </div>
               </section>
 
               <Separator className="bg-brand-line" />
 
+              {/* Section 2: Resident Description & Notes */}
               <section>
                 <h3 className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
                   Resident Description & Notes
                 </h3>
-                <Card
-                  size="sm"
-                  className="mt-2 rounded-xl border border-brand-line/80 bg-brand-paper/40 py-3.5 ring-0"
-                >
-                  <CardContent className="px-3.5">
-                    <p className="whitespace-pre-wrap text-xs font-medium leading-5 text-brand-ink">
-                      {selectedReport.notes || 'No additional notes were provided by the resident.'}
-                    </p>
-                  </CardContent>
-                </Card>
+                {selectedReport.notes ? (
+                  <div className="mt-2 rounded-xl border border-brand-line/80 bg-brand-paper/40 p-3.5 text-xs font-medium leading-relaxed text-brand-ink whitespace-pre-wrap">
+                    {selectedReport.notes}
+                  </div>
+                ) : (
+                  <p className="mt-1.5 text-xs text-brand-muted italic">
+                    No additional notes or description were provided by the resident.
+                  </p>
+                )}
               </section>
 
+              {/* Section 3: Field Operations & Dispatch Command (When Verified) */}
+              {statusKey === 'verified' && (
+                <>
+                  <Separator className="bg-brand-line" />
+                  <section className="space-y-3.5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
+                        <Truck className="size-3.5 text-brand-blue" aria-hidden="true" />
+                        Field Operations & Dispatch Command
+                      </h3>
+                      {selectedReport.assignedTeamId && teamNames[selectedReport.assignedTeamId] && (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-blue">
+                          <span className="size-2 rounded-full bg-brand-blue animate-pulse" />
+                          Assigned to {teamNames[selectedReport.assignedTeamId]}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* AI Smart Dispatch & Repair Guidance */}
+                    <div className="rounded-xl border border-amber-200/90 bg-amber-50/60 p-3.5 text-xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 font-bold text-brand-navy text-xs">
+                          <Sparkles className="size-3.5 text-amber-600" aria-hidden="true" />
+                          AI Smart Dispatch & Repair Guidance
+                        </span>
+                        <Button
+                          type="button"
+                          size="xs"
+                          variant="outline"
+                          onClick={handleGetAiDispatch}
+                          disabled={isGeneratingDispatch}
+                          className="h-6.5 gap-1 rounded-md border-amber-300 bg-white px-2.5 text-[10px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer shadow-2xs"
+                        >
+                          <Sparkles className={`size-3 ${isGeneratingDispatch ? 'animate-spin' : ''}`} aria-hidden="true" />
+                          {isGeneratingDispatch ? 'Analyzing…' : dispatchRecommendation ? 'Re-analyze' : 'Analyze Dispatch'}
+                        </Button>
+                      </div>
+
+                      {dispatchRecommendation ? (
+                        <div className="space-y-2 pt-1 text-xs">
+                          <div className="flex items-center gap-1.5 font-semibold text-brand-navy">
+                            <Clock className="size-3.5 text-brand-blue" aria-hidden="true" />
+                            <span>Suggested Repair ETA: <strong className="text-amber-900">{dispatchRecommendation.suggestedEta}</strong></span>
+                          </div>
+                          <div className="rounded-lg border border-amber-200/60 bg-white/80 p-2.5 text-brand-ink leading-relaxed">
+                            <p className="font-semibold text-brand-navy text-[11px]">Recommended Lineman Instructions:</p>
+                            <p className="mt-0.5 text-xs text-brand-ink">{dispatchRecommendation.suggestedRemarks}</p>
+                          </div>
+                          <p className="text-[11px] text-brand-muted italic">
+                            {dispatchRecommendation.reasoning}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-brand-muted leading-relaxed">
+                          Click "Analyze Dispatch" to predict realistic restoration hours and generate technical instructions for the field team.
+                        </p>
+                      )}
+
+                      <div className="pt-1.5 border-t border-amber-200/60 flex items-center justify-between text-[11px]">
+                        <span className="text-brand-muted">Need to notify residents?</span>
+                        <a
+                          href={`/admin/announcements?barangay=${encodeURIComponent(selectedReport.barangay || '')}&cause=${encodeURIComponent(selectedReport.outageType || '')}`}
+                          className="inline-flex items-center gap-1 font-bold text-brand-blue hover:underline"
+                        >
+                          <Megaphone className="size-3" aria-hidden="true" />
+                          Draft Public Advisory
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Dispatch Field Team Selection */}
+                    <div className="rounded-xl border border-brand-line bg-brand-paper/30 p-4 space-y-3">
+                      <div>
+                        <label
+                          htmlFor="assign-team-select"
+                          className="block text-xs font-bold text-brand-navy"
+                        >
+                          {selectedReport.assignedTeamId ? 'Reassign Field Team' : 'Dispatch Field Team (Recommended)'}
+                        </label>
+                        <p className="mt-0.5 text-[11px] text-brand-muted">
+                          Every technician in the assigned team will receive this dispatch, view route guidance, and submit resolution photos.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2.5">
+                        <select
+                          id="assign-team-select"
+                          value={teamId}
+                          onChange={(event) => setTeamId(event.target.value)}
+                          className="h-10 min-w-0 flex-1 rounded-xl border border-brand-line bg-white px-3 text-xs font-semibold text-brand-ink shadow-2xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue cursor-pointer"
+                        >
+                          <option value="">Select a field crew team…</option>
+                          {teams.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name} ({t.memberCount || 0} crew · {t.activeJobCount || 0} active jobs)
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          type="button"
+                          onClick={onDispatchTeam}
+                          disabled={isSubmitting || !teamId || teams.length === 0}
+                          className="h-10 shrink-0 gap-1.5 rounded-xl bg-brand-blue px-5 text-xs font-bold text-white shadow-sm hover:bg-brand-navy cursor-pointer transition-colors"
+                        >
+                          <UsersIcon className="size-4" aria-hidden="true" />
+                          <span>{selectedReport.assignedTeamId ? 'Reassign Team' : 'Dispatch Team'}</span>
+                        </Button>
+                      </div>
+
+                      {/* Secondary: Individual staff assignment override */}
+                      <div className="pt-2 border-t border-brand-line/60">
+                        <details className="group">
+                          <summary className="text-[11px] font-semibold text-brand-muted hover:text-brand-navy cursor-pointer select-none">
+                            Or assign to a specific individual lineman
+                          </summary>
+                          <div className="mt-2.5 flex flex-col sm:flex-row gap-2">
+                            <select
+                              id="assign-staff-select"
+                              value={staffId}
+                              onChange={(event) => setStaffId(event.target.value)}
+                              className="h-9 min-w-0 flex-1 rounded-lg border border-brand-line bg-white px-2.5 text-xs font-medium text-brand-ink cursor-pointer"
+                            >
+                              <option value="">Select individual staff…</option>
+                              {staff.map((member) => (
+                                <option key={member.id} value={member.id}>
+                                  {member.full_name || member.email}
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={onAssignStaff}
+                              disabled={isSubmitting || !staffId}
+                              className="h-9 rounded-lg text-xs font-bold"
+                            >
+                              Assign Staff
+                            </Button>
+                          </div>
+                        </details>
+                      </div>
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {/* Section 4: Field Staff Updates (If Present) */}
               {(selectedReport.staffRemarks || selectedReport.restorationEta) && (
                 <>
                   <Separator className="bg-brand-line" />
@@ -205,39 +487,51 @@ export function ReportReviewDialog({
                     <h3 className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
                       Field Staff Updates
                     </h3>
-                    <Card
-                      size="sm"
-                      className="mt-2 rounded-xl border border-brand-blue/20 bg-[#e5e9f6]/50 py-3.5 ring-0"
-                    >
-                      <CardContent className="space-y-1.5 px-3.5 text-xs">
-                        {selectedReport.restorationEta && (
-                          <p className="font-bold text-brand-navy">
-                            Estimated Restoration: {selectedReport.restorationEta}
-                          </p>
-                        )}
-                        {selectedReport.staffRemarks && (
-                          <p className="whitespace-pre-wrap font-medium leading-5 text-brand-ink">
-                            {selectedReport.staffRemarks}
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
+                    <div className="mt-2.5 rounded-xl border border-brand-blue/20 bg-[#e5e9f6]/50 p-4 space-y-1.5 text-xs">
+                      {selectedReport.restorationEta && (
+                        <p className="font-bold text-brand-navy">
+                          Estimated Restoration: {selectedReport.restorationEta}
+                        </p>
+                      )}
+                      {selectedReport.staffRemarks && (
+                        <p className="whitespace-pre-wrap font-medium leading-5 text-brand-ink">
+                          {selectedReport.staffRemarks}
+                        </p>
+                      )}
+                    </div>
                   </section>
                 </>
               )}
 
+              {/* Section 5: Attached Evidence */}
+              <Separator className="bg-brand-line" />
+              <section>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
+                    Attached Evidence ({selectedReport.photos?.length ?? 0})
+                  </h3>
+                  {(selectedReport.photos?.length ?? 0) > 0 && (
+                    <span className="text-[11px] font-medium text-brand-muted">
+                      Click photo to enlarge
+                    </span>
+                  )}
+                </div>
+                <ReportEvidenceGallery report={selectedReport} />
+              </section>
+
+              {/* Section 6: AI Evidence Security & Forensics */}
               {selectedReport.aiVerification && (
                 <>
                   <Separator className="bg-brand-line" />
                   <section>
                     <div className="flex items-center justify-between">
                       <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                        <ShieldCheck className="size-3.5 text-brand-blue" />
+                        <ShieldCheck className="size-3.5 text-brand-blue" aria-hidden="true" />
                         AI Evidence Security & Forensics
                       </h3>
                       <Badge
                         variant="outline"
-                        className={`h-auto gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        className={`h-auto gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
                           selectedReport.aiVerification.isPowerRelated === false
                             ? 'border-red-300 bg-red-50 text-red-800'
                             : selectedReport.aiVerification.isWebOrStockImage
@@ -253,8 +547,8 @@ export function ReportReviewDialog({
                       </Badge>
                     </div>
 
-                    <div className="mt-2.5 space-y-2.5 rounded-xl border border-brand-line/80 bg-brand-paper/40 p-3">
-                      <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="mt-2.5 space-y-2.5 rounded-xl border border-brand-line/80 bg-brand-paper/40 p-3.5">
+                      <div className="grid grid-cols-2 gap-2.5 text-xs">
                         <div>
                           <span className="text-[10px] font-bold uppercase text-brand-muted">Camera Device</span>
                           <p className="truncate font-semibold text-brand-navy" title={selectedReport.aiVerification.cameraDevice || ''}>
@@ -291,7 +585,7 @@ export function ReportReviewDialog({
                       </div>
 
                       {selectedReport.aiVerification.rejectionReason && (
-                        <div className="rounded-lg bg-red-50 p-2 text-[11px] font-medium text-red-800">
+                        <div className="rounded-lg bg-red-50 p-2.5 text-[11px] font-medium text-red-800">
                           ⚠️ {selectedReport.aiVerification.rejectionReason}
                         </div>
                       )}
@@ -306,51 +600,36 @@ export function ReportReviewDialog({
                   </section>
                 </>
               )}
-
-              <Separator className="bg-brand-line" />
-
-              <section>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                    Attached Evidence ({selectedReport.photos?.length ?? 0})
-                  </h3>
-                  {(selectedReport.photos?.length ?? 0) > 0 && (
-                    <span className="text-[11px] font-medium text-brand-muted">
-                      Click photo to enlarge
-                    </span>
-                  )}
-                </div>
-                <ReportEvidenceGallery report={selectedReport} />
-              </section>
             </div>
 
-            <footer className="shrink-0 border-t border-brand-line bg-brand-paper/75 px-5 py-4">
+            {/* Footer: Streamlined Action Bar & Status Notices */}
+            <footer className="shrink-0 border-t border-brand-line bg-brand-paper/80 px-6 py-3">
               {statusKey === 'pending' && !confirmingReject && (
-                <div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <Button
-                      type="button"
-                      onClick={onVerify}
-                      disabled={isSubmitting}
-                      className="h-10 w-full gap-1.5 rounded-xl bg-brand-blue px-4 text-xs font-bold text-white shadow-2xs hover:bg-brand-navy cursor-pointer"
-                    >
-                      <Check className="size-4" strokeWidth={2.5} aria-hidden="true" />
-                      Verify report
-                    </Button>
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <p className="text-xs text-brand-muted leading-tight text-center sm:text-left">
+                    Review incident evidence above, then verify to dispatch field crews.
+                  </p>
+                  <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto">
                     <Button
                       type="button"
                       variant="destructive"
                       onClick={() => setConfirmingReject(true)}
                       disabled={isSubmitting}
-                      className="h-10 w-full gap-1.5 rounded-xl border border-red-200 bg-red-50 px-4 text-xs font-bold text-[#b42318] hover:bg-red-100 cursor-pointer"
+                      className="h-9 flex-1 sm:flex-initial gap-1.5 rounded-xl border border-red-200 bg-red-50 px-4 text-xs font-bold text-[#b42318] hover:bg-red-100 cursor-pointer"
                     >
                       <XCircle className="size-4" aria-hidden="true" />
                       Reject report
                     </Button>
+                    <Button
+                      type="button"
+                      onClick={onVerify}
+                      disabled={isSubmitting}
+                      className="h-9 flex-1 sm:flex-initial gap-1.5 rounded-xl bg-brand-blue px-5 text-xs font-bold text-white shadow-sm hover:bg-brand-navy cursor-pointer transition-colors"
+                    >
+                      <Check className="size-4" strokeWidth={2.5} aria-hidden="true" />
+                      Verify report
+                    </Button>
                   </div>
-                  <p className="mt-2 text-[11px] leading-4 text-brand-muted">
-                    Verify this report first to unlock field staff assignment and dispatch.
-                  </p>
                 </div>
               )}
 
@@ -392,73 +671,80 @@ export function ReportReviewDialog({
               )}
 
               {statusKey === 'verified' && (
-                <div>
-                  <label
-                    htmlFor="assign-staff"
-                    className="text-[11px] font-bold uppercase tracking-wider text-brand-muted"
+                <div className="flex items-center justify-between gap-3">
+                  {selectedReport.assignedTeamId && teamNames[selectedReport.assignedTeamId] ? (
+                    <div className="flex items-center gap-2 text-xs font-semibold text-brand-navy">
+                      <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>
+                        Dispatched to <strong>{teamNames[selectedReport.assignedTeamId]}</strong>
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs font-medium text-amber-800">
+                      <AlertCircle className="size-4 text-amber-600 shrink-0" aria-hidden="true" />
+                      <span>Awaiting team dispatch — select a field crew in the dossier above.</span>
+                    </div>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onClose}
+                    className="h-8.5 rounded-lg px-4 text-xs font-bold cursor-pointer"
                   >
-                    {selectedReport.assignedStaffId
-                      ? 'Reassign Field Staff'
-                      : 'Dispatch Field Staff'}
-                  </label>
-                  <div className="mt-2 flex gap-2">
-                    <select
-                      id="assign-staff"
-                      value={staffId}
-                      onChange={(event) => setStaffId(event.target.value)}
-                      className="h-10 min-w-0 flex-1 rounded-xl border border-brand-line bg-white px-3 text-xs font-semibold text-brand-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue cursor-pointer"
-                    >
-                      <option value="">Select a field staff member…</option>
-                      {staff.map((member) => (
-                        <option key={member.id} value={member.id}>
-                          {member.full_name || member.email}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      type="button"
-                      onClick={onAssignStaff}
-                      disabled={isSubmitting || !staffId || staff.length === 0}
-                      className="h-10 shrink-0 gap-1.5 rounded-xl bg-brand-blue px-4 text-xs font-bold text-white shadow-2xs hover:bg-brand-navy cursor-pointer"
-                    >
-                      <UsersIcon className="size-3.5" aria-hidden="true" />
-                      {selectedReport.assignedStaffId ? 'Update' : 'Dispatch'}
-                    </Button>
-                  </div>
-                  <p className="mt-2 text-[11px] leading-4 text-brand-muted">
-                    {staff.length === 0
-                      ? 'No staff accounts yet — create one under Users first.'
-                      : selectedReport.assignedStaffId
-                        ? `${staffNames[selectedReport.assignedStaffId] ?? 'The assigned staff member'} can update this job status from the staff portal.`
-                        : 'Assigned staff receive this job immediately on their map and job list.'}
-                  </p>
+                    Close
+                  </Button>
                 </div>
               )}
 
               {statusKey === 'resolved' && (
-                <div className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-semibold text-emerald-800">
-                  <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden="true" />
-                  <span>
-                    Resolved
-                    {selectedReport.assignedStaffId
-                      ? ` by ${staffNames[selectedReport.assignedStaffId] ?? 'field staff'}`
-                      : ''}{' '}
-                    — no further action needed.
-                  </span>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-emerald-800">
+                    <CheckCircle2 className="size-4 shrink-0 text-emerald-600" aria-hidden="true" />
+                    <span>
+                      Resolved
+                      {selectedReport.assignedTeamId && teamNames[selectedReport.assignedTeamId]
+                        ? ` by ${teamNames[selectedReport.assignedTeamId]}`
+                        : selectedReport.assignedStaffId
+                        ? ` by ${staffNames[selectedReport.assignedStaffId] ?? 'field staff'}`
+                        : ''}{' '}
+                      — power restored.
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onClose}
+                    className="h-8.5 rounded-lg px-4 text-xs font-bold cursor-pointer"
+                  >
+                    Close
+                  </Button>
                 </div>
               )}
 
               {statusKey === 'rejected' && (
-                <div className="flex items-center gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs font-semibold text-[#b42318]">
-                  <XCircle className="size-4 shrink-0" aria-hidden="true" />
-                  <span>Rejected — this report is closed and requires no dispatch.</span>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-[#b42318]">
+                    <XCircle className="size-4 shrink-0 text-[#b42318]" aria-hidden="true" />
+                    <span>Rejected — this report is closed and requires no dispatch.</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onClose}
+                    className="h-8.5 rounded-lg px-4 text-xs font-bold cursor-pointer"
+                  >
+                    Close
+                  </Button>
                 </div>
               )}
 
               {actionError && (
                 <p
                   role="alert"
-                  className="mt-2.5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-semibold text-[#b42318]"
+                  className="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] font-semibold text-[#b42318]"
                 >
                   {actionError}
                 </p>

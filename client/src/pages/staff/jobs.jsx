@@ -10,6 +10,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { loadAssignedReports, priorityLabels, updateReportStatus } from '../../lib/reports'
+import { supabase } from '../../lib/supabase'
 import { useLanguage } from '../../lib/i18n'
 import { ResolutionEvidenceInput } from '../../components/staff/evidenceInput'
 import { StaffNotificationsButton } from '../../components/staff/notificationsModal'
@@ -45,6 +46,7 @@ export default function StaffJobs() {
   const [updateForm, setUpdateForm] = useState({ remarks: '', eta: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
+  const [userProfile, setUserProfile] = useState(null)
 
   const showToast = (msg) => {
     setToastMessage(msg)
@@ -79,6 +81,35 @@ export default function StaffJobs() {
     }
   }, [reloadKey])
 
+  useEffect(() => {
+    if (!supabase) return undefined
+    let active = true
+
+    supabase.auth.getUser().then(async ({ data: authData }) => {
+      const user = authData?.user
+      if (!user || !active) return
+      const metaName = user.user_metadata?.full_name || ''
+      const { data } = await supabase
+        .from('users')
+        .select('id, full_name, team_id, teams:team_id(id, name)')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (data && active) {
+        setUserProfile({
+          id: data.id,
+          fullName: data.full_name || metaName,
+          teamId: data.team_id,
+          teamName: data.teams?.name || '',
+        })
+      }
+    })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
   const counts = useMemo(() => {
     const newCount = reports.filter((r) => r.tone === 'pending').length
     const activeCount = reports.filter((r) => r.tone === 'verified').length
@@ -109,7 +140,13 @@ export default function StaffJobs() {
         statusKey === 'resolved' && evidenceFiles.length > 0
           ? evidenceFiles.map((file) => ({ file, label: 'Resolution evidence', type: file.type }))
           : [],
-        { staffRemarks: updateForm.remarks.trim(), restorationEta: updateForm.eta.trim() },
+        {
+          staffRemarks: updateForm.remarks.trim(),
+          restorationEta: updateForm.eta.trim(),
+          staffName: userProfile?.fullName,
+          teamName: userProfile?.teamName,
+          assignedTeamId: report.assignedTeamId,
+        },
       )
       setEvidenceFiles([])
       setUpdateForm({ remarks: '', eta: '' })

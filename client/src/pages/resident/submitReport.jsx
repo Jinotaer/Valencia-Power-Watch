@@ -20,7 +20,7 @@ import L from 'leaflet'
 import { useEffect, useRef, useState } from 'react'
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { addReport, priorityLabels, reportPriorities } from '../../lib/reports'
+import { addReport, loadPublicOutages, priorityLabels, reportPriorities } from '../../lib/reports'
 import { useLanguage } from '../../lib/i18n'
 import { VALENCIA_CENTER } from '../../components/resident/mapData'
 import { SubmitReportSuccess } from '../../components/resident/submitReportSuccess'
@@ -274,6 +274,23 @@ export default function SubmitReport() {
   const [isGeofenceWarning, setIsGeofenceWarning] = useState(false)
   const [isStalePhoto, setIsStalePhoto] = useState(false)
   const [cooldownSeconds, setCooldownSeconds] = useState(0)
+  const [publicOutages, setPublicOutages] = useState([])
+
+  useEffect(() => {
+    let active = true
+    loadPublicOutages()
+      .then((outages) => {
+        if (active) setPublicOutages(outages || [])
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const activeBarangayReportsCount = publicOutages.filter(
+    (o) => (o.barangay || '').trim().toLowerCase() === (barangay || '').trim().toLowerCase() && o.tone !== 'resolved',
+  ).length
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return
@@ -1095,6 +1112,23 @@ export default function SubmitReport() {
                 <ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 rotate-90 text-brand-muted" />
               </div>
               <p className="mt-1.5 text-[11px] text-brand-muted">{t('Auto-filled from the pin when it can be matched.')}</p>
+
+              {activeBarangayReportsCount > 0 && (
+                <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/90 p-3 text-amber-900 shadow-xs animate-in fade-in">
+                  <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" />
+                  <div className="text-xs leading-relaxed">
+                    <p className="font-semibold">
+                      {t('{count} other report(s) are already logged for Brgy. {barangay}. Utility dispatchers are aware of this area.', {
+                        count: activeBarangayReportsCount,
+                        barangay,
+                      })}
+                    </p>
+                    <p className="text-[11px] text-amber-700/90 mt-0.5">
+                      {t('You can still submit your report if your specific street or issue is different.')}
+                    </p>
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* Street or Landmark Input */}
@@ -1203,6 +1237,20 @@ export default function SubmitReport() {
                 </div>
               </div>
             </div>
+
+            {activeBarangayReportsCount > 0 && (
+              <div className="flex items-start gap-2 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-3 text-amber-900 text-xs shadow-xs animate-in fade-in">
+                <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" />
+                <div className="leading-relaxed">
+                  <span className="font-semibold">
+                    {t('{count} other report(s) are already logged for Brgy. {barangay}. Utility dispatchers are aware of this area.', {
+                      count: activeBarangayReportsCount,
+                      barangay,
+                    })}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Evidence Summary Card */}
             <div className="rounded-2xl border border-brand-line bg-white p-4 shadow-xs">

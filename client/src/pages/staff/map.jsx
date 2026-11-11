@@ -17,6 +17,8 @@ import { Circle, MapContainer, Marker, Polyline, TileLayer, useMap } from 'react
 import 'leaflet/dist/leaflet.css'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { loadAssignedReports, updateReportStatus } from '../../lib/reports'
+import { updateTeamLocation } from '../../lib/teams'
+import { supabase } from '../../lib/supabase'
 import { barangayCenters } from '../../lib/geo'
 import {
   fetchDrivingRoute,
@@ -98,6 +100,7 @@ export default function StaffMap() {
   const [targetZoom, setTargetZoom] = useState(13)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [evidence, setEvidence] = useState(null) // { jobId, file }
+  const [userProfile, setUserProfile] = useState(null)
   const [navTarget, setNavTarget] = useState(null)
   const [navRoute, setNavRoute] = useState(null)
   const [navPosition, setNavPosition] = useState(null)
@@ -157,6 +160,52 @@ export default function StaffMap() {
       active = false
     }
   }, [reloadKey, requestedJobId])
+
+  useEffect(() => {
+    if (!supabase) return undefined
+    let active = true
+
+    supabase.auth.getUser().then(async ({ data: authData }) => {
+      const user = authData?.user
+      if (!user || !active) return
+      const { data } = await supabase
+        .from('users')
+        .select('id, full_name, team_id, teams:team_id(id, name)')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (data && active) {
+        setUserProfile({
+          id: data.id,
+          fullName: data.full_name || user.user_metadata?.full_name || '',
+          teamId: data.team_id,
+          teamName: data.teams?.name || '',
+        })
+      }
+    })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const teamId = userProfile?.teamId
+  const lastTeamSyncRef = useRef(0)
+  const syncTeamGps = useCallback(
+    (coords, heading) => {
+      if (!teamId || !coords) return
+      const now = Date.now()
+      if (now - lastTeamSyncRef.current < 10000) return
+      lastTeamSyncRef.current = now
+
+      updateTeamLocation(teamId, {
+        latitude: coords[0],
+        longitude: coords[1],
+        heading: heading || null,
+      }).catch(() => {})
+    },
+    [teamId],
+  )
 
   const visibleJobs = useMemo(() => {
     if (filter === 'done') return reports.filter((r) => r.tone === 'resolved')
@@ -248,6 +297,7 @@ export default function StaffMap() {
         const next = [position.coords.latitude, position.coords.longitude]
         setStaffPosition(next)
         setNavPosition(next)
+        syncTeamGps(next, position.coords.heading)
         requestRoute(next)
       },
       () => setNavError(t('Could not read your GPS. Move to an open area and try again.')),
@@ -264,6 +314,7 @@ export default function StaffMap() {
         const next = [position.coords.latitude, position.coords.longitude]
         setStaffPosition(next)
         setNavPosition(next)
+        syncTeamGps(next, position.coords.heading)
 
         // First route once the GPS is known, then reroute after leaving the line.
         if (Date.now() - lastRouteAt.current < REROUTE_COOLDOWN_MS) return
@@ -281,7 +332,7 @@ export default function StaffMap() {
     )
 
     return () => navigator.geolocation.clearWatch(watchId)
-  }, [navTarget, navRoute, requestRoute, t])
+  }, [navTarget, navRoute, requestRoute, syncTeamGps, t])
 
   const navProgress = useMemo(
     () => (navTarget && navRoute && navPosition ? routeProgress(navRoute, navPosition) : null),
@@ -297,6 +348,7 @@ export default function StaffMap() {
           setStaffPosition(coords)
           setTargetCoord(coords)
           setTargetZoom(15)
+          syncTeamGps(coords, pos.coords.heading)
           showToast(t('Updated live GPS coordinates'))
         },
         () => showToast(t('Could not access GPS — check location permission.')),
@@ -322,6 +374,11 @@ export default function StaffMap() {
         'resolved',
         cardJob.assignedStaffId,
         evidenceFiles.map((file) => ({ file, label: 'Resolution evidence', type: file.type })),
+        {
+          staffName: userProfile?.fullName,
+          teamName: userProfile?.teamName,
+          assignedTeamId: cardJob.assignedTeamId,
+        },
       )
       setActiveJob(null)
       stopNavigation()

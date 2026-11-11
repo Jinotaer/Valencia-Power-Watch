@@ -36,6 +36,7 @@ export function AdminUsersCreateDialog({
   newUser,
   setNewUser,
   onCreateUser,
+  teamsList = [],
   isSubmitting,
   errorMessage,
 }) {
@@ -74,8 +75,25 @@ export function AdminUsersCreateDialog({
               </span>
             </div>
 
+            {/* 1. Staff ID Number */}
             <div className="space-y-1.5">
-              <label className={labelClass} htmlFor="user-full-name">Full Name *</label>
+              <label className={labelClass} htmlFor="user-id-number">
+                Staff ID Number
+              </label>
+              <Input
+                id="user-id-number"
+                value={newUser.idNumber || ''}
+                onChange={(e) => setNewUser({ ...newUser, idNumber: e.target.value })}
+                placeholder="e.g. STF-101"
+                className={inputClass}
+              />
+            </div>
+
+            {/* 2. Full Name */}
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="user-full-name">
+                Full Name *
+              </label>
               <Input
                 id="user-full-name"
                 required
@@ -86,8 +104,11 @@ export function AdminUsersCreateDialog({
               />
             </div>
 
+            {/* 3. Email Address */}
             <div className="space-y-1.5">
-              <label className={labelClass} htmlFor="user-email">Email Address *</label>
+              <label className={labelClass} htmlFor="user-email">
+                Email Address *
+              </label>
               <Input
                 id="user-email"
                 required
@@ -99,8 +120,11 @@ export function AdminUsersCreateDialog({
               />
             </div>
 
+            {/* Temporary Password */}
             <div className="space-y-1.5">
-              <label className={labelClass} htmlFor="user-password">Temporary Password *</label>
+              <label className={labelClass} htmlFor="user-password">
+                Temporary Password *
+              </label>
               <div className="relative">
                 <Input
                   id="user-password"
@@ -120,35 +144,44 @@ export function AdminUsersCreateDialog({
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
-              <p className="text-[11px] text-brand-muted">The staff member will sign in with this temporary password.</p>
+              <p className="text-[11px] text-brand-muted">
+                The staff member will sign in with this temporary password.
+              </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3.5">
-              <div className="space-y-1.5">
-                <label className={labelClass} htmlFor="user-id-number">Staff ID Number</label>
-                <Input
-                  id="user-id-number"
-                  value={newUser.idNumber}
-                  onChange={(e) => setNewUser({ ...newUser, idNumber: e.target.value })}
-                  placeholder="STF-101"
-                  className={inputClass}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className={labelClass} htmlFor="user-contact">Contact Number</label>
-                <Input
-                  id="user-contact"
-                  value={newUser.contactNumber}
-                  onChange={(e) => setNewUser({ ...newUser, contactNumber: e.target.value })}
-                  placeholder="+63 917 123 4567"
-                  className={inputClass}
-                />
-              </div>
-            </div>
-
+            {/* 4. Contact Number */}
             <div className="space-y-1.5">
-              <label className={labelClass} htmlFor="user-position">Staff Position / Designation</label>
+              <label className={labelClass} htmlFor="user-contact">
+                Contact Number
+              </label>
+              <Input
+                id="user-contact"
+                value={newUser.contactNumber || ''}
+                onChange={(e) => setNewUser({ ...newUser, contactNumber: e.target.value })}
+                placeholder="+63 917 123 4567"
+                className={inputClass}
+              />
+            </div>
+
+            {/* 5. Address / Coverage */}
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="user-address">
+                Address / Coverage
+              </label>
+              <Input
+                id="user-address"
+                value={newUser.address || ''}
+                onChange={(e) => setNewUser({ ...newUser, address: e.target.value })}
+                placeholder="e.g. Brgy. Poblacion, Valencia City"
+                className={inputClass}
+              />
+            </div>
+
+            {/* 6. Staff Position / Designation */}
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="user-position">
+                Staff Position / Designation
+              </label>
               <select
                 id="user-position"
                 value={newUser.position}
@@ -162,6 +195,29 @@ export function AdminUsersCreateDialog({
                 <option value="Emergency Response Lead">Emergency Response Lead</option>
                 <option value="Field Support Crew">Field Support Crew</option>
               </select>
+            </div>
+
+            {/* 7. Field Team Assignment */}
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="user-team">
+                Field Team Assignment
+              </label>
+              <select
+                id="user-team"
+                value={newUser.teamId || ''}
+                onChange={(e) => setNewUser({ ...newUser, teamId: e.target.value || null })}
+                className={selectClass}
+              >
+                <option value="">No team assigned (Unassigned)</option>
+                {teamsList.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name} ({team.memberCount || 0} members)
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-brand-muted">
+                Staff assigned to this team will receive all reports dispatched to the team.
+              </p>
             </div>
           </div>
 
@@ -198,6 +254,7 @@ export function AdminUsersEditDialog({
   onSave,
   onToggleActive,
   onResetAccess,
+  teamsList = [],
   isSubmitting,
   isWorking,
   errorMessage,
@@ -219,7 +276,9 @@ export function AdminUsersEditDialog({
         <DialogHeader className={dialogHeaderClass}>
           <DialogTitle className={dialogTitleClass}>Edit Staff Account</DialogTitle>
           <DialogDescription className={dialogDescriptionClass}>
-            {user?.email ? `Update ${user.email}'s details. Email changes are made by the staff member, not here.` : 'Update staff details.'}
+            {user?.email
+              ? `Update ${user.email}'s details. Email changes are made by the staff member, not here.`
+              : 'Update staff details.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -231,38 +290,119 @@ export function AdminUsersEditDialog({
               </p>
             )}
 
-            <div className="grid grid-cols-2 gap-3.5">
-              <div className="space-y-1.5">
-                <label className={labelClass} htmlFor="edit-full-name">Full Name *</label>
-                <Input id="edit-full-name" required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className={inputClass} />
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelClass} htmlFor="edit-id-number">Staff ID Number</label>
-                <Input id="edit-id-number" value={form.idNumber} onChange={(e) => setForm({ ...form, idNumber: e.target.value })} className={inputClass} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3.5">
-              <div className="space-y-1.5">
-                <label className={labelClass} htmlFor="edit-contact">Contact Number</label>
-                <Input id="edit-contact" value={form.contactNumber} onChange={(e) => setForm({ ...form, contactNumber: e.target.value })} className={inputClass} />
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelClass} htmlFor="edit-position">Position</label>
-                <select
-                  id="edit-position"
-                  value={form.position}
-                  onChange={(e) => setForm({ ...form, position: e.target.value })}
-                  className={selectClass}
-                >
-                  {positionOptions.map((position) => <option key={position}>{position}</option>)}
-                </select>
-              </div>
-            </div>
+            {/* 1. Staff ID Number */}
             <div className="space-y-1.5">
-              <label className={labelClass} htmlFor="edit-address">Address / Coverage</label>
-              <Input id="edit-address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={inputClass} />
+              <label className={labelClass} htmlFor="edit-id-number">
+                Staff ID Number
+              </label>
+              <Input
+                id="edit-id-number"
+                value={form.idNumber}
+                onChange={(e) => setForm({ ...form, idNumber: e.target.value })}
+                placeholder="e.g. STF-101"
+                className={inputClass}
+              />
             </div>
 
+            {/* 2. Full Name */}
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="edit-full-name">
+                Full Name *
+              </label>
+              <Input
+                id="edit-full-name"
+                required
+                value={form.fullName}
+                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                placeholder="e.g. Maria Santos"
+                className={inputClass}
+              />
+            </div>
+
+            {/* 3. Email Address (Read-only) */}
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="edit-email">
+                Email Address
+              </label>
+              <Input
+                id="edit-email"
+                disabled
+                value={user?.email || ''}
+                className={`${inputClass} bg-brand-paper/50 cursor-not-allowed text-brand-muted text-xs font-mono`}
+              />
+            </div>
+
+            {/* 4. Contact Number */}
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="edit-contact">
+                Contact Number
+              </label>
+              <Input
+                id="edit-contact"
+                value={form.contactNumber}
+                onChange={(e) => setForm({ ...form, contactNumber: e.target.value })}
+                placeholder="+63 917 123 4567"
+                className={inputClass}
+              />
+            </div>
+
+            {/* 5. Address / Coverage */}
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="edit-address">
+                Address / Coverage
+              </label>
+              <Input
+                id="edit-address"
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                placeholder="e.g. Brgy. Poblacion, Valencia City"
+                className={inputClass}
+              />
+            </div>
+
+            {/* 6. Staff Position / Designation */}
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="edit-position">
+                Staff Position / Designation
+              </label>
+              <select
+                id="edit-position"
+                value={form.position}
+                onChange={(e) => setForm({ ...form, position: e.target.value })}
+                className={selectClass}
+              >
+                {positionOptions.map((position) => (
+                  <option key={position} value={position}>
+                    {position}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 7. Field Team Assignment */}
+            <div className="space-y-1.5">
+              <label className={labelClass} htmlFor="edit-team">
+                Field Team Assignment
+              </label>
+              <select
+                id="edit-team"
+                value={form.teamId || ''}
+                onChange={(e) => setForm({ ...form, teamId: e.target.value || null })}
+                className={selectClass}
+              >
+                <option value="">No team assigned (Unassigned)</option>
+                {teamsList.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name} ({team.memberCount || 0} members)
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-brand-muted">
+                Staff assigned to this team will receive all reports dispatched to the team.
+              </p>
+            </div>
+
+            {/* Account Actions: Deactivate / Reset Password */}
             <div className="grid gap-2 border-t border-brand-line pt-4 sm:grid-cols-2">
               <Button
                 type="button"
@@ -286,10 +426,20 @@ export function AdminUsersEditDialog({
           </div>
 
           <div className={dialogFooterClass}>
-            <Button type="button" variant="outline" disabled={isSubmitting} onClick={() => onOpenChange(false)} className={cancelClass}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSubmitting}
+              onClick={() => onOpenChange(false)}
+              className={cancelClass}
+            >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting} className={`${submitClass} flex items-center gap-2`}>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className={`${submitClass} flex items-center gap-2`}
+            >
               {isSubmitting && <LoaderCircle className="size-4 animate-spin" />}
               <span>{isSubmitting ? 'Saving...' : 'Save changes'}</span>
             </Button>

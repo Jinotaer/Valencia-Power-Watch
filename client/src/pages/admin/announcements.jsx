@@ -1,4 +1,4 @@
-import { Check, Megaphone, Pencil, Plus, Search, Trash2, X, XCircle } from 'lucide-react'
+import { Check, Megaphone, Pencil, Plus, Search, Sparkles, Trash2, X, XCircle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
 import AdminSidebar from '../../components/admin/sidebar'
@@ -21,6 +21,7 @@ import {
   loadAnnouncements,
   updateAnnouncement,
 } from '../../lib/announcements'
+import { generatePublicAdvisory } from '../../lib/adminAiAssistant'
 
 const categoryOptions = [
   { value: 'advisory', label: 'Advisory' },
@@ -98,16 +99,67 @@ export default function AdminAnnouncements() {
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('All categories')
   const [barangayFilter, setBarangayFilter] = useState('All barangays')
+  const initialData = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const bg = params.get('barangay')
+      const cause = params.get('cause')
+      if (bg || cause) {
+        return {
+          form: { title: '', body: '', barangay: bg || '', category: 'advisory' },
+          isOpen: true,
+          cause: cause || '',
+        }
+      }
+    }
+    return { form: emptyForm(), isOpen: false, cause: '' }
+  }, [])
+
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isFormOpen, setIsFormOpen] = useState(initialData.isOpen)
   const [editingId, setEditingId] = useState(null)
   const [deletingAnnouncement, setDeletingAnnouncement] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [toast, setToast] = useState(null)
   const [formError, setFormError] = useState('')
-  const [form, setForm] = useState(emptyForm())
+  const [form, setForm] = useState(initialData.form)
+  const [isAiDrafterOpen, setIsAiDrafterOpen] = useState(initialData.isOpen)
+  const [aiCause, setAiCause] = useState(initialData.cause)
+  const [aiEta, setAiEta] = useState('')
+  const [aiSitios, setAiSitios] = useState('')
+  const [aiLanguage, setAiLanguage] = useState('en')
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false)
+
+  const handleGenerateAiAdvisory = async () => {
+    if (isGeneratingAi) return
+    setIsGeneratingAi(true)
+    try {
+      const result = await generatePublicAdvisory({
+        category: form.category || 'advisory',
+        barangay: form.barangay || '',
+        cause: aiCause,
+        eta: aiEta,
+        affectedSitios: aiSitios,
+        language: aiLanguage,
+      })
+      if (result) {
+        setForm((prev) => ({
+          ...prev,
+          title: result.title || prev.title,
+          body: result.body || prev.body,
+          category: result.category || prev.category,
+          barangay: result.barangay || prev.barangay,
+        }))
+        showToast('AI draft generated! You can review or edit.')
+      }
+    } catch {
+      showToast('Could not generate AI draft.')
+    } finally {
+      setIsGeneratingAi(false)
+    }
+  }
 
   const showToast = (message, tone = 'ok') => {
     setToast({ message, tone })
@@ -493,6 +545,98 @@ export default function AdminAnnouncements() {
                   {formError}
                 </p>
               )}
+
+              {/* AI Advisory Drafter Tool */}
+              <div className="rounded-2xl border border-brand-yellow/60 bg-amber-50/60 p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="size-4 text-amber-600" />
+                    <span className="text-xs font-bold text-brand-navy">AI Advisory Drafter</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setIsAiDrafterOpen(!isAiDrafterOpen)}
+                    className="h-6 text-[11px] font-bold text-brand-blue hover:text-brand-navy cursor-pointer"
+                  >
+                    {isAiDrafterOpen ? 'Hide Drafter' : 'Draft with AI'}
+                  </Button>
+                </div>
+
+                {isAiDrafterOpen && (
+                  <div className="space-y-3 pt-1 animate-in fade-in">
+                    <p className="text-[11px] leading-relaxed text-brand-muted">
+                      Generate an official public notice in your chosen language based on outage facts.
+                    </p>
+
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-brand-muted">Cause / Outage Details</label>
+                        <Input
+                          value={aiCause}
+                          onChange={(e) => setAiCause(e.target.value)}
+                          placeholder="e.g. Broken pole on feeder 2"
+                          className="h-8 text-xs bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-brand-muted">Sitios / Purok (Optional)</label>
+                        <Input
+                          value={aiSitios}
+                          onChange={(e) => setAiSitios(e.target.value)}
+                          placeholder="e.g. Purok 3 & 4"
+                          className="h-8 text-xs bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold uppercase text-brand-muted">Est. Restoration (ETA)</label>
+                        <Input
+                          value={aiEta}
+                          onChange={(e) => setAiEta(e.target.value)}
+                          placeholder="e.g. 2:00 PM today"
+                          className="h-8 text-xs bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-amber-200/60">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="text-[10px] font-bold uppercase text-brand-muted">Language:</span>
+                        {[
+                          ['en', 'English'],
+                          ['fil', 'Filipino'],
+                          ['bce', 'Bisaya'],
+                        ].map(([code, label]) => (
+                          <button
+                            key={code}
+                            type="button"
+                            onClick={() => setAiLanguage(code)}
+                            className={`rounded-md px-2 py-0.5 text-[11px] font-bold transition-all cursor-pointer ${
+                              aiLanguage === code
+                                ? 'bg-brand-navy text-white shadow-2xs'
+                                : 'bg-white text-brand-muted border border-brand-line hover:text-brand-navy'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <Button
+                        type="button"
+                        size="xs"
+                        onClick={handleGenerateAiAdvisory}
+                        disabled={isGeneratingAi}
+                        className="gap-1.5 rounded-lg bg-brand-navy px-3 py-1.5 text-[11px] font-bold text-white hover:bg-brand-blue cursor-pointer"
+                      >
+                        <Sparkles className={`size-3 text-brand-yellow ${isGeneratingAi ? 'animate-spin' : ''}`} />
+                        <span>{isGeneratingAi ? 'Generating…' : 'Generate Notice'}</span>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div className="space-y-1.5">
                 <label htmlFor="announcement-title" className="block text-xs font-semibold text-brand-ink">

@@ -43,8 +43,10 @@ export function EvidenceGallery({ photos = [] }) {
                 ) : (
                   <img src={photo.dataUrl} alt={photo.label || t('Report evidence')} className="size-full object-cover" />
                 )}
-                <span className="absolute inset-x-0 bottom-0 truncate bg-black/50 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                  {photo.label || (photo.kind === 'video' ? t('Video') : t('Photo'))}
+                <span className="absolute inset-x-0 bottom-0 truncate bg-black/65 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                  {photo.uploadedByName || photo.teamName
+                    ? `${photo.uploadedByName || 'Lineman'}${photo.teamName ? ` (${photo.teamName})` : ''}`
+                    : photo.label || (photo.kind === 'video' ? t('Video') : t('Photo'))}
                 </span>
               </a>
             ))}

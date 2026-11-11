@@ -21,10 +21,11 @@ import {
 } from '../../components/ui/sidebar'
 import { createUnpersistedClient, supabase } from '../../lib/supabase'
 import { sendStaffPasswordReset, setUserActive, updateAdminUser } from '../../lib/adminUsers'
+import { loadTeams } from '../../lib/teams'
 
 // Map a public.users row to the shape used by the table (staff + admin only;
 // residents are displayed on /admin/residents)
-function toUser(u) {
+function toUser(u, teamsMap = {}) {
   const role = (u.role || 'resident').toLowerCase()
   const capitalized = role.charAt(0).toUpperCase() + role.slice(1)
   return {
@@ -36,6 +37,8 @@ function toUser(u) {
     contactNumber: u.contact_number || '\u2014',
     position: u.position || '',
     address: u.address || '',
+    teamId: u.team_id || null,
+    teamName: teamsMap[u.team_id] || '',
     isActive: u.is_active !== false,
     rawId: u.id,
     joined: u.created_at ? new Date(u.created_at).toLocaleDateString() : '\u2014',
@@ -86,10 +89,11 @@ function AdminUsers() {
   const [sortOrder, setSortOrder] = useState('asc')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [teamsList, setTeamsList] = useState([])
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
-  const [editForm, setEditForm] = useState({ fullName: '', idNumber: '', contactNumber: '', position: '', address: '' })
+  const [editForm, setEditForm] = useState({ fullName: '', idNumber: '', contactNumber: '', position: '', address: '', teamId: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isWorking, setIsWorking] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -103,10 +107,12 @@ function AdminUsers() {
     role: 'Staff',
     position: 'Line Crew / Responder',
     contactNumber: '',
+    address: '',
     idNumber: 'STF-109',
+    teamId: '',
   })
 
-  // Load registered users from Supabase public.users (admins see every row)
+  // Load registered users and field teams from Supabase
   useEffect(() => {
     let active = true
 
@@ -121,10 +127,12 @@ function AdminUsers() {
       return data || []
     }
 
-    fetchUsers()
-      .then((rows) => {
+    Promise.all([fetchUsers(), loadTeams().catch(() => [])])
+      .then(([rows, teamsData]) => {
         if (!active) return
-        setUsersList(rows.map(toUser))
+        setTeamsList(teamsData || [])
+        const teamsMap = Object.fromEntries((teamsData || []).map((t) => [t.id, t.name]))
+        setUsersList(rows.map((r) => toUser(r, teamsMap)))
         setLoadError('')
       })
       .catch((err) => {
@@ -223,7 +231,8 @@ function AdminUsers() {
           role: 'staff',
           id_number: idNumber,
           position: newUser.position || 'Line Crew / Responder',
-          contact_number: newUser.contactNumber || null,
+          contact_number: newUser.contactNumber ? newUser.contactNumber.trim() : null,
+          address: newUser.address ? newUser.address.trim() : null,
         },
       },
     })
@@ -239,6 +248,17 @@ function AdminUsers() {
       return
     }
 
+    if ((newUser.teamId || newUser.address) && supabase) {
+      try {
+        const updatePayload = {}
+        if (newUser.teamId) updatePayload.team_id = newUser.teamId
+        if (newUser.address) updatePayload.address = newUser.address.trim()
+        await supabase.from('users').update(updatePayload).eq('email', newUser.email.trim())
+      } catch (err) {
+        console.warn('Could not assign team/address to user:', err)
+      }
+    }
+
     setIsCreateOpen(false)
     reload()
     setToastMessage(`Staff account for ${newUser.name.trim()} created successfully!`)
@@ -251,7 +271,9 @@ function AdminUsers() {
       role: 'Staff',
       position: 'Line Crew / Responder',
       contactNumber: '',
+      address: '',
       idNumber: `STF-${suffix}`,
+      teamId: '',
     })
   }
 
@@ -268,6 +290,7 @@ function AdminUsers() {
       contactNumber: user.contactNumber === '\u2014' ? '' : user.contactNumber,
       position: user.position || 'Line Crew / Responder',
       address: user.address || '',
+      teamId: user.teamId || '',
     })
     setEditError('')
     setIsEditOpen(true)
@@ -281,7 +304,8 @@ function AdminUsers() {
     setEditError('')
     try {
       const updated = await updateAdminUser(editingUser.rawId, editForm)
-      setUsersList((current) => current.map((row) => (row.rawId === updated.id ? toUser(updated.raw) : row)))
+      const teamsMap = Object.fromEntries(teamsList.map((t) => [t.id, t.name]))
+      setUsersList((current) => current.map((row) => (row.rawId === updated.id ? toUser(updated.raw, teamsMap) : row)))
       setIsEditOpen(false)
       showToast('Staff account updated.')
     } catch (error) {
@@ -455,9 +479,10 @@ function AdminUsers() {
                         </button>
                       </th>
                       <th className="h-11 px-5">Contact</th>
-                      <th className="h-11 px-5">Status</th>
                       <th className="h-11 px-5">Position</th>
+                      <th className="h-11 px-5">Field Team</th>
                       <th className="h-11 px-5">Joined</th>
+                      <th className="h-11 px-5">Status</th>
                       <th className="h-11 px-5 text-right">Action</th>
                     </tr>
                   </thead>
@@ -477,16 +502,25 @@ function AdminUsers() {
                         <td className="px-5 py-4 text-xs text-brand-muted sm:text-sm">{user.email}</td>
                         <td className="px-5 py-4"><RoleBadge role={user.role} /></td>
                         <td className="whitespace-nowrap px-5 py-4 text-xs text-brand-muted sm:text-sm">{user.contactNumber}</td>
+                        <td className="whitespace-nowrap px-5 py-4 text-xs font-medium text-brand-muted">
+                          {user.position || '—'}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4 text-xs font-medium">
+                          {user.teamName ? (
+                            <span className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-bold text-brand-blue">
+                              {user.teamName}
+                            </span>
+                          ) : (
+                            <span className="text-brand-muted italic text-[11px]">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-4 text-xs text-brand-muted">{user.joined}</td>
                         <td className="px-5 py-4">
                           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${user.isActive === false ? 'border-[#f3c7c3] bg-red-50 text-[#b42318]' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
                             <span className={`size-1.5 rounded-full ${user.isActive === false ? 'bg-[#b42318]' : 'bg-emerald-500'}`} />
                             {user.isActive === false ? 'Deactivated' : 'Active'}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-5 py-4 text-xs font-medium text-brand-muted">
-                          {user.position || '—'}
-                        </td>
-                        <td className="whitespace-nowrap px-5 py-4 text-xs text-brand-muted">{user.joined}</td>
                         <td className="px-5 py-4">
                           <div className="flex items-center justify-end gap-2">
                             <button type="button" onClick={() => openEdit(user)} aria-label={`Edit ${user.name}`} title="Edit" className="grid size-9 place-items-center rounded-lg border border-brand-line bg-white text-brand-muted transition-colors hover:bg-brand-paper hover:text-brand-navy">
@@ -499,7 +533,7 @@ function AdminUsers() {
 
                     {isLoading && (
                       <tr>
-                        <td colSpan={9} className="px-5 py-12 text-center text-sm font-semibold text-brand-muted">
+                        <td colSpan={10} className="px-5 py-12 text-center text-sm font-semibold text-brand-muted">
                           Loading users…
                         </td>
                       </tr>
@@ -507,7 +541,7 @@ function AdminUsers() {
 
                     {!isLoading && loadError && (
                       <tr>
-                        <td colSpan={9} className="px-5 py-12 text-center">
+                        <td colSpan={10} className="px-5 py-12 text-center">
                           <p className="text-sm font-bold text-[#b42318]">{loadError}</p>
                           <button
                             type="button"
@@ -522,7 +556,7 @@ function AdminUsers() {
 
                     {!isLoading && !loadError && visibleUsers.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="px-5 py-12 text-center text-sm text-brand-muted">
+                        <td colSpan={10} className="px-5 py-12 text-center text-sm text-brand-muted">
                           No users found matching this filter combination.
                         </td>
                       </tr>
@@ -554,6 +588,7 @@ function AdminUsers() {
         newUser={newUser}
         setNewUser={setNewUser}
         onCreateUser={handleCreateUser}
+        teamsList={teamsList}
         isSubmitting={isSubmitting}
         errorMessage={createError}
       />
@@ -565,6 +600,7 @@ function AdminUsers() {
         onSave={handleSaveEdit}
         onToggleActive={handleToggleActive}
         onResetAccess={handleResetAccess}
+        teamsList={teamsList}
         isSubmitting={isSubmitting}
         isWorking={isWorking}
         errorMessage={editError}

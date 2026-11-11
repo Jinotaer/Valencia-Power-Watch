@@ -93,6 +93,8 @@ export default {
   'This photo appears to have been taken outside Valencia City bounds. Please confirm your selected barangay and pin.': 'Kini nga hulagway morag nakuha gawas sa Valencia City. Palihug kumpirmaha ang imong napiling barangay ug pin sa mapa.',
   'Stale evidence advisory': 'Pahibalo sa daan nga ebidensya',
   'This photo was captured over 24 hours ago. Please confirm it reflects the current ongoing outage.': 'Kini nga hulagway nakuha kapin 24 ka oras na ang milabay. Palihug kumpirmaha kon kini nagpakita sa kasamtangang brownout.',
+  '{count} other report(s) are already logged for Brgy. {barangay}. Utility dispatchers are aware of this area.': 'Adunay {count} laing report nga narehistro na alang sa Brgy. {barangay}. Nahibalo na ang mga dispatcher sa pasilidad niini nga dapit.',
+  'You can still submit your report if your specific street or issue is different.': 'Mahimo gihapon nimong isumite ang imong report kon lahi ang imong espesipikong dalan o problema.',
   'Evidence could not be loaded.': 'Dili ma-load ang ebidensya.',
   Excellent: 'Labing maayo',
   'Expand map': 'Padak-a ang mapa',

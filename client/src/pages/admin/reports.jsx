@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react'
+import { Check, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import AdminNavbar from '../../components/admin/navbar'
 import { ReportReviewDialog } from '../../components/admin/reports/ReportReviewDialog'
@@ -7,15 +7,19 @@ import { ReportsTable } from '../../components/admin/reports/ReportsTable'
 import AdminSidebar from '../../components/admin/sidebar'
 import PageHeader from '../../components/common/pageHeader'
 import Pagination from '../../components/common/pagination'
+import { Button } from '../../components/ui/button'
 import { Card } from '../../components/ui/card'
 import { SidebarInset, SidebarProvider } from '../../components/ui/sidebar'
 import {
+  dispatchReportToTeam,
   getAdminAccess,
   loadAllReports,
   loadStaff,
   setReportDuplicateFlag,
   updateReportStatus,
 } from '../../lib/reports'
+import { loadTeams } from '../../lib/teams'
+import { detectDuplicateClusters } from '../../lib/adminAiAssistant'
 
 export default function AdminReports() {
   const [reports, setReports] = useState([])
@@ -32,14 +36,59 @@ export default function AdminReports() {
   const [confirmingReject, setConfirmingReject] = useState(false)
   const [staff, setStaff] = useState([])
   const [staffId, setStaffId] = useState('')
+  const [teams, setTeams] = useState([])
+  const [teamId, setTeamId] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [actionError, setActionError] = useState('')
   const [toastMessage, setToastMessage] = useState('')
   const [access, setAccess] = useState(null)
+  const [isScanningDuplicates, setIsScanningDuplicates] = useState(false)
+  const [detectedClusters, setDetectedClusters] = useState([])
+  const [isFlaggingBatch, setIsFlaggingBatch] = useState(false)
 
   const showToast = (msg) => {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(''), 3200)
+  }
+
+  const handleScanDuplicates = async () => {
+    if (isScanningDuplicates || reports.length < 2) return
+    setIsScanningDuplicates(true)
+    try {
+      const clusters = await detectDuplicateClusters({ reports })
+      setDetectedClusters(clusters)
+      if (clusters.length === 0) {
+        showToast('AI scan complete: No duplicate clusters detected.')
+      } else {
+        const totalDups = clusters.reduce((acc, c) => acc + (c.duplicateIds?.length || 0), 0)
+        showToast(`AI detected ${clusters.length} outage cluster(s) with ${totalDups} duplicate(s).`)
+      }
+    } catch {
+      showToast('Could not complete AI duplicate scan.')
+    } finally {
+      setIsScanningDuplicates(false)
+    }
+  }
+
+  const handleBatchFlagDuplicates = async (cluster) => {
+    if (isFlaggingBatch || !cluster.duplicateIds?.length) return
+    setIsFlaggingBatch(true)
+    try {
+      for (const id of cluster.duplicateIds) {
+        await setReportDuplicateFlag(id, true)
+      }
+      setReports((current) =>
+        current.map((r) =>
+          cluster.duplicateIds.includes(r.id) ? { ...r, isDuplicate: true } : r
+        )
+      )
+      setDetectedClusters((prev) => prev.filter((c) => c.masterReportId !== cluster.masterReportId))
+      showToast(`Flagged ${cluster.duplicateIds.length} duplicate report(s).`)
+    } catch {
+      showToast('Error flagging duplicate batch.')
+    } finally {
+      setIsFlaggingBatch(false)
+    }
   }
 
   const reload = () => {
@@ -52,7 +101,21 @@ export default function AdminReports() {
     let active = true
     loadAllReports()
       .then((savedReports) => {
-        if (active) setReports(savedReports)
+        if (active) {
+          setReports(savedReports)
+          // AUTOMATIC DUPLICATE DETECTION: scans as soon as reports load
+          if (savedReports && savedReports.length >= 2) {
+            setIsScanningDuplicates(true)
+            detectDuplicateClusters({ reports: savedReports })
+              .then((clusters) => {
+                if (active) setDetectedClusters(clusters || [])
+              })
+              .catch(() => {})
+              .finally(() => {
+                if (active) setIsScanningDuplicates(false)
+              })
+          }
+        }
       })
       .catch(() => {
         if (active) {
@@ -74,11 +137,17 @@ export default function AdminReports() {
 
   useEffect(() => {
     loadStaff().then(setStaff)
+    loadTeams().then(setTeams).catch(() => {})
   }, [])
 
   const staffNames = useMemo(
     () => Object.fromEntries(staff.map((member) => [member.id, member.full_name || member.email])),
     [staff],
+  )
+
+  const teamNames = useMemo(
+    () => Object.fromEntries(teams.map((t) => [t.id, t.name])),
+    [teams],
   )
 
   const barangayOptions = useMemo(() => {
@@ -173,6 +242,7 @@ export default function AdminReports() {
   const openReview = (report) => {
     setSelectedReport(report)
     setStaffId(report.assignedStaffId ?? '')
+    setTeamId(report.assignedTeamId ?? '')
     setConfirmingReject(false)
     setActionError('')
   }
@@ -206,6 +276,22 @@ export default function AdminReports() {
     setSelectedReport(null)
     reload()
     showToast('Report rejected.')
+  }
+
+  const handleDispatchTeam = async () => {
+    if (!teamId || !selectedReport) return
+    setIsSubmitting(true)
+    setActionError('')
+    try {
+      await dispatchReportToTeam(selectedReport.id, teamId)
+      setSelectedReport(null)
+      reload()
+      showToast(`Report dispatched to ${teamNames[teamId] || 'team'}.`)
+    } catch {
+      setActionError('Could not dispatch team. Try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleAssignStaff = async () => {
@@ -262,7 +348,67 @@ export default function AdminReports() {
             <PageHeader
               title="Outage reports"
               description="Verify resident-submitted power interruptions, flag duplicates, and dispatch field staff."
+              actions={
+                <Button
+                  type="button"
+                  onClick={handleScanDuplicates}
+                  disabled={isScanningDuplicates || reports.length < 2}
+                  className="h-10 gap-2 bg-brand-blue hover:bg-brand-navy px-4 font-semibold text-white shadow-xs rounded-lg transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  <Sparkles className={`size-4 text-brand-yellow ${isScanningDuplicates ? 'animate-spin' : ''}`} />
+                  <span>{isScanningDuplicates ? 'Scanning Duplicates…' : 'AI Duplicate Scanner'}</span>
+                </Button>
+              }
             />
+
+            {detectedClusters.length > 0 && (
+              <div className="rounded-2xl border border-brand-yellow/60 bg-amber-50/70 p-4 shadow-xs animate-in fade-in space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-brand-navy">
+                    <Sparkles className="size-4 text-amber-600" />
+                    <span>AI Outage Clusters Detected ({detectedClusters.length})</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setDetectedClusters([])}
+                    className="text-[11px] text-brand-muted hover:text-brand-navy cursor-pointer"
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {detectedClusters.map((cluster) => (
+                    <div key={cluster.masterReportId} className="rounded-xl border border-amber-200 bg-white p-3 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <span className="text-brand-navy">Brgy. {cluster.barangay}</span>
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-800">
+                          {Math.round(cluster.confidence * 100)}% match · {cluster.duplicateIds.length} duplicate(s)
+                        </span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-brand-muted">
+                        {cluster.reason}
+                      </p>
+                      <div className="flex items-center justify-between pt-1 border-t border-brand-line/50">
+                        <span className="font-mono text-[10px] text-brand-muted">
+                          Master: #{cluster.masterReportId}
+                        </span>
+                        <Button
+                          type="button"
+                          size="xs"
+                          onClick={() => handleBatchFlagDuplicates(cluster)}
+                          disabled={isFlaggingBatch}
+                          className="rounded-lg bg-amber-600 px-2.5 text-[10px] font-bold text-white hover:bg-amber-700 cursor-pointer"
+                        >
+                          Flag {cluster.duplicateIds.length} as Duplicate
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <Card className="gap-0 overflow-hidden rounded-2xl border border-brand-line bg-white py-0 shadow-sm shadow-slate-200/50 ring-0">
               <ReportsFilterBar
@@ -300,8 +446,10 @@ export default function AdminReports() {
                 reports={reports}
                 visibleReports={paginatedReports}
                 staffNames={staffNames}
+                teamNames={teamNames}
                 hasActiveFilters={hasActiveFilters}
                 access={access}
+                detectedClusters={detectedClusters}
                 onReload={reload}
                 onClearFilters={clearFilters}
                 onOpenReview={openReview}
@@ -333,13 +481,19 @@ export default function AdminReports() {
           staffNames={staffNames}
           staffId={staffId}
           setStaffId={setStaffId}
+          teams={teams}
+          teamNames={teamNames}
+          teamId={teamId}
+          setTeamId={setTeamId}
           isSubmitting={isSubmitting}
           actionError={actionError}
           confirmingReject={confirmingReject}
           setConfirmingReject={setConfirmingReject}
+          detectedClusters={detectedClusters}
           onVerify={handleVerify}
           onReject={handleReject}
           onAssignStaff={handleAssignStaff}
+          onDispatchTeam={handleDispatchTeam}
           onToggleDuplicateFlag={handleToggleDuplicateFlag}
         />
       </SidebarInset>

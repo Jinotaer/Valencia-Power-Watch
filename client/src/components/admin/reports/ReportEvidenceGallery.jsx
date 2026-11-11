@@ -79,8 +79,10 @@ export function ReportEvidenceGallery({ report }) {
                 loading="lazy"
                 className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105"
               />
-              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-2.5 py-1.5 text-[10px] font-semibold text-white">
-                {photo.uploadedBy === 'staff' ? 'Staff resolution photo' : photo.label || `Photo ${index + 1}`}
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent px-2.5 py-1.5 text-[10px] font-semibold text-white truncate">
+                {photo.uploadedBy === 'staff'
+                  ? `Resolution Evidence${photo.uploadedByName ? ` · ${photo.uploadedByName}` : ''}${photo.teamName ? ` (${photo.teamName})` : ''}`
+                  : photo.label || `Photo ${index + 1}`}
               </span>
             </button>
           )

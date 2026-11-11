@@ -92,6 +92,8 @@ export default {
   'This photo appears to have been taken outside Valencia City bounds. Please confirm your selected barangay and pin.': 'Ang larawang ito ay tila kinuha sa labas ng Valencia City. Pakikumpirma ang iyong napiling barangay at pin sa mapa.',
   'Stale evidence advisory': 'Paalala sa lumang ebidensya',
   'This photo was captured over 24 hours ago. Please confirm it reflects the current ongoing outage.': 'Ang larawang ito ay kinuha higit 24 oras na ang nakalipas. Pakikumpirma kung ito ay tumutukoy sa kasalukuyang outage.',
+  '{count} other report(s) are already logged for Brgy. {barangay}. Utility dispatchers are aware of this area.': 'May {count} pang ulat na naitala para sa Brgy. {barangay}. May kamalayan na ang mga dispatcher ng pasilidad sa lugar na ito.',
+  'You can still submit your report if your specific street or issue is different.': 'Maaari mo pa ring isumite ang iyong ulat kung iba ang iyong partikular na kalye o isyu.',
   'Evidence could not be loaded.': 'Hindi ma-load ang ebidensya.',
   Excellent: 'Napakahusay',
   'Expand map': 'Palakihin ang mapa',
