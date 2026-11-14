@@ -8,11 +8,13 @@ import {
   MapPin,
   Maximize2,
   Minimize2,
+  Navigation,
   Truck,
+  X,
 } from 'lucide-react'
 import L from 'leaflet'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
+import { MapContainer, Marker, Polyline, Popup, TileLayer } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import AdminNavbar from '../../components/admin/navbar'
 import AdminSidebar from '../../components/admin/sidebar'
@@ -23,11 +25,24 @@ import {
 } from '../../components/ui/sidebar'
 import { loadAllReports } from '../../lib/reports'
 import { loadTeams } from '../../lib/teams'
-import { VALENCIA_CENTER, barangayCenters } from '../../lib/geo'
+import { supabase } from '../../lib/supabase'
+import { VALENCIA_CENTER, barangayCenters, resolveReportCoordinates } from '../../lib/geo'
+import {
+  distanceMeters,
+  fetchDrivingRoute,
+  nearestRouteIndex,
+  routeProgress,
+} from '../../lib/routing'
 import { icons } from '../../components/admin/mapData'
 import { FlyToControl } from '../../components/admin/mapControls'
+import TeamTrackingCard from '../../components/admin/TeamTrackingCard'
 
 const STATUS_ORDER = ['pending', 'verified', 'resolved', 'rejected']
+const ACTIVE_REPORT_TONES = new Set(['pending', 'verified'])
+const OFF_ROUTE_METERS = 120
+const ROUTE_MOVE_THRESHOLD_METERS = 80
+const REROUTE_COOLDOWN_MS = 15000
+const LIVE_POLL_INTERVAL_MS = 10000
 
 const statusMeta = {
   pending: { label: 'Pending', color: '#d97706', badge: 'bg-[#fff1a8] text-[#9a6500]' },
@@ -36,15 +51,17 @@ const statusMeta = {
   rejected: { label: 'Rejected', color: '#dc2626', badge: 'bg-red-50 text-[#b42318]' },
 }
 
-function normalizeName(value) {
-  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+function hasValidLocation(team) {
+  const loc = team?.lastKnownLocation
+  return Boolean(loc && Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude))
 }
 
-function timeAgo(dateString) {
+function timeAgo(dateString, nowMs) {
   if (!dateString) return 'Just now'
   const date = new Date(dateString)
   if (Number.isNaN(date.getTime())) return 'Recently'
-  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000)
+  const refNow = Number.isFinite(nowMs) ? nowMs : date.getTime()
+  const diffSec = Math.max(0, Math.floor((refNow - date.getTime()) / 1000))
   if (diffSec < 60) return 'Just now'
   const diffMin = Math.floor(diffSec / 60)
   if (diffMin < 60) return `${diffMin}m ago`
@@ -68,16 +85,20 @@ const reportIcons = Object.fromEntries(
 )
 
 // Field Team Map Marker ("Aha na sila")
-function makeTeamIcon(team) {
+function makeTeamIcon(team, isTracked = false) {
   const isDispatched = team.status === 'dispatched'
   const isAvailable = team.status === 'available'
-  const bg = isDispatched ? '#2563eb' : isAvailable ? '#16a34a' : '#64748b'
+  const bg = isTracked ? '#24449a' : isDispatched ? '#2563eb' : isAvailable ? '#16a34a' : '#64748b'
 
   const truckSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>`
 
-  const pingHtml = isDispatched
+  const pingHtml = isTracked || isDispatched
     ? `<span style="position:absolute;inset:-4px;border-radius:9999px;background:#3b82f6;opacity:0.6;animation:ping 1.5s cubic-bezier(0,0,.2,1) infinite;"></span>`
     : ''
+
+  const borderStyle = isTracked
+    ? 'border:3px solid #ffd500;box-shadow:0 0 0 4px rgba(36,68,154,0.28), 0 4px 12px rgba(0,0,0,0.4);'
+    : 'border:2.5px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.35);'
 
   const safeName = (team.name || 'Team').replace(/"/g, '&quot;')
 
@@ -88,11 +109,11 @@ function makeTeamIcon(team) {
     popupAnchor: [0, -22],
     html: `
       <div style="position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer;">
-        <div style="position:relative;width:36px;height:36px;border-radius:50%;background:${bg};border:2.5px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;">
+        <div style="position:relative;width:36px;height:36px;border-radius:50%;background:${bg};${borderStyle}display:flex;align-items:center;justify-content:center;">
           ${pingHtml}
           ${truckSvg}
         </div>
-        <div style="margin-top:3px;background:rgba(15,23,42,0.92);color:#ffffff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;box-shadow:0 2px 5px rgba(0,0,0,0.3);white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis;">
+        <div style="margin-top:3px;background:${isTracked ? '#24449a' : 'rgba(15,23,42,0.92)'};color:#ffffff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;box-shadow:0 2px 5px rgba(0,0,0,0.3);white-space:nowrap;max-width:110px;overflow:hidden;text-overflow:ellipsis;">
           ${safeName}
         </div>
       </div>
@@ -131,12 +152,41 @@ function ReportPopup({ report, teamName }) {
   )
 }
 
-function TeamPopup({ team, assignedReports = [] }) {
+function groupActiveTeamReports(teams, reports) {
+  const memberToTeamId = {}
+  teams.forEach((team) => {
+    ;(team.members || []).forEach((member) => {
+      memberToTeamId[member.id] = team.id
+    })
+  })
+
+  const map = {}
+  reports.forEach((report) => {
+    if (!ACTIVE_REPORT_TONES.has(report.tone)) return
+    const ownerTeamId = report.assignedTeamId || memberToTeamId[report.assignedStaffId]
+    if (!ownerTeamId) return
+    if (!map[ownerTeamId]) map[ownerTeamId] = []
+    map[ownerTeamId].push(report)
+  })
+
+  // Verified (active dispatch) jobs take priority over pending ones.
+  Object.values(map).forEach((list) => {
+    list.sort((a, b) => {
+      if (a.tone === b.tone) return 0
+      return a.tone === 'verified' ? -1 : 1
+    })
+  })
+
+  return map
+}
+
+function TeamPopup({ team, assignedReports = [], nowMs, isTracked = false, onTrackTeam }) {
   const isDispatched = team.status === 'dispatched'
   const isAvailable = team.status === 'available'
   const lastUpdated = team.lastKnownLocation?.updated_at
-    ? timeAgo(team.lastKnownLocation.updated_at)
+    ? timeAgo(team.lastKnownLocation.updated_at, nowMs)
     : 'Unknown'
+  const hasGps = hasValidLocation(team)
 
   return (
     <div className="min-w-[220px] max-w-[280px] space-y-2 p-0.5 text-xs text-brand-ink">
@@ -198,6 +248,23 @@ function TeamPopup({ team, assignedReports = [] }) {
         </div>
       )}
 
+      {hasGps && onTrackTeam && (
+        <button
+          type="button"
+          onClick={() => onTrackTeam(team)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#24449a] px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-brand-navy cursor-pointer"
+        >
+          <Navigation className="size-3" aria-hidden="true" />
+          <span>
+            {assignedReports.length > 0
+              ? isTracked
+                ? 'Reframe blue route'
+                : 'Track route on map'
+              : 'Center on map'}
+          </span>
+        </button>
+      )}
+
       <div className="pt-1.5 flex items-center justify-between border-t border-brand-line text-[11px] font-bold">
         <a href="/admin/teams" className="text-brand-blue hover:underline">
           Manage Team &rarr;
@@ -216,6 +283,7 @@ export default function AdminMap() {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+  const [nowMs, setNowMs] = useState(() => Date.now())
   const [sidebarTab, setSidebarTab] = useState(() =>
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('focusTeam')
       ? 'teams'
@@ -230,9 +298,18 @@ export default function AdminMap() {
   const [showBarangays, setShowBarangays] = useState(false)
   const [flyTarget, setFlyTarget] = useState(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [trackedTeamId, setTrackedTeamId] = useState(null)
+  const [selectedTrackedJobId, setSelectedTrackedJobId] = useState(null)
+  const [routeState, setRouteState] = useState(null)
+  const [isFetchingRoute, setIsFetchingRoute] = useState(false)
+  const [routeRetryKey, setRouteRetryKey] = useState(0)
 
   const mapRef = useRef(null)
   const mapContainerRef = useRef(null)
+  const hasInitialFitRef = useRef(false)
+  const lastRouteFetchRef = useRef({ key: '', from: null, at: 0, shouldFit: false })
+  const refreshInFlightRef = useRef(false)
+  const routeSessionRef = useRef(0)
 
   const reload = () => {
     setLoadError('')
@@ -248,17 +325,32 @@ export default function AdminMap() {
         if (!active) return
         setReports(reportRows)
         setTeams(teamRows)
+        setNowMs(Date.now())
 
         const focusTeamId = new URLSearchParams(window.location.search).get('focusTeam')
-        if (focusTeamId) {
+        if (focusTeamId && !hasInitialFitRef.current) {
           const targetTeam = teamRows.find((t) => t.id === focusTeamId)
-          if (targetTeam?.lastKnownLocation) {
-            setFlyTarget({
-              id: targetTeam.id,
-              lat: targetTeam.lastKnownLocation.latitude,
-              lng: targetTeam.lastKnownLocation.longitude,
-              zoom: 15,
-            })
+          if (targetTeam && hasValidLocation(targetTeam)) {
+            hasInitialFitRef.current = true
+            const grouped = groupActiveTeamReports(teamRows, reportRows)
+            const firstJob = (grouped[targetTeam.id] || [])[0] ?? null
+            setTrackedTeamId(targetTeam.id)
+            setSelectedTrackedJobId(firstJob?.id ?? null)
+            const teamPos = [targetTeam.lastKnownLocation.latitude, targetTeam.lastKnownLocation.longitude]
+            const target = resolveReportCoordinates(firstJob)
+            if (target) {
+              setIsFetchingRoute(true)
+              lastRouteFetchRef.current.shouldFit = true
+              mapRef.current?.fitBounds([teamPos, target.position], { padding: [56, 56], maxZoom: 15 })
+            } else {
+              setFlyTarget({
+                id: targetTeam.id,
+                lat: teamPos[0],
+                lng: teamPos[1],
+                zoom: 16,
+                ts: Date.now(),
+              })
+            }
           }
         }
       })
@@ -277,6 +369,66 @@ export default function AdminMap() {
     }
   }, [reloadKey])
 
+  const refreshSilently = useCallback(async () => {
+    if (refreshInFlightRef.current) return
+    refreshInFlightRef.current = true
+    try {
+      const [reportRows, teamRows] = await Promise.all([loadAllReports(), loadTeams()])
+      setReports(reportRows)
+      setTeams(teamRows)
+      setNowMs(Date.now())
+    } catch {
+      // Preserve last snapshot if a background refresh fails transiently.
+    } finally {
+      refreshInFlightRef.current = false
+    }
+  }, [])
+
+  // Keep field team GPS pins, ping ages, and routes updated in real time.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNowMs(Date.now())
+      if (document.visibilityState === 'visible') {
+        refreshSilently()
+      }
+    }, LIVE_POLL_INTERVAL_MS)
+
+    let channel = null
+    if (supabase) {
+      channel = supabase
+        .channel('admin-live-map')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams' }, (payload) => {
+          const updated = payload.new
+          if (!updated?.id) return
+          setTeams((current) =>
+            current.map((team) =>
+              team.id === updated.id
+                ? {
+                    ...team,
+                    status: updated.status ?? team.status,
+                    lastKnownLocation: updated.last_known_location ?? team.lastKnownLocation,
+                    updatedAt: updated.updated_at ?? team.updatedAt,
+                  }
+                : team,
+            ),
+          )
+          setNowMs(Date.now())
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, (payload) => {
+          if (payload.eventType !== 'UPDATE') refreshSilently()
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, () => {
+          refreshSilently()
+        })
+        .subscribe()
+    }
+
+    return () => {
+      clearInterval(interval)
+      if (channel && supabase) supabase.removeChannel(channel)
+    }
+  }, [refreshSilently])
+
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement))
     document.addEventListener('fullscreenchange', onFullscreenChange)
@@ -289,56 +441,28 @@ export default function AdminMap() {
     return () => clearTimeout(timer)
   }, [isFullscreen])
 
-  const centerByBarangay = useMemo(
-    () => Object.fromEntries(barangayCenters.map((barangay) => [normalizeName(barangay.name), barangay])),
-    [],
-  )
-
   // Map teams that have valid coordinates
-  const mappedTeams = useMemo(
-    () =>
-      teams.filter(
-        (t) =>
-          t.lastKnownLocation &&
-          Number.isFinite(t.lastKnownLocation.latitude) &&
-          Number.isFinite(t.lastKnownLocation.longitude),
-      ),
-    [teams],
-  )
+  const mappedTeams = useMemo(() => teams.filter(hasValidLocation), [teams])
 
   const teamMap = useMemo(
     () => Object.fromEntries(teams.map((t) => [t.id, t.name])),
     [teams],
   )
 
-  const reportsByTeam = useMemo(() => {
-    const map = {}
-    reports.forEach((r) => {
-      if (r.assignedTeamId) {
-        if (!map[r.assignedTeamId]) map[r.assignedTeamId] = []
-        map[r.assignedTeamId].push(r)
-      }
-    })
-    return map
-  }, [reports])
+  const activeReportsByTeam = useMemo(
+    () => groupActiveTeamReports(teams, reports),
+    [teams, reports],
+  )
 
   // Every report gets a pin: its captured coordinates, or its barangay center when no pin exists.
   const mappedReports = useMemo(
     () =>
       reports.flatMap((report) => {
-        if (report.coordinates) {
-          return [{
-            ...report,
-            position: [report.coordinates.latitude, report.coordinates.longitude],
-            approximate: false,
-          }]
-        }
-
-        const center = centerByBarangay[normalizeName(report.barangay)]
-        if (!center) return []
-        return [{ ...report, position: [center.lat, center.lng], approximate: true }]
+        const resolved = resolveReportCoordinates(report)
+        if (!resolved) return []
+        return [{ ...report, position: resolved.position, approximate: resolved.approximate }]
       }),
-    [centerByBarangay, reports],
+    [reports],
   )
 
   const counts = useMemo(() => {
@@ -354,17 +478,226 @@ export default function AdminMap() {
     [mappedReports, statusFilter],
   )
 
+  const trackedTeam = useMemo(
+    () => teams.find((team) => team.id === trackedTeamId) ?? null,
+    [teams, trackedTeamId],
+  )
+
+  const trackedTeamPosition = useMemo(() => {
+    if (!hasValidLocation(trackedTeam)) return null
+    return [trackedTeam.lastKnownLocation.latitude, trackedTeam.lastKnownLocation.longitude]
+  }, [trackedTeam])
+
+  const trackedActiveJobs = useMemo(
+    () => (trackedTeamId ? activeReportsByTeam[trackedTeamId] || [] : []),
+    [activeReportsByTeam, trackedTeamId],
+  )
+
+  const trackedJob = useMemo(
+    () => trackedActiveJobs.find((job) => job.id === selectedTrackedJobId) ?? trackedActiveJobs[0] ?? null,
+    [trackedActiveJobs, selectedTrackedJobId],
+  )
+
+  const trackedTarget = useMemo(() => resolveReportCoordinates(trackedJob), [trackedJob])
+
+  const activeRoute =
+    routeState?.teamId === trackedTeamId && routeState?.jobId === trackedJob?.id
+      ? routeState.route
+      : null
+  const activeRouteError =
+    routeState?.teamId === trackedTeamId && routeState?.jobId === trackedJob?.id
+      ? routeState.error
+      : ''
+
+  const trackedProgress = useMemo(
+    () => (trackedTeamPosition && activeRoute ? routeProgress(activeRoute, trackedTeamPosition) : null),
+    [activeRoute, trackedTeamPosition],
+  )
+
+  const trackedPolylinePositions = useMemo(() => {
+    if (!activeRoute?.geometry?.length) return null
+    if (!trackedTeamPosition) return activeRoute.geometry
+    const { index } = nearestRouteIndex(activeRoute.geometry, trackedTeamPosition)
+    const remaining = activeRoute.geometry.slice(index + 1)
+    return remaining.length > 0
+      ? [trackedTeamPosition, ...remaining]
+      : [trackedTeamPosition, activeRoute.geometry[activeRoute.geometry.length - 1]]
+  }, [activeRoute, trackedTeamPosition])
+
+  // Ensure the tracked incident destination marker stays visible while its blue route is shown.
+  const mapReportPins = useMemo(() => {
+    const basePins = showReports ? visibleReports : []
+    if (!trackedJob) return basePins
+    if (basePins.some((report) => report.id === trackedJob.id)) return basePins
+    const trackedPin = mappedReports.find((report) => report.id === trackedJob.id)
+    return trackedPin ? [...basePins, trackedPin] : basePins
+  }, [mappedReports, showReports, trackedJob, visibleReports])
+
   const approximateCount = visibleReports.filter((report) => report.approximate).length
   const unmappedCount = reports.length - mappedReports.length
 
   useEffect(() => {
+    if (hasInitialFitRef.current) return
     if (mappedReports.length === 0 && mappedTeams.length === 0) return
+    hasInitialFitRef.current = true
     const points = [
       ...mappedReports.map((report) => report.position),
       ...mappedTeams.map((t) => [t.lastKnownLocation.latitude, t.lastKnownLocation.longitude]),
     ]
     mapRef.current?.fitBounds(points, { padding: [48, 48], maxZoom: 13 })
   }, [mappedReports, mappedTeams])
+
+  useEffect(() => {
+    if (!trackedTeamId || !trackedJob || !trackedTeamPosition || !trackedTarget) return
+
+    const pairKey = `${trackedTeamId}:${trackedJob.id}:${trackedTarget.position[0].toFixed(5)},${trackedTarget.position[1].toFixed(5)}:r${routeRetryKey}`
+    const samePair = lastRouteFetchRef.current.key === pairKey
+    const elapsed = Date.now() - lastRouteFetchRef.current.at
+    const hasRouteForPair =
+      routeState?.teamId === trackedTeamId &&
+      routeState?.jobId === trackedJob.id &&
+      Boolean(routeState?.route)
+
+    if (samePair && hasRouteForPair) {
+      const offRoute =
+        nearestRouteIndex(routeState.route.geometry, trackedTeamPosition).distance > OFF_ROUTE_METERS
+      const startMoved = lastRouteFetchRef.current.from
+        ? distanceMeters(lastRouteFetchRef.current.from, trackedTeamPosition) > ROUTE_MOVE_THRESHOLD_METERS
+        : false
+      if ((!offRoute && !startMoved) || elapsed < REROUTE_COOLDOWN_MS) return
+    } else if (samePair && routeState?.error && elapsed < REROUTE_COOLDOWN_MS) {
+      return
+    }
+
+    lastRouteFetchRef.current = {
+      key: pairKey,
+      from: trackedTeamPosition,
+      at: Date.now(),
+      shouldFit: !samePair || lastRouteFetchRef.current.shouldFit,
+    }
+
+    const session = ++routeSessionRef.current
+    const targetTeamId = trackedTeamId
+    const targetJobId = trackedJob.id
+
+    fetchDrivingRoute(trackedTeamPosition, trackedTarget.position)
+      .then((nextRoute) => {
+        if (session !== routeSessionRef.current) return
+        setRouteState({ teamId: targetTeamId, jobId: targetJobId, route: nextRoute, error: '' })
+        setIsFetchingRoute(false)
+        if (lastRouteFetchRef.current.shouldFit) {
+          lastRouteFetchRef.current.shouldFit = false
+          mapRef.current?.fitBounds(nextRoute.geometry, { padding: [56, 56], maxZoom: 15 })
+        }
+      })
+      .catch(() => {
+        if (session !== routeSessionRef.current) return
+        setRouteState((prev) => ({
+          teamId: targetTeamId,
+          jobId: targetJobId,
+          route: prev?.teamId === targetTeamId && prev?.jobId === targetJobId ? prev.route : null,
+          error: 'Could not load driving route.',
+        }))
+        setIsFetchingRoute(false)
+      })
+  }, [
+    routeRetryKey,
+    routeState,
+    trackedJob,
+    trackedTarget,
+    trackedTeamId,
+    trackedTeamPosition,
+  ])
+
+  const handleTrackTeam = useCallback(
+    (team) => {
+      if (!team || !hasValidLocation(team)) return
+      setShowTeams(true)
+      setTrackedTeamId(team.id)
+
+      const teamJobs = activeReportsByTeam[team.id] || []
+      const nextJob =
+        team.id === trackedTeamId
+          ? teamJobs.find((job) => job.id === selectedTrackedJobId) ?? teamJobs[0] ?? null
+          : teamJobs[0] ?? null
+
+      setSelectedTrackedJobId(nextJob?.id ?? null)
+      const teamPos = [team.lastKnownLocation.latitude, team.lastKnownLocation.longitude]
+      const target = resolveReportCoordinates(nextJob)
+
+      if (target) {
+        const sameActiveRoute =
+          activeRoute && trackedTeamId === team.id && trackedJob?.id === nextJob?.id
+        lastRouteFetchRef.current.shouldFit = true
+        if (!sameActiveRoute) {
+          setIsFetchingRoute(true)
+          mapRef.current?.fitBounds([teamPos, target.position], { padding: [56, 56], maxZoom: 15 })
+        } else {
+          mapRef.current?.fitBounds(activeRoute.geometry, { padding: [56, 56], maxZoom: 15 })
+        }
+      } else {
+        setIsFetchingRoute(false)
+        setFlyTarget({
+          id: team.id,
+          lat: teamPos[0],
+          lng: teamPos[1],
+          zoom: 16,
+          ts: Date.now(),
+        })
+      }
+    },
+    [activeReportsByTeam, activeRoute, selectedTrackedJobId, trackedJob, trackedTeamId],
+  )
+
+  const handleStopTracking = useCallback(() => {
+    routeSessionRef.current += 1
+    setTrackedTeamId(null)
+    setSelectedTrackedJobId(null)
+    setRouteState(null)
+    setIsFetchingRoute(false)
+  }, [])
+
+  const handleSelectTrackedJob = useCallback(
+    (jobId) => {
+      setSelectedTrackedJobId(jobId)
+      const nextJob = trackedActiveJobs.find((job) => job.id === jobId)
+      const target = resolveReportCoordinates(nextJob)
+      if (target && trackedTeamPosition) {
+        setIsFetchingRoute(true)
+        lastRouteFetchRef.current.shouldFit = true
+        mapRef.current?.fitBounds([trackedTeamPosition, target.position], {
+          padding: [56, 56],
+          maxZoom: 15,
+        })
+      }
+    },
+    [trackedActiveJobs, trackedTeamPosition],
+  )
+
+  const handleReframeTracked = useCallback(() => {
+    if (activeRoute?.geometry?.length) {
+      mapRef.current?.fitBounds(activeRoute.geometry, { padding: [56, 56], maxZoom: 15 })
+    } else if (trackedTeamPosition && trackedTarget) {
+      mapRef.current?.fitBounds([trackedTeamPosition, trackedTarget.position], {
+        padding: [56, 56],
+        maxZoom: 15,
+      })
+    } else if (trackedTeamPosition && trackedTeamId) {
+      setFlyTarget({
+        id: trackedTeamId,
+        lat: trackedTeamPosition[0],
+        lng: trackedTeamPosition[1],
+        zoom: 16,
+        ts: Date.now(),
+      })
+    }
+  }, [activeRoute, trackedTarget, trackedTeamId, trackedTeamPosition])
+
+  const handleRetryRoute = useCallback(() => {
+    lastRouteFetchRef.current = { key: '', from: null, at: 0, shouldFit: true }
+    setIsFetchingRoute(true)
+    setRouteRetryKey((value) => value + 1)
+  }, [])
 
   const resetView = useCallback(() => {
     mapRef.current?.flyTo(VALENCIA_CENTER, 12, { duration: 0.8 })
@@ -438,6 +771,20 @@ export default function AdminMap() {
                   <TileLayer url={tileUrl} attribution={tileAttribution} />
                   <FlyToControl target={flyTarget} />
 
+                  {/* Tracked field team driving route (matching staff navigation blue style) */}
+                  {trackedPolylinePositions && (
+                    <>
+                      <Polyline
+                        positions={trackedPolylinePositions}
+                        pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.9 }}
+                      />
+                      <Polyline
+                        positions={trackedPolylinePositions}
+                        pathOptions={{ color: '#24449a', weight: 5, opacity: 0.95 }}
+                      />
+                    </>
+                  )}
+
                   {/* Barangay Centers Layer */}
                   {showBarangays &&
                     barangayCenters.map((barangay) => (
@@ -455,38 +802,61 @@ export default function AdminMap() {
 
                   {/* Field Team Markers ("Aha na sila") */}
                   {showTeams &&
-                    mappedTeams.map((team) => (
-                      <Marker
-                        key={`team-${team.id}`}
-                        position={[team.lastKnownLocation.latitude, team.lastKnownLocation.longitude]}
-                        icon={makeTeamIcon(team)}
-                      >
-                        <Popup>
-                          <TeamPopup
-                            team={team}
-                            assignedReports={reportsByTeam[team.id] || []}
-                          />
-                        </Popup>
-                      </Marker>
-                    ))}
+                    mappedTeams.map((team) => {
+                      const isTracked = trackedTeamId === team.id
+                      return (
+                        <Marker
+                          key={`team-${team.id}`}
+                          position={[team.lastKnownLocation.latitude, team.lastKnownLocation.longitude]}
+                          icon={makeTeamIcon(team, isTracked)}
+                        >
+                          <Popup>
+                            <TeamPopup
+                              team={team}
+                              assignedReports={activeReportsByTeam[team.id] || []}
+                              nowMs={nowMs}
+                              isTracked={isTracked}
+                              onTrackTeam={handleTrackTeam}
+                            />
+                          </Popup>
+                        </Marker>
+                      )
+                    })}
 
                   {/* Incident Report Markers */}
-                  {showReports &&
-                    visibleReports.map((report) => (
-                      <Marker
-                        key={`report-${report.id}`}
-                        position={report.position}
-                        icon={reportIcons[report.tone] ?? reportIcons.pending}
-                      >
-                        <Popup>
-                          <ReportPopup
-                            report={report}
-                            teamName={teamMap[report.assignedTeamId]}
-                          />
-                        </Popup>
-                      </Marker>
-                    ))}
+                  {mapReportPins.map((report) => (
+                    <Marker
+                      key={`report-${report.id}`}
+                      position={report.position}
+                      icon={reportIcons[report.tone] ?? reportIcons.pending}
+                    >
+                      <Popup>
+                        <ReportPopup
+                          report={report}
+                          teamName={teamMap[report.assignedTeamId]}
+                        />
+                      </Popup>
+                    </Marker>
+                  ))}
                 </MapContainer>
+
+                {trackedTeam && (
+                  <TeamTrackingCard
+                    team={trackedTeam}
+                    activeJobs={trackedActiveJobs}
+                    selectedJob={trackedJob}
+                    isTargetApproximate={Boolean(trackedTarget?.approximate)}
+                    progress={trackedProgress}
+                    route={activeRoute}
+                    isFetchingRoute={isFetchingRoute}
+                    routeError={activeRouteError}
+                    lastPingLabel={timeAgo(trackedTeam.lastKnownLocation?.updated_at, nowMs)}
+                    onSelectJob={handleSelectTrackedJob}
+                    onReframe={handleReframeTracked}
+                    onRetryRoute={handleRetryRoute}
+                    onStop={handleStopTracking}
+                  />
+                )}
 
                 {/* Map Legend */}
                 <div className="pointer-events-none absolute bottom-4 left-4 z-[1000] hidden rounded-xl border border-brand-line bg-white/95 px-3 py-2 shadow-md backdrop-blur sm:block">
@@ -502,6 +872,12 @@ export default function AdminMap() {
                       <span className="size-2.5 rounded-full bg-blue-600 ring-2 ring-blue-300" />
                       Field Team (GPS Truck)
                     </span>
+                    {trackedPolylinePositions && (
+                      <span className="flex items-center gap-1.5 text-[10px] font-semibold text-[#24449a] col-span-2">
+                        <span className="h-1.5 w-3.5 rounded-full bg-[#24449a] ring-1 ring-[#24449a]/25" />
+                        Tracked Team Route
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -779,12 +1155,11 @@ export default function AdminMap() {
 
                     <div className="min-h-0 flex-1 overflow-y-auto p-2 space-y-2">
                       {teams.map((team) => {
-                        const hasGps = Boolean(
-                          team.lastKnownLocation &&
-                            Number.isFinite(team.lastKnownLocation.latitude) &&
-                            Number.isFinite(team.lastKnownLocation.longitude),
-                        )
-                        const isActive = flyTarget?.id === team.id
+                        const hasGps = hasValidLocation(team)
+                        const teamJobs = activeReportsByTeam[team.id] || []
+                        const activeAssignments = teamJobs.length
+                        const isTracked = trackedTeamId === team.id
+                        const isActive = isTracked || flyTarget?.id === team.id
                         const isDispatched = team.status === 'dispatched'
                         const isAvailable = team.status === 'available'
 
@@ -827,10 +1202,10 @@ export default function AdminMap() {
                                 <HardHat className="size-3 text-amber-600" />
                                 <span>Leader: <strong>{team.leaderName || 'None'}</strong> · {team.memberCount} crew</span>
                               </p>
-                              {team.activeJobCount > 0 ? (
+                              {activeAssignments > 0 ? (
                                 <p className="flex items-center gap-1.5 text-amber-800 font-semibold">
                                   <AlertTriangle className="size-3" />
-                                  <span>{team.activeJobCount} active assignment{team.activeJobCount !== 1 ? 's' : ''}</span>
+                                  <span>{activeAssignments} active assignment{activeAssignments !== 1 ? 's' : ''}</span>
                                 </p>
                               ) : (
                                 <p className="flex items-center gap-1.5 text-emerald-700">
@@ -840,29 +1215,37 @@ export default function AdminMap() {
                               )}
                             </div>
 
-                            <div className="mt-2.5 pt-2 border-t border-brand-line/60 flex items-center justify-between">
+                            <div className="mt-2.5 pt-2 border-t border-brand-line/60 flex items-center justify-between gap-2">
                               {hasGps ? (
                                 <>
                                   <span className="flex items-center gap-1 text-[10px] font-semibold text-brand-blue">
                                     <span className="size-2 rounded-full bg-blue-500 animate-pulse" />
-                                    {timeAgo(team.lastKnownLocation?.updated_at)}
+                                    {timeAgo(team.lastKnownLocation?.updated_at, nowMs)}
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setShowTeams(true)
-                                      setFlyTarget({
-                                        id: team.id,
-                                        lat: team.lastKnownLocation.latitude,
-                                        lng: team.lastKnownLocation.longitude,
-                                        zoom: 15,
-                                      })
-                                    }}
-                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-blue hover:underline cursor-pointer"
-                                  >
-                                    <LocateFixed className="size-3" />
-                                    Locate on map
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTrackTeam(team)}
+                                      className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-blue hover:underline cursor-pointer"
+                                    >
+                                      <LocateFixed className="size-3" />
+                                      {isTracked
+                                        ? activeAssignments > 0
+                                          ? 'Reframe route'
+                                          : 'Center truck'
+                                        : 'Locate on map'}
+                                    </button>
+                                    {isTracked && (
+                                      <button
+                                        type="button"
+                                        onClick={handleStopTracking}
+                                        className="inline-flex items-center gap-0.5 rounded-md border border-brand-line bg-white px-1.5 py-0.5 text-[10px] font-bold text-brand-muted hover:text-[#b42318] cursor-pointer"
+                                      >
+                                        <X className="size-2.5" />
+                                        Stop
+                                      </button>
+                                    )}
+                                  </div>
                                 </>
                               ) : (
                                 <span className="text-[10px] text-brand-muted italic">

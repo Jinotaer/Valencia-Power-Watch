@@ -175,3 +175,23 @@ create policy "Staff can read team report evidence"
 drop trigger if exists teams_audit_log on public.teams;
 create trigger teams_audit_log after insert or update or delete on public.teams
   for each row execute function public.audit_log_trigger();
+
+-- 8. Enable Supabase Realtime for live admin map tracking ("Aha na sila")
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'teams'
+    ) then
+      alter publication supabase_realtime add table public.teams;
+    end if;
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'reports'
+    ) then
+      alter publication supabase_realtime add table public.reports;
+    end if;
+  end if;
+end
+$$;

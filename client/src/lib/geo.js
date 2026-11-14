@@ -36,3 +36,29 @@ export const barangayCenters = [
   { name: 'Lurugan', lat: 7.8780, lng: 125.0980, households: 1050 },
   { name: 'Mabuhay', lat: 7.9420, lng: 125.0920, households: 1350 },
 ]
+
+function normalizePlaceName(value) {
+  return (value ?? '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+const centerByBarangayName = Object.fromEntries(
+  barangayCenters.map((barangay) => [normalizePlaceName(barangay.name), barangay]),
+)
+
+// Resolve a report's map position: captured pin first, otherwise its barangay center.
+export function resolveReportCoordinates(report) {
+  if (!report) return null
+  if (
+    report.coordinates &&
+    Number.isFinite(report.coordinates.latitude) &&
+    Number.isFinite(report.coordinates.longitude)
+  ) {
+    return {
+      position: [report.coordinates.latitude, report.coordinates.longitude],
+      approximate: false,
+    }
+  }
+
+  const center = centerByBarangayName[normalizePlaceName(report.barangay)]
+  return center ? { position: [center.lat, center.lng], approximate: true } : null
+}
