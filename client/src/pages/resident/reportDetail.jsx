@@ -1,9 +1,9 @@
-import { ChevronLeft, Image as ImageIcon, MapPin, X } from 'lucide-react'
+import { ChevronLeft, Copy, Image as ImageIcon, MapPin, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { useLanguage } from '../../lib/i18n'
 import { loadReport } from '../../lib/reports'
-import { ReportPriorityBadge, ReportStatusBadge, ReportTimeline } from '../../components/resident/reportView'
+import { ReportDuplicateBadge, ReportPriorityBadge, ReportStatusBadge, ReportTimeline } from '../../components/resident/reportView'
 
 const statusSummary = {
   pending: 'Waiting for verification.',
@@ -113,8 +113,9 @@ export default function ResidentReportDetail({ reportId }) {
                     <span>{new Date(report.createdAt).toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                   <ReportPriorityBadge priority={report.priority} />
+                  {report.isDuplicate && <ReportDuplicateBadge />}
                   <ReportStatusBadge tone={report.tone} status={report.status} />
                 </div>
               </div>
@@ -125,6 +126,20 @@ export default function ResidentReportDetail({ reportId }) {
                 })}
               </p>
               <ReportTimeline progress={report.progress ?? 0} />
+              {report.isDuplicate && (
+                <div
+                  role="note"
+                  className="mt-3.5 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-950"
+                >
+                  <Copy className="mt-0.5 size-4 shrink-0 text-amber-700" aria-hidden="true" />
+                  <div className="min-w-0 text-[11px] leading-4 sm:text-xs sm:leading-5">
+                    <p className="font-bold">{t('Marked as duplicate report')}</p>
+                    <p className="mt-0.5 text-amber-900/90">
+                      {t('An administrator linked this report to an existing incident in the same area so field crews can coordinate a single response. Updates on the incident still apply here.')}
+                    </p>
+                  </div>
+                </div>
+              )}
             </article>
 
             <section className="rounded-2xl border border-brand-line bg-white p-3.5 sm:p-5" aria-labelledby="report-info-heading">

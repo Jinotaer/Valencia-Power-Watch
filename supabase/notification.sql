@@ -127,3 +127,31 @@ create trigger reports_notify_staff_assignment
   after update of assigned_staff_id on public.reports
   for each row
   execute function public.notify_staff_assignment();
+
+-- 3c. Notify resident when an admin marks their report as a duplicate
+create or replace function public.notify_report_duplicate()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(old.is_duplicate, false) = false and new.is_duplicate = true then
+    insert into public.notifications (user_id, type, title, body, report_reference)
+    values (
+      new.user_id,
+      'report_status',
+      'Your report was marked as duplicate',
+      new.reference || ' was linked to an existing incident in the same area.',
+      new.reference
+    );
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists reports_notify_duplicate on public.reports;
+create trigger reports_notify_duplicate
+  after update of is_duplicate on public.reports
+  for each row
+  execute function public.notify_report_duplicate();

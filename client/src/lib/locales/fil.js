@@ -510,4 +510,42 @@ export default {
   '{minutes}m ago': '{minutes} min ang nakalipas',
   'Active work order: {id}': 'Aktibong work order: {id}',
   'All caught up': 'Lahat ay nabasa na',
+  'AI could not be reached, so fields were pre-filled from basic offline rules.':
+    'Hindi maabot ang AI, kaya paunang pinunan ang mga detalye gamit ang basic offline rules.',
+  'All attached photos and video analyzed.': 'Nasuri ang lahat ng naka-attach na photo at video.',
+  'Could not decode frames from that video. Try an MP4/WebM clip under 14 MB or attach a photo instead.':
+    'Hindi mabasa ang mga frame mula sa video na iyon. Mag-try ng MP4/WebM clip na mas mababa sa 14 MB o mag-attach na lang ng photo.',
+  'Could not read the attached media. Please try another photo or video.':
+    'Hindi mabasa ang naka-attach na media. Subukan ang ibang photo o video.',
+  'Full video motion and audio analyzed.': 'Nasuri ang buong galaw at tunog ng video.',
+  'Offline quick fill — please verify': 'Offline quick fill — pakisuri',
+  'The uploaded evidence does not appear to show power lines, poles, transformers, or an outage scene. Please upload a clear photo or video of the electrical issue, or report without attachments.':
+    'Mukhang hindi nagpapakita ng linya ng kuryente, poste, transformer, o eksena ng outage ang na-upload na ebidensya. Mag-upload ng malinaw na photo o video ng isyu sa kuryente, o mag-ulat nang walang attachment.',
+  'Video analyzed from sampled keyframes.': 'Nasuri ang video mula sa mga piling keyframe.',
+  'Video clips up to 14 MB are analyzed with full motion and audio.':
+    'Ang mga video hanggang 14 MB ay sinusuri nang may buong galaw at tunog.',
+  'Videos over 14 MB are scanned via sampled keyframes.':
+    'Ang mga video na higit sa 14 MB ay sinusuri gamit ang mga piling keyframe.',
+  '{count} attachment(s) could not be decoded and were skipped.':
+    '{count} attachment ang hindi mabasa kaya nilaktawan ito.',
+  'An administrator linked this report to an existing incident in the same area so field crews can coordinate a single response. Updates on the incident still apply here.':
+    'Ikinonekta ng administrator ang ulat na ito sa isang naunang insidente sa parehong lugar upang makapag-coordinate ng iisang tugon ang mga field crew. Magpapatuloy pa rin dito ang mga update.',
+  'Duplicate': 'Kapareho',
+  'Linked to an existing report in your area — crews are coordinating one response.':
+    'Naka-link sa isang naunang ulat sa inyong lugar — iisang tugon ang inaayos ng mga crew.',
+  'Marked as duplicate report': 'Minarkahan bilang kaparehong ulat',
+  'Already reported': 'Naiulat na',
+  'This pin is within {distance} m of your active report ({reference} · {type} in Brgy. {barangay}). You can only report an incident once while your report is active.':
+    'Ang pin na ito ay nasa loob ng {distance} m mula sa aktibo mong ulat ({reference} · {type} sa Brgy. {barangay}). Isang beses lang maaaring mag-ulat ng insidente habang aktibo pa ito.',
+  'View existing report': 'Tingnan ang umiiral na ulat',
+  'You already have an active report for this incident ({reference}). Duplicate submissions are blocked until your existing report is resolved or closed.':
+    'Mayroon ka nang aktibong ulat para sa insidenteng ito ({reference}). Naka-block ang kaparehong pagpapasa hanggang sa maresolba o maisara ang naunang ulat.',
+  'You already have an active {type} report in Brgy. {barangay} ({reference}). If this incident is in a different area, update the location in the next step.':
+    'Mayroon ka nang aktibong ulat na {type} sa Brgy. {barangay} ({reference}). Kung nasa ibang lugar ang insidenteng ito, baguhin ang lokasyon sa susunod na hakbang.',
+  'You already reported this incident ({reference}). Duplicate submissions are not allowed.':
+    'Naiulat mo na ang insidenteng ito ({reference}). Hindi pinapayagan ang dobleng pagpapasa.',
+  'You already reported this incident. Duplicate submissions are not allowed.':
+    'Naiulat mo na ang insidenteng ito. Hindi pinapayagan ang dobleng pagpapasa.',
+  'You already reported this {type} in Brgy. {barangay} ({reference}). You can only report an incident once while your report is active.':
+    'Naiulat mo na ang {type} na ito sa Brgy. {barangay} ({reference}). Isang beses lang maaaring mag-ulat ng insidente habang aktibo pa ang iyong ulat.',
 }

@@ -12,7 +12,7 @@ import {
   Users,
   UsersRound,
 } from 'lucide-react'
-import powerWatchLogo from '../../assets/logo.png'
+import powerWatchLogo from '../../assets/logo.svg'
 import {
   Sidebar,
   SidebarContent,

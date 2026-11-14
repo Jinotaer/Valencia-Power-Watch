@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react'
 import {
   countUnreadNotifications,
   getLastSeenAnnouncements,
+  LAST_SEEN_KEY,
   loadNotifications,
+  NOTIFICATIONS_UPDATED_EVENT,
 } from '../../lib/notifications'
 import { loadAnnouncements } from '../../lib/announcements'
 import { loadAssignedReports } from '../../lib/reports'
@@ -57,10 +59,27 @@ export function StaffNotificationsButton({ assignedReports }) {
       }
     }
 
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') computeUnread()
+    }
+    const handleStorage = (event) => {
+      if (event.key === LAST_SEEN_KEY) computeUnread()
+    }
+
     computeUnread()
+    window.addEventListener('pageshow', computeUnread)
+    window.addEventListener('focus', computeUnread)
+    window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, computeUnread)
+    window.addEventListener('storage', handleStorage)
+    document.addEventListener('visibilitychange', handleVisibility)
 
     return () => {
       active = false
+      window.removeEventListener('pageshow', computeUnread)
+      window.removeEventListener('focus', computeUnread)
+      window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, computeUnread)
+      window.removeEventListener('storage', handleStorage)
+      document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [assignedReports])
 

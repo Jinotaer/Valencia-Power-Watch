@@ -58,6 +58,9 @@ create index if not exists reports_user_created_idx on public.reports (user_id, 
 create index if not exists reports_created_idx on public.reports (created_at desc);
 create index if not exists reports_assigned_staff_idx on public.reports (assigned_staff_id);
 create index if not exists reports_duplicate_idx on public.reports (is_duplicate);
+create index if not exists reports_user_active_idx
+  on public.reports (user_id, created_at desc)
+  where status in ('pending', 'verified');
 
 alter table public.reports drop constraint if exists reports_outage_type_check;
 update public.reports set outage_type = 'power-supply-interruption' where outage_type = 'no-power';
@@ -122,6 +125,64 @@ create trigger reports_touch_updated_at
   before update on public.reports
   for each row
   execute function public.touch_report_updated_at();
+
+create or replace function public.prevent_duplicate_resident_report()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_existing_ref text;
+begin
+  perform pg_advisory_xact_lock(hashtext(new.user_id::text));
+
+  select r.reference
+    into v_existing_ref
+  from public.reports r
+  where r.user_id = new.user_id
+    and r.status in ('pending', 'verified')
+    and (
+      (
+        lower(trim(r.barangay)) = lower(trim(new.barangay))
+        and r.outage_type = new.outage_type
+      )
+      or (
+        new.latitude is not null
+        and new.longitude is not null
+        and r.latitude is not null
+        and r.longitude is not null
+        and 2.0 * 6371000.0 * asin(
+          sqrt(
+            least(
+              1.0,
+              power(sin(radians((r.latitude - new.latitude) / 2.0)), 2) +
+              cos(radians(new.latitude)) * cos(radians(r.latitude)) *
+              power(sin(radians((r.longitude - new.longitude) / 2.0)), 2)
+            )
+          )
+        ) <= 300.0
+      )
+    )
+  order by r.created_at desc
+  limit 1;
+
+  if v_existing_ref is not null then
+    raise exception using
+      errcode = 'P0001',
+      message = 'ALREADY_REPORTED:' || v_existing_ref,
+      hint = 'You already have an active report for this incident.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists reports_prevent_duplicate on public.reports;
+create trigger reports_prevent_duplicate
+  before insert on public.reports
+  for each row
+  execute function public.prevent_duplicate_resident_report();
 
 -- 3. Privacy-safe public outage map view
 create or replace view public.public_outage_map as

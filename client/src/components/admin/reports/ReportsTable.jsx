@@ -60,7 +60,7 @@ export function ReportsTable({
             Status
           </TableHead>
           <TableHead className="hidden h-11 px-3 text-[11px] font-bold uppercase tracking-wider text-brand-muted md:table-cell">
-            Assigned Staff
+            Assigned Crew
           </TableHead>
           <TableHead className="h-11 pl-3 pr-5 text-right text-[11px] font-bold uppercase tracking-wider text-brand-muted">
             Action
@@ -236,7 +236,7 @@ export function ReportsTable({
                   {report.barangay ? `Brgy. ${report.barangay}` : '—'}
                 </TableCell>
 
-                <TableCell className="px-3 text-xs font-medium tabular-nums text-brand-muted">
+                <TableCell className="px-3 text-xs font-medium whitespace-nowrap tabular-nums text-brand-muted">
                   {report.startedTime || report.date || '—'}
                 </TableCell>
 

@@ -174,7 +174,7 @@ export default function AdminReports() {
       if (statusKey === 'pending') summary.Pending += 1
       else if (statusKey === 'verified') {
         summary.Verified += 1
-        if (!report.assignedStaffId) summary.unassignedVerified += 1
+        if (!report.assignedStaffId && !report.assignedTeamId) summary.unassignedVerified += 1
       } else if (statusKey === 'resolved') summary.Resolved += 1
       else if (statusKey === 'rejected') summary.Rejected += 1
 
@@ -204,6 +204,7 @@ export default function AdminReports() {
       const matchesBarangay =
         barangayFilter === 'All' || report.barangay === barangayFilter
       const assignedName = staffNames[report.assignedStaffId] ?? ''
+      const assignedTeam = teamNames[report.assignedTeamId] ?? ''
       const matchesQuery =
         !normalizedQuery ||
         [
@@ -215,10 +216,11 @@ export default function AdminReports() {
           report.location,
           report.status,
           assignedName,
+          assignedTeam,
         ].some((value) => value?.toLowerCase().includes(normalizedQuery))
       return matchesFilter && matchesPriority && matchesBarangay && matchesQuery
     })
-  }, [barangayFilter, filter, priorityFilter, query, reports, staffNames])
+  }, [barangayFilter, filter, priorityFilter, query, reports, staffNames, teamNames])
 
   const hasActiveFilters =
     filter !== 'All' || priorityFilter !== 'All' || barangayFilter !== 'All' || query.trim() !== ''

@@ -1,4 +1,4 @@
-import { Search, X } from 'lucide-react'
+import { FilterX, Search, X } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 
@@ -21,9 +21,14 @@ export function ReportsFilterBar({
   onPriorityChange,
   filter,
   onFilterChange,
+  counts,
+  hasActiveFilters,
+  onClearFilters,
+  visibleCount,
+  totalCount,
 }) {
   return (
-    <div className="border-b border-brand-line p-4">
+    <div className="border-b border-brand-line p-4 space-y-2.5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="relative min-w-0 flex-1 lg:max-w-md">
           <Search
@@ -36,7 +41,7 @@ export function ReportsFilterBar({
           <Input
             id="report-search"
             type="text"
-            placeholder="Search by ID, barangay, resident, type, or staff…"
+            placeholder="Search by ID, barangay, resident, type, or crew…"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             className="h-10 w-full rounded-xl border-brand-line bg-white pl-9 pr-9 text-xs font-medium text-brand-ink placeholder:text-brand-muted focus-visible:border-brand-line focus-visible:ring-0 sm:text-sm"
@@ -62,11 +67,14 @@ export function ReportsFilterBar({
             aria-label="Filter by status"
             className="h-10 rounded-xl border border-brand-line bg-white px-3 text-xs font-semibold text-brand-ink focus:border-brand-blue focus:outline-none cursor-pointer"
           >
-            {statusFilters.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
+            {statusFilters.map((option) => {
+              const count = counts?.[option.value]
+              return (
+                <option key={option.value} value={option.value}>
+                  {typeof count === 'number' ? `${option.label} (${count})` : option.label}
+                </option>
+              )
+            })}
           </select>
 
           <select
@@ -95,6 +103,25 @@ export function ReportsFilterBar({
           </select>
         </div>
       </div>
+
+      {hasActiveFilters && (
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-xs text-brand-muted">
+          <span className="tabular-nums">
+            Showing <strong className="text-brand-navy">{visibleCount ?? 0}</strong> of{' '}
+            <strong className="text-brand-navy">{totalCount ?? 0}</strong> reports
+          </span>
+          {onClearFilters && (
+            <button
+              type="button"
+              onClick={onClearFilters}
+              className="inline-flex items-center gap-1 font-semibold text-brand-blue hover:underline cursor-pointer"
+            >
+              <FilterX className="size-3.5" aria-hidden="true" />
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,16 +1,17 @@
-import { ChevronRight, ClipboardList, FilePlus2, MapPin, Search } from 'lucide-react'
+import { ChevronRight, ClipboardList, Copy, FilePlus2, MapPin, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { PortalMobileNav, PortalMark } from '../../components/layout/PortalMobileNav'
 import { BellLink } from '../../components/layout/BellLink'
 import { useLanguage } from '../../lib/i18n'
 import { loadReports } from '../../lib/reports'
-import { ReportStatusBadge, ReportTimeline } from '../../components/resident/reportView'
+import { ReportDuplicateBadge, ReportStatusBadge, ReportTimeline } from '../../components/resident/reportView'
 
 const filters = [
   { label: 'All', matches: () => true },
   { label: 'Pending', matches: (report) => report.status === 'Pending' },
   { label: 'Verified', matches: (report) => report.status === 'Verified' },
   { label: 'Resolved', matches: (report) => report.status === 'Resolved' },
+  { label: 'Duplicate', matches: (report) => Boolean(report.isDuplicate) },
 ]
 
 const statusSummary = {
@@ -38,11 +39,20 @@ function ReportCard({ report }) {
             <span>{new Date(report.createdAt).toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
           </div>
         </div>
-        <ReportStatusBadge tone={report.tone} status={report.status} />
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {report.isDuplicate && <ReportDuplicateBadge />}
+          <ReportStatusBadge tone={report.tone} status={report.status} />
+        </div>
       </div>
       <p className="mt-3 max-w-[48ch] text-[11px] leading-4 text-brand-muted sm:text-sm sm:leading-6">
         {t('Reported at {time}. {summary}', { time, summary })}
       </p>
+      {report.isDuplicate && (
+        <p className="mt-2.5 flex items-start gap-1.5 rounded-xl border border-amber-200 bg-amber-50/90 px-2.5 py-2 text-[11px] font-medium leading-4 text-amber-900 sm:text-xs sm:leading-5">
+          <Copy className="mt-0.5 size-3.5 shrink-0 text-amber-700" aria-hidden="true" />
+          <span>{t('Linked to an existing report in your area — crews are coordinating one response.')}</span>
+        </p>
+      )}
       <ReportTimeline progress={report.progress} />
       <div className="mt-3 flex items-center justify-between border-t border-brand-line pt-2.5">
         <span className="text-[9px] font-semibold tracking-[.04em] text-brand-muted sm:text-[11px]">{report.id}</span>
@@ -96,7 +106,7 @@ export default function ResidentReports() {
     const selectedFilter = filters.find((option) => option.label === filter)
     return reports.filter((report) => {
       const matchesFilter = selectedFilter?.matches(report)
-      const matchesQuery = !normalizedQuery || [report.id, report.title, report.location, report.status].some((value) => value.toLowerCase().includes(normalizedQuery))
+      const matchesQuery = !normalizedQuery || [report.id, report.title, report.location, report.status, report.isDuplicate ? 'duplicate' : ''].some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery))
       return matchesFilter && matchesQuery
     })
   }, [filter, query, reports])
@@ -147,8 +157,8 @@ export default function ResidentReports() {
             <input className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-brand-muted" type="search" placeholder={t('Search by place or report ID')} value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
           <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1 sm:gap-2">
-            {filters.map(({ label }) => {
-              const count = label === 'All' ? reports.length : reports.filter((report) => report.status === label).length
+            {filters.map(({ label, matches }) => {
+              const count = reports.filter(matches).length
               return <button key={label} type="button" onClick={() => setFilter(label)} className={`shrink-0 rounded-full px-2.5 py-1.5 text-[10px] font-bold transition-colors sm:px-3 sm:text-xs ${filter === label ? 'bg-brand-blue text-white' : 'border border-brand-line bg-white text-brand-muted hover:border-brand-line'}`}>{t(label)} <span className="opacity-80">{count}</span></button>
             })}
           </div>

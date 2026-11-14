@@ -42,6 +42,27 @@ export default function ResidentMap() {
   const [reloadKey, setReloadKey] = useState(0)
 
   const mapRef = useRef(null)
+  const layerMenuRef = useRef(null)
+
+  useEffect(() => {
+    if (!showLayerMenu) return
+
+    const handlePointerDown = (event) => {
+      if (layerMenuRef.current && !layerMenuRef.current.contains(event.target)) {
+        setShowLayerMenu(false)
+      }
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setShowLayerMenu(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [showLayerMenu])
 
   const showToast = (msg) => {
     setToastMessage(msg)
@@ -248,9 +269,9 @@ export default function ResidentMap() {
         </MapContainer>
       </div>
 
-      <header className="absolute top-0 inset-x-0 z-[500] p-3 sm:p-4 pointer-events-none">
+      <header className="absolute top-0 inset-x-0 z-[600] p-3 sm:p-4 pointer-events-none">
         <div className="mx-auto max-w-md space-y-2 pointer-events-auto">
-          <div className="relative flex items-center rounded-2xl bg-white px-3.5 py-2 shadow-[0_6px_20px_rgba(23,43,104,0.12)] border border-brand-line">
+          <div ref={layerMenuRef} className="relative flex items-center rounded-2xl bg-white px-3.5 py-2 shadow-[0_6px_20px_rgba(23,43,104,0.12)] border border-brand-line">
             <Search className="size-4.5 text-brand-muted shrink-0 mr-2.5" />
             <input
               type="text"
@@ -261,9 +282,11 @@ export default function ResidentMap() {
             />
             <button
               type="button"
-              onClick={() => setShowLayerMenu(!showLayerMenu)}
-              className="ml-2 flex size-9 shrink-0 items-center justify-center rounded-xl bg-[e5e9f6] text-brand-blue transition-colors hover:bg-[e5e9f6] active:scale-95 cursor-pointer"
+              onClick={() => setShowLayerMenu((open) => !open)}
+              className="ml-2 flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#e5e9f6] text-brand-blue transition-colors hover:bg-[#dce2f4] active:scale-95 cursor-pointer"
               title={t('Map layers')}
+              aria-label={t('Map layers')}
+              aria-expanded={showLayerMenu}
             >
               <Layers className="size-4.5" />
             </button>
@@ -281,7 +304,7 @@ export default function ResidentMap() {
                       setBasemap(key)
                       setShowLayerMenu(false)
                     }}
-                    className={`w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg flex items-center justify-between ${basemap === key ? 'bg-[e5e9f6] text-brand-blue' : 'hover:bg-brand-paper text-brand-ink'}`}
+                    className={`w-full text-left px-2.5 py-2 text-xs font-semibold rounded-lg flex items-center justify-between cursor-pointer ${basemap === key ? 'bg-[#e5e9f6] text-brand-blue' : 'hover:bg-brand-paper text-brand-ink'}`}
                   >
                     {label}
                     {basemap === key && <Check className="size-3.5" />}

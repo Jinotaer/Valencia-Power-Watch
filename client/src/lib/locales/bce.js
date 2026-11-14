@@ -508,4 +508,42 @@ export default {
   '{minutes}m ago': '{minutes} min ang milabay',
   'Active work order: {id}': 'Aktibong work order: {id}',
   'All caught up': 'Nabasa na ang tanan',
+  'AI could not be reached, so fields were pre-filled from basic offline rules.':
+    'Dili maabot ang AI, busa pauna nga gipunan ang mga detalye gamit ang basic offline rules.',
+  'All attached photos and video analyzed.': 'Nasusi ang tanang naka-attach nga photo ug video.',
+  'Could not decode frames from that video. Try an MP4/WebM clip under 14 MB or attach a photo instead.':
+    'Dili mabasa ang mga frame gikan sa maong video. Sulayi ang MP4/WebM clip nga ubos sa 14 MB o pag-attach na lang og photo.',
+  'Could not read the attached media. Please try another photo or video.':
+    'Dili mabasa ang naka-attach nga media. Palihug sulayi ang laing photo o video.',
+  'Full video motion and audio analyzed.': 'Nasusi ang tibuok lihok ug tingog sa video.',
+  'Offline quick fill — please verify': 'Offline quick fill — palihug susiha',
+  'The uploaded evidence does not appear to show power lines, poles, transformers, or an outage scene. Please upload a clear photo or video of the electrical issue, or report without attachments.':
+    'Murag wala nagpakita og linya sa kuryente, poste, transformer, o eksena sa outage ang gi-upload nga ebidensya. Pag-upload og klaro nga photo o video sa isyu sa kuryente, o pag-report nga walay attachment.',
+  'Video analyzed from sampled keyframes.': 'Nasusi ang video gikan sa mga gipiling keyframe.',
+  'Video clips up to 14 MB are analyzed with full motion and audio.':
+    'Ang mga video hangtod 14 MB susihon uban ang tibuok lihok ug tingog.',
+  'Videos over 14 MB are scanned via sampled keyframes.':
+    'Ang mga video nga labaw sa 14 MB susihon gamit ang mga gipiling keyframe.',
+  '{count} attachment(s) could not be decoded and were skipped.':
+    '{count} ka attachment ang dili mabasa ug gilaktawan.',
+  'An administrator linked this report to an existing incident in the same area so field crews can coordinate a single response. Updates on the incident still apply here.':
+    'Gisumpay sa administrator kini nga report sa usa ka naunang insidente sa parehong lugar aron maka-coordinate og usa ka tubag ang mga field crew. Magpadayon gihapon dinhi ang mga update.',
+  'Duplicate': 'Kapareho',
+  'Linked to an existing report in your area — crews are coordinating one response.':
+    'Gisumpay sa usa ka naunang report sa inyong lugar — usa ka tubag ang giatiman sa mga crew.',
+  'Marked as duplicate report': 'Gimarkahan isip kaparehong report',
+  'Already reported': 'Na-report na',
+  'This pin is within {distance} m of your active report ({reference} · {type} in Brgy. {barangay}). You can only report an incident once while your report is active.':
+    'Kini nga pin naa sulod sa {distance} m gikan sa imong aktibong report ({reference} · {type} sa Brgy. {barangay}). Kausa ra puwede mag-report og insidente samtang aktibo pa kini.',
+  'View existing report': 'Tan-awa ang naunang report',
+  'You already have an active report for this incident ({reference}). Duplicate submissions are blocked until your existing report is resolved or closed.':
+    'Naa ka nay aktibong report alang niini nga insidente ({reference}). Gi-block ang kaparehong pagpasa hangtod masulbad o masira ang naunang report.',
+  'You already have an active {type} report in Brgy. {barangay} ({reference}). If this incident is in a different area, update the location in the next step.':
+    'Naa ka nay aktibong report nga {type} sa Brgy. {barangay} ({reference}). Kung naa sa laing lugar kini nga insidente, usba ang lokasyon sa sunod nga lakang.',
+  'You already reported this incident ({reference}). Duplicate submissions are not allowed.':
+    'Na-report na nimo kini nga insidente ({reference}). Dili tugotan ang doble nga pagpasa.',
+  'You already reported this incident. Duplicate submissions are not allowed.':
+    'Na-report na nimo kini nga insidente. Dili tugotan ang doble nga pagpasa.',
+  'You already reported this {type} in Brgy. {barangay} ({reference}). You can only report an incident once while your report is active.':
+    'Na-report na nimo kini nga {type} sa Brgy. {barangay} ({reference}). Kausa ra puwede mag-report og insidente samtang aktibo pa ang imong report.',
 }

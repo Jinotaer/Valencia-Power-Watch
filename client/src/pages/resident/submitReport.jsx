@@ -20,9 +20,17 @@ import L from 'leaflet'
 import { useEffect, useRef, useState } from 'react'
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { addReport, loadPublicOutages, priorityLabels, reportPriorities } from '../../lib/reports'
+import {
+  addReport,
+  findMatchingResidentIncident,
+  loadActiveResidentReports,
+  loadPublicOutages,
+  priorityLabels,
+  reportPriorities,
+} from '../../lib/reports'
 import { useLanguage } from '../../lib/i18n'
 import { VALENCIA_CENTER } from '../../components/resident/mapData'
+import { AlreadyReportedBanner } from '../../components/resident/reportView'
 import { SubmitReportSuccess } from '../../components/resident/submitReportSuccess'
 import { analyzeEvidenceWithAI, getAiCooldownRemaining } from '../../lib/evidenceAiAnalyzer'
 
@@ -78,6 +86,31 @@ const outageTypes = [
 ]
 
 const MAX_VIDEO_BYTES = 25 * 1024 * 1024
+const MAX_INLINE_AI_VIDEO_BYTES = 14 * 1024 * 1024
+
+const VIDEO_EXT_MIME = {
+  mp4: 'video/mp4',
+  m4v: 'video/mp4',
+  mov: 'video/quicktime',
+  qt: 'video/quicktime',
+  webm: 'video/webm',
+  '3gp': 'video/3gpp',
+  mpeg: 'video/mpeg',
+  mpg: 'video/mpg',
+  avi: 'video/avi',
+}
+
+function classifyEvidenceFile(file) {
+  if (file.type?.startsWith('image/')) return { kind: 'image', mimeType: file.type }
+  if (file.type?.startsWith('video/')) return { kind: 'video', mimeType: file.type }
+
+  const ext = file.name?.split('.').pop()?.toLowerCase() || ''
+  if (VIDEO_EXT_MIME[ext]) return { kind: 'video', mimeType: VIDEO_EXT_MIME[ext] }
+  if (['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].includes(ext)) {
+    return { kind: 'image', mimeType: `image/${ext === 'jpg' ? 'jpeg' : ext}` }
+  }
+  return null
+}
 
 function toDateTimeLocalValue(date = new Date()) {
   const offset = date.getTimezoneOffset()
@@ -262,7 +295,7 @@ export default function SubmitReport() {
 
   const [confirmed, setConfirmed] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState('')
+  const [submitError, setSubmitError] = useState(null)
   const [reportReference, setReportReference] = useState('')
   const [isAnalyzingAi, setIsAnalyzingAi] = useState(false)
   const [aiAnalysisResult, setAiAnalysisResult] = useState(null)
@@ -275,22 +308,46 @@ export default function SubmitReport() {
   const [isStalePhoto, setIsStalePhoto] = useState(false)
   const [cooldownSeconds, setCooldownSeconds] = useState(0)
   const [publicOutages, setPublicOutages] = useState([])
+  const [activeResidentReports, setActiveResidentReports] = useState([])
+  const [blockedSubmission, setBlockedSubmission] = useState(null)
 
   useEffect(() => {
     let active = true
-    loadPublicOutages()
-      .then((outages) => {
-        if (active) setPublicOutages(outages || [])
-      })
-      .catch(() => {})
+    Promise.all([
+      loadPublicOutages().catch(() => []),
+      loadActiveResidentReports().catch(() => []),
+    ]).then(([outages, myActive]) => {
+      if (!active) return
+      setPublicOutages(outages || [])
+      setActiveResidentReports(myActive || [])
+    })
     return () => {
       active = false
     }
   }, [])
 
+  const submissionSignature = `${outageType}|${barangay}|${coordinates?.latitude ?? ''}|${coordinates?.longitude ?? ''}`
+  const blockedExistingReference =
+    blockedSubmission?.signature === submissionSignature ? blockedSubmission.reference : ''
+  const activeSubmitError =
+    submitError && (!submitError.signature || submitError.signature === submissionSignature)
+      ? submitError
+      : null
+
+  const activeResidentRefs = new Set(activeResidentReports.map((report) => report.id))
   const activeBarangayReportsCount = publicOutages.filter(
-    (o) => (o.barangay || '').trim().toLowerCase() === (barangay || '').trim().toLowerCase() && o.tone !== 'resolved',
+    (o) =>
+      !activeResidentRefs.has(o.reference) &&
+      (o.barangay || '').trim().toLowerCase() === (barangay || '').trim().toLowerCase() &&
+      o.tone !== 'resolved',
   ).length
+
+  const alreadyReportedMatch = findMatchingResidentIncident(activeResidentReports, {
+    barangay,
+    outageTypeId: outageType,
+    coordinates,
+  })
+  const isDuplicateBlocked = Boolean(alreadyReportedMatch || blockedExistingReference)
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return
@@ -430,13 +487,15 @@ export default function SubmitReport() {
       return
     }
 
-    const isImage = file.type.startsWith('image/')
-    const isVideo = file.type.startsWith('video/')
+    const classified = classifyEvidenceFile(file)
 
-    if (!isImage && !isVideo) {
+    if (!classified) {
       setPhotoError('Choose a photo or video file.')
       return
     }
+
+    const isImage = classified.kind === 'image'
+    const isVideo = classified.kind === 'video'
 
     if (isVideo && file.size > MAX_VIDEO_BYTES) {
       setPhotoError('Choose a video under 25 MB.')
@@ -445,6 +504,9 @@ export default function SubmitReport() {
 
     setIsProcessingPhoto(true)
     setPhotoError('')
+    setAiError('')
+    setIsIrrelevantMedia(false)
+    setRejectionReason('')
 
     try {
       if (isImage) {
@@ -459,7 +521,7 @@ export default function SubmitReport() {
         setPhotos((current) => (
           current.length >= 3
             ? current
-            : [...current, { id: `${Date.now()}-${current.length}`, label: file.name, type: file.type, kind: 'video', file, previewUrl }]
+            : [...current, { id: `${Date.now()}-${current.length}`, label: file.name, type: classified.mimeType, kind: 'video', file, previewUrl }]
         ))
       }
     } catch {
@@ -473,6 +535,9 @@ export default function SubmitReport() {
     const photo = photos.find((item) => item.id === id)
     if (photo?.kind === 'video') URL.revokeObjectURL(photo.previewUrl)
     setPhotos((current) => current.filter((item) => item.id !== id))
+    setAiError('')
+    setIsIrrelevantMedia(false)
+    setRejectionReason('')
   }
 
   // AI Analysis of uploaded evidence (photos or video)
@@ -486,8 +551,11 @@ export default function SubmitReport() {
 
     setIsAnalyzingAi(true)
     setAiError('')
+    setAiAnalysisResult(null)
     setIsIrrelevantMedia(false)
     setRejectionReason('')
+    setIsWebImageDetected(false)
+    setSafetyWarning('')
     setIsGeofenceWarning(false)
     setIsStalePhoto(false)
 
@@ -539,11 +607,11 @@ export default function SubmitReport() {
   // Handle Submission
   const handleSubmit = async (event) => {
     event.preventDefault()
-    if (!confirmed || isSubmitting || isProcessingPhoto) return
+    if (!confirmed || isSubmitting || isProcessingPhoto || isDuplicateBlocked) return
     if (!outageType || !noticedAt || !pinnedLocation) return
 
     setIsSubmitting(true)
-    setSubmitError('')
+    setSubmitError(null)
 
     const typeLabel = t(outageTypes.find((type) => type.id === outageType)?.label ?? 'Power interruption')
     const now = new Date()
@@ -589,14 +657,39 @@ export default function SubmitReport() {
           isWithinValencia: aiAnalysisResult.isWithinValencia,
           isStale: aiAnalysisResult.isStale,
           ageHours: aiAnalysisResult.ageHours,
+          analysisMode: aiAnalysisResult.analysisMode,
+          analyzedCount: aiAnalysisResult.analyzedCount,
           scannedAt: new Date().toISOString(),
         } : null,
       })
 
       setReportReference(report.id)
       setStep(5)
-    } catch {
-      setSubmitError('We could not save this report. Check your connection and try again.')
+    } catch (error) {
+      if (error?.code === 'ALREADY_REPORTED') {
+        const ref = error.existingReference || ''
+        if (ref) setBlockedSubmission({ reference: ref, signature: submissionSignature })
+        loadActiveResidentReports()
+          .then((rows) => setActiveResidentReports(rows || []))
+          .catch(() => {})
+        setSubmitError(
+          ref
+            ? {
+                key: 'You already reported this incident ({reference}). Duplicate submissions are not allowed.',
+                values: { reference: ref },
+                signature: submissionSignature,
+              }
+            : {
+                key: 'You already reported this incident. Duplicate submissions are not allowed.',
+                signature: submissionSignature,
+              },
+        )
+      } else {
+        setSubmitError({
+          key: 'We could not save this report. Check your connection and try again.',
+          signature: submissionSignature,
+        })
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -830,6 +923,13 @@ export default function SubmitReport() {
                     <p className="mt-0.5 text-[11px] leading-relaxed text-brand-muted">
                       {t('AI will scan your evidence to detect the interruption type, priority, time and location. You can review and edit everything.')}
                     </p>
+                    {photos.some((item) => item.kind === 'video') && (
+                      <p className="mt-1 text-[11px] font-semibold text-brand-blue">
+                        {photos.some((item) => item.kind === 'video' && (item.file?.size || 0) > MAX_INLINE_AI_VIDEO_BYTES)
+                          ? t('Videos over 14 MB are scanned via sampled keyframes.')
+                          : t('Video clips up to 14 MB are analyzed with full motion and audio.')}
+                      </p>
+                    )}
                     <button
                       type="button"
                       onClick={handleRunAiAnalysis}
@@ -857,7 +957,7 @@ export default function SubmitReport() {
                 <div className="min-w-0 flex-1">
                   <p className="font-bold">{t('No electrical infrastructure detected')}</p>
                   <p className="mt-0.5 text-[11px] leading-relaxed text-amber-800">
-                    {rejectionReason || t('The uploaded photo does not appear to show power lines, poles, transformers, or an outage scene. Please upload a clear photo of the electrical issue, or report without photos.')}
+                    {rejectionReason || t('The uploaded evidence does not appear to show power lines, poles, transformers, or an outage scene. Please upload a clear photo or video of the electrical issue, or report without attachments.')}
                   </p>
                 </div>
               </div>
@@ -867,7 +967,7 @@ export default function SubmitReport() {
             {aiError && (
               <div className="flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs text-red-900 shadow-xs">
                 <AlertTriangle className="size-4 shrink-0 text-red-600 mt-0.5" />
-                <span className="text-[11px] leading-relaxed">{aiError}</span>
+                <span className="text-[11px] leading-relaxed">{t(aiError)}</span>
               </div>
             )}
 
@@ -886,16 +986,54 @@ export default function SubmitReport() {
           <div className="space-y-5 animate-in fade-in">
             {/* AI result banner */}
             {aiAnalysisResult && (
-              <div className="rounded-2xl border border-brand-blue/30 bg-[#f4f7ff] p-3 shadow-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-black text-brand-blue">
-                    <Sparkles className="size-3.5 text-[#b88a00]" />
-                    {t('Filled in by AI — please review')}
+              <div
+                className={`rounded-2xl border p-3 shadow-xs ${
+                  aiAnalysisResult.usedFallback
+                    ? 'border-amber-200 bg-amber-50'
+                    : 'border-brand-blue/30 bg-[#f4f7ff]'
+                }`}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-xs font-black ${
+                      aiAnalysisResult.usedFallback ? 'text-amber-900' : 'text-brand-blue'
+                    }`}
+                  >
+                    <Sparkles
+                      className={`size-3.5 ${aiAnalysisResult.usedFallback ? 'text-amber-600' : 'text-[#b88a00]'}`}
+                    />
+                    {aiAnalysisResult.usedFallback
+                      ? t('Offline quick fill — please verify')
+                      : t('Filled in by AI — please review')}
                   </span>
-                  <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[10px] font-extrabold text-brand-blue">
-                    {t('{percent}% match', { percent: Math.round((aiAnalysisResult.confidence || 0.9) * 100) })}
-                  </span>
+                  {!aiAnalysisResult.usedFallback && (
+                    <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[10px] font-extrabold text-brand-blue">
+                      {t('{percent}% match', { percent: Math.round((aiAnalysisResult.confidence || 0.9) * 100) })}
+                    </span>
+                  )}
                 </div>
+                {aiAnalysisResult.usedFallback ? (
+                  <p className="mt-1 text-[11px] text-amber-800">
+                    {t('AI could not be reached, so fields were pre-filled from basic offline rules.')}
+                  </p>
+                ) : (
+                  aiAnalysisResult.analysisMode && aiAnalysisResult.analysisMode !== 'images' && (
+                    <p className="mt-1 text-[11px] font-semibold text-brand-blue">
+                      {aiAnalysisResult.analysisMode === 'full_video'
+                        ? t('Full video motion and audio analyzed.')
+                        : aiAnalysisResult.analysisMode === 'video_keyframes'
+                          ? t('Video analyzed from sampled keyframes.')
+                          : t('All attached photos and video analyzed.')}
+                    </p>
+                  )
+                )}
+                {aiAnalysisResult.skippedUnreadableCount > 0 && (
+                  <p className="mt-1 text-[11px] text-amber-800">
+                    {t('{count} attachment(s) could not be decoded and were skipped.', {
+                      count: aiAnalysisResult.skippedUnreadableCount,
+                    })}
+                  </p>
+                )}
                 {aiAnalysisResult.detectedComponents?.length > 0 && (
                   <p className="mt-1 text-[11px] text-brand-muted">
                     {t('Detected:')} {aiAnalysisResult.detectedComponents.join(', ')}
@@ -973,6 +1111,10 @@ export default function SubmitReport() {
                 <p className="mt-1.5 text-[11px] text-[#9a6500]">{t('Choose the type that best matches what happened.')}</p>
               )}
             </section>
+
+            {alreadyReportedMatch && (
+              <AlreadyReportedBanner match={alreadyReportedMatch} allowLocationChangeHint />
+            )}
 
             {/* Priority */}
             <section>
@@ -1113,7 +1255,11 @@ export default function SubmitReport() {
               </div>
               <p className="mt-1.5 text-[11px] text-brand-muted">{t('Auto-filled from the pin when it can be matched.')}</p>
 
-              {activeBarangayReportsCount > 0 && (
+              {alreadyReportedMatch ? (
+                <div className="mt-3 animate-in fade-in">
+                  <AlreadyReportedBanner match={alreadyReportedMatch} />
+                </div>
+              ) : activeBarangayReportsCount > 0 && (
                 <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50/90 p-3 text-amber-900 shadow-xs animate-in fade-in">
                   <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" />
                   <div className="text-xs leading-relaxed">
@@ -1238,7 +1384,12 @@ export default function SubmitReport() {
               </div>
             </div>
 
-            {activeBarangayReportsCount > 0 && (
+            {isDuplicateBlocked ? (
+              <AlreadyReportedBanner
+                match={alreadyReportedMatch}
+                fallbackReference={blockedExistingReference}
+              />
+            ) : activeBarangayReportsCount > 0 && (
               <div className="flex items-start gap-2 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-3 text-amber-900 text-xs shadow-xs animate-in fade-in">
                 <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" />
                 <div className="leading-relaxed">
@@ -1304,7 +1455,13 @@ export default function SubmitReport() {
               <span>{t('I confirm this information is accurate to the best of my knowledge.')}</span>
             </label>
 
-            {submitError && <p className="text-[11px] font-semibold text-[#b42318]">{t(submitError)}</p>}
+            {activeSubmitError && (
+              <p className="text-[11px] font-semibold text-[#b42318]">
+                {typeof activeSubmitError === 'string'
+                  ? t(activeSubmitError)
+                  : t(activeSubmitError.key, activeSubmitError.values)}
+              </p>
+            )}
           </div>
         )}
       </main>
@@ -1326,7 +1483,12 @@ export default function SubmitReport() {
             <button
               type="button"
               onClick={() => setStep(step + 1)}
-              disabled={isProcessingPhoto || isAnalyzingAi || (step === 2 && (!outageType || !noticedAt)) || (step === 3 && !pinnedLocation)}
+              disabled={
+                isProcessingPhoto ||
+                isAnalyzingAi ||
+                (step === 2 && (!outageType || !noticedAt)) ||
+                (step === 3 && (!pinnedLocation || Boolean(alreadyReportedMatch)))
+              }
               className="flex-1 rounded-2xl bg-brand-blue py-3 text-xs font-bold text-white shadow-xs hover:bg-brand-navy active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-1 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span>{step === 1 && photos.length === 0 ? t('Skip photo') : t('Next')}</span>
@@ -1335,16 +1497,18 @@ export default function SubmitReport() {
           ) : (
             <button
               type="button"
-              disabled={!confirmed || isSubmitting || isProcessingPhoto}
+              disabled={!confirmed || isSubmitting || isProcessingPhoto || isDuplicateBlocked}
               onClick={handleSubmit}
               className={`flex-1 rounded-2xl py-3 text-xs font-black shadow-xs transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                confirmed && !isSubmitting && !isProcessingPhoto
+                confirmed && !isSubmitting && !isProcessingPhoto && !isDuplicateBlocked
                   ? 'bg-brand-yellow text-brand-navy hover:bg-brand-yellow active:scale-[0.99]'
                   : 'bg-brand-line text-brand-muted cursor-not-allowed'
               }`}
             >
               <Send className="size-3.5 fill-current" />
-              <span>{isSubmitting ? t('Submitting…') : t('Submit report')}</span>
+              <span>
+                {isSubmitting ? t('Submitting…') : isDuplicateBlocked ? t('Already reported') : t('Submit report')}
+              </span>
             </button>
           )}
         </div>

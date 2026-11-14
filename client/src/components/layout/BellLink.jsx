@@ -1,7 +1,11 @@
 import { Bell } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLanguage } from '../../lib/i18n'
-import { countUnreadNotifications } from '../../lib/notifications'
+import {
+  countUnreadNotifications,
+  LAST_SEEN_KEY,
+  NOTIFICATIONS_UPDATED_EVENT,
+} from '../../lib/notifications'
 
 // Bell button for resident headers: opens the notifications page and shows the
 // live unread count (stored notifications + new advisories).
@@ -11,13 +15,36 @@ export function BellLink() {
 
   useEffect(() => {
     let active = true
-    countUnreadNotifications()
-      .then((count) => {
-        if (active) setUnread(count)
-      })
-      .catch(() => {})
+
+    const refresh = () => {
+      countUnreadNotifications()
+        .then((count) => {
+          if (active) setUnread(count)
+        })
+        .catch(() => {})
+    }
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    const handleStorage = (event) => {
+      if (event.key === LAST_SEEN_KEY) refresh()
+    }
+
+    refresh()
+    window.addEventListener('pageshow', refresh)
+    window.addEventListener('focus', refresh)
+    window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, refresh)
+    window.addEventListener('storage', handleStorage)
+    document.addEventListener('visibilitychange', handleVisibility)
+
     return () => {
       active = false
+      window.removeEventListener('pageshow', refresh)
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, refresh)
+      window.removeEventListener('storage', handleStorage)
+      document.removeEventListener('visibilitychange', handleVisibility)
     }
   }, [])
 

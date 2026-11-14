@@ -8,13 +8,14 @@ import {
   Navigation,
   Zap,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PortalMark, PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { loadAnnouncements } from '../../lib/announcements'
 import {
   getLastSeenAnnouncements,
   loadNotifications,
   markAllNotificationsRead,
+  markAnnouncementsSeen,
 } from '../../lib/notifications'
 import { loadAssignedReports } from '../../lib/reports'
 import { localeFor, useLanguage } from '../../lib/i18n'
@@ -43,6 +44,9 @@ export default function StaffNotifications() {
   const [loadError, setLoadError] = useState('')
   const [isMarking, setIsMarking] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  const [arrivalLastSeen, setArrivalLastSeen] = useState(() => getLastSeenAnnouncements())
+  const [arrivalUnreadIds, setArrivalUnreadIds] = useState(null)
+  const hasAutoMarkedRef = useRef(false)
 
   const reload = () => {
     setLoadError('')
@@ -63,6 +67,22 @@ export default function StaffNotifications() {
         setItems(notifs)
         setAdvisories(notices)
         setAssignedReports(reports)
+
+        if (!hasAutoMarkedRef.current) {
+          hasAutoMarkedRef.current = true
+          const unreadDbIds = notifs.filter((n) => !n.readAt).map((n) => n.id)
+          setArrivalUnreadIds(new Set(unreadDbIds))
+          const latestNoticeMs = notices.reduce((max, row) => {
+            const ts = new Date(row.publishedAt).getTime()
+            return Number.isFinite(ts) ? Math.max(max, ts) : max
+          }, 0)
+
+          if (unreadDbIds.length > 0) {
+            markAllNotificationsRead(latestNoticeMs).catch(() => {})
+          } else if (notices.length > 0) {
+            markAnnouncementsSeen(latestNoticeMs)
+          }
+        }
       })
       .catch(() => {
         if (active) {
@@ -78,11 +98,22 @@ export default function StaffNotifications() {
     }
   }, [reloadKey])
 
+  const latestAdvisoryTimestamp = useMemo(
+    () =>
+      advisories.reduce((max, row) => {
+        const ts = new Date(row.publishedAt).getTime()
+        return Number.isFinite(ts) ? Math.max(max, ts) : max
+      }, 0),
+    [advisories],
+  )
+
   const handleMarkAllRead = async () => {
     if (isMarking) return
     setIsMarking(true)
     try {
-      await markAllNotificationsRead().catch(() => {})
+      await markAllNotificationsRead(latestAdvisoryTimestamp).catch(() => {})
+      setArrivalUnreadIds(new Set())
+      setArrivalLastSeen(Math.max(Date.now(), latestAdvisoryTimestamp))
       setItems((prev) =>
         prev.map((item) => ({ ...item, readAt: item.readAt || new Date().toISOString() })),
       )
@@ -112,7 +143,6 @@ export default function StaffNotifications() {
         createdAt: r.updatedAt || r.createdAt,
       }))
 
-    const lastSeen = getLastSeenAnnouncements()
     const fourteenDaysAgo = mountTime - 14 * 24 * 60 * 60 * 1000
     const advisoryFeed = advisories.map((adv) => ({
       id: `adv-${adv.id}`,
@@ -121,8 +151,8 @@ export default function StaffNotifications() {
       body: adv.body,
       reportReference: null,
       readAt:
-        lastSeen > 0
-          ? new Date(adv.publishedAt).getTime() <= lastSeen
+        arrivalLastSeen > 0
+          ? new Date(adv.publishedAt).getTime() <= arrivalLastSeen
             ? adv.publishedAt
             : null
           : new Date(adv.publishedAt).getTime() <= fourteenDaysAgo
@@ -131,10 +161,15 @@ export default function StaffNotifications() {
       createdAt: adv.publishedAt,
     }))
 
-    return [...items, ...synthesizedAssignments, ...advisoryFeed].sort(
+    const storedWithArrival = items.map((item) => {
+      const stillUnreadOnArrival = arrivalUnreadIds ? arrivalUnreadIds.has(item.id) : !item.readAt
+      return stillUnreadOnArrival ? { ...item, readAt: null } : { ...item, readAt: item.readAt || item.createdAt }
+    })
+
+    return [...storedWithArrival, ...synthesizedAssignments, ...advisoryFeed].sort(
       (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
     )
-  }, [items, assignedReports, advisories, mountTime, t])
+  }, [items, assignedReports, advisories, mountTime, arrivalLastSeen, arrivalUnreadIds, t])
 
   const unreadCount = useMemo(() => combinedFeed.filter((n) => !n.readAt).length, [combinedFeed])
   const assignmentCount = useMemo(

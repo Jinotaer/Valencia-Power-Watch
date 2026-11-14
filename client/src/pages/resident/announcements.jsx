@@ -4,6 +4,7 @@ import { PortalMobileNav, PortalMark } from '../../components/layout/PortalMobil
 import { BellLink } from '../../components/layout/BellLink'
 import { useLanguage } from '../../lib/i18n'
 import { loadAnnouncements } from '../../lib/announcements'
+import { markAnnouncementsSeen } from '../../lib/notifications'
 
 const categoryMeta = {
   advisory: { label: 'Advisory', badge: 'bg-[#fff1a8] text-[#9a6500]' },
@@ -30,7 +31,15 @@ export default function ResidentAnnouncements() {
 
     loadAnnouncements()
       .then((rows) => {
-        if (active) setAnnouncements(rows)
+        if (!active) return
+        setAnnouncements(rows)
+        if (rows.length > 0) {
+          const latestMs = rows.reduce((max, row) => {
+            const ts = new Date(row.publishedAt).getTime()
+            return Number.isFinite(ts) ? Math.max(max, ts) : max
+          }, 0)
+          markAnnouncementsSeen(latestMs)
+        }
       })
       .catch(() => {
         if (active) {

@@ -3,12 +3,19 @@ import { loadAnnouncements } from './announcements'
 
 // When the resident last opened the notifications page — new advisories
 // published after this count as unread.
-const LAST_SEEN_KEY = 'pw:lastSeenAnnouncements'
+export const LAST_SEEN_KEY = 'pw:lastSeenAnnouncements'
+export const NOTIFICATIONS_UPDATED_EVENT = 'pw:notifications-updated'
 
 export const defaultNotificationPreferences = {
   outageAlerts: true,
   reportStatusUpdates: true,
   scheduledReminders: false,
+}
+
+function emitNotificationsUpdated() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(NOTIFICATIONS_UPDATED_EVENT))
+  }
 }
 
 async function currentUserId() {
@@ -45,18 +52,37 @@ export async function loadNotifications(limit = 50) {
   return (data ?? []).map(toNotification)
 }
 
-export async function markAllNotificationsRead() {
+export async function markAllNotificationsRead(minAnnouncementTimestamp = 0) {
+  markAnnouncementsSeen(minAnnouncementTimestamp)
+
   if (!supabase) return
   const userId = await currentUserId()
   if (!userId) return
 
-  await supabase
+  const { error } = await supabase
     .from('notifications')
     .update({ read_at: new Date().toISOString() })
     .eq('user_id', userId)
     .is('read_at', null)
 
-  markAnnouncementsSeen()
+  if (error) throw error
+  emitNotificationsUpdated()
+}
+
+export async function markNotificationRead(id) {
+  if (!supabase || !id) return
+  const userId = await currentUserId()
+  if (!userId) return
+
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('user_id', userId)
+    .is('read_at', null)
+
+  if (error) throw error
+  emitNotificationsUpdated()
 }
 
 export function getLastSeenAnnouncements() {
@@ -64,9 +90,12 @@ export function getLastSeenAnnouncements() {
   return Number.isFinite(value) && value > 0 ? value : 0
 }
 
-export function markAnnouncementsSeen() {
+export function markAnnouncementsSeen(minTimestamp = 0) {
   try {
-    localStorage.setItem(LAST_SEEN_KEY, String(Date.now()))
+    const previous = getLastSeenAnnouncements()
+    const next = Math.max(Date.now(), Number(minTimestamp) || 0, previous)
+    localStorage.setItem(LAST_SEEN_KEY, String(next))
+    emitNotificationsUpdated()
   } catch {
     // Private mode: the badge simply stays until localStorage works again.
   }
@@ -74,6 +103,7 @@ export function markAnnouncementsSeen() {
 
 export async function countUnreadNotifications() {
   let count = 0
+  const preferences = await loadNotificationPreferences().catch(() => defaultNotificationPreferences)
 
   if (supabase) {
     const userId = await currentUserId()
@@ -87,19 +117,21 @@ export async function countUnreadNotifications() {
     }
   }
 
-  const lastSeen = getLastSeenAnnouncements()
-  const announcements = await loadAnnouncements(50).catch(() => [])
-  if (lastSeen > 0) {
-    count += announcements.filter(
-      (row) => new Date(row.publishedAt).getTime() > lastSeen,
-    ).length
-  } else {
-    // If not marked seen yet, count recent announcements from the last 14 days (up to 5)
-    const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000
-    const recent = announcements.filter(
-      (row) => new Date(row.publishedAt).getTime() > fourteenDaysAgo,
-    )
-    count += Math.min(recent.length, 5)
+  if (preferences.outageAlerts !== false) {
+    const lastSeen = getLastSeenAnnouncements()
+    const announcements = await loadAnnouncements(50).catch(() => [])
+    if (lastSeen > 0) {
+      count += announcements.filter(
+        (row) => new Date(row.publishedAt).getTime() > lastSeen,
+      ).length
+    } else {
+      // If not marked seen yet, count recent announcements from the last 14 days (up to 5)
+      const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000
+      const recent = announcements.filter(
+        (row) => new Date(row.publishedAt).getTime() > fourteenDaysAgo,
+      )
+      count += Math.min(recent.length, 5)
+    }
   }
 
   return count

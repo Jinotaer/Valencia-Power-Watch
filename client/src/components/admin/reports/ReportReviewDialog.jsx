@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  AlertTriangle,
   Check,
   CheckCircle2,
   Clock,
@@ -33,101 +34,158 @@ import { ReportEvidenceGallery } from './ReportEvidenceGallery'
 import { ReportLocationMap } from './ReportLocationMap'
 import { recommendDispatchAndEta } from '../../../lib/adminAiAssistant'
 
-export function ReportDetailsGrid({ report, assignedStaffName, assignedTeamName }) {
-  const submittedFormatted = report.createdAt
-    ? new Date(report.createdAt).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-    : report.date || 'Unknown'
+function formatShortDateTime(value, fallback = '—') {
+  if (!value) return fallback
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+export function ReportDetailsGrid({
+  report,
+  assignedStaffName,
+  assignedTeamName,
+  resolvedByName,
+}) {
+  const submittedFormatted = formatShortDateTime(report.createdAt, report.date || 'Unknown')
+  const noticedText = report.startedTime || report.date || 'Not specified'
+  const statusKey = String(report.status ?? '').toLowerCase()
+  const resolvedFormatted =
+    statusKey === 'resolved' && report.resolvedAt
+      ? formatShortDateTime(report.resolvedAt, null)
+      : null
 
   const isGps = report.pinSource === 'gps'
   const gpsAccuracy = report.coordinates?.accuracy ? Math.round(report.coordinates.accuracy) : null
+  const responderLabel = resolvedByName || assignedStaffName
 
   return (
-    <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-      {/* 1. Reporter & Time */}
-      <div className="flex flex-col justify-between rounded-xl border border-brand-line/80 bg-brand-paper/50 p-3 transition-colors hover:border-brand-line">
-        <div>
+    <div className="@container overflow-hidden rounded-xl border border-brand-line/80 bg-brand-paper/35 divide-y divide-brand-line/60">
+      {/* Row 1: Reporter & Timeline */}
+      <div className="grid grid-cols-1 gap-3 p-3.5 @[400px]:grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)] @[400px]:items-start">
+        <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
-            <User className="size-3.5 text-brand-blue" aria-hidden="true" />
-            <span>Reporter</span>
+            <User className="size-3.5 shrink-0 text-brand-blue" aria-hidden="true" />
+            <span>Reported By</span>
           </div>
-          <p className="mt-1.5 truncate text-xs font-bold text-brand-navy" title={report.residentName || 'Unknown resident'}>
+          <p className="mt-1 text-sm font-bold text-brand-navy break-words">
             {report.residentName || 'Unknown resident'}
           </p>
         </div>
-        <div className="mt-2.5 space-y-1 border-t border-brand-line/50 pt-2 text-[11px]">
-          <div className="flex items-center justify-between text-brand-muted">
-            <span>Noticed:</span>
-            <span className="font-medium text-brand-ink truncate ml-1">{report.startedTime || report.date || 'Not specified'}</span>
+
+        <dl className="space-y-1.5 text-xs">
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="shrink-0 font-medium text-brand-muted">First noticed</dt>
+            <dd className="text-right font-semibold tabular-nums text-brand-ink">
+              {noticedText}
+            </dd>
           </div>
-          <div className="flex items-center justify-between text-brand-muted">
-            <span>Submitted:</span>
-            <span className="font-medium text-brand-ink truncate ml-1">{submittedFormatted}</span>
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="shrink-0 font-medium text-brand-muted">Submitted</dt>
+            <dd className="text-right font-semibold tabular-nums text-brand-ink">
+              {submittedFormatted}
+            </dd>
           </div>
-        </div>
+          {resolvedFormatted && (
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="shrink-0 font-medium text-emerald-700">Resolved</dt>
+              <dd className="text-right font-semibold tabular-nums text-emerald-800">
+                {resolvedFormatted}
+              </dd>
+            </div>
+          )}
+        </dl>
       </div>
 
-      {/* 2. Location & Geotag */}
-      <div className="flex flex-col justify-between rounded-xl border border-brand-line/80 bg-brand-paper/50 p-3 transition-colors hover:border-brand-line">
-        <div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
-              <MapPin className="size-3.5 text-brand-blue" aria-hidden="true" />
-              <span>Location</span>
-            </div>
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                isGps
-                  ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
-                  : 'border border-slate-200 bg-slate-100 text-slate-700'
-              }`}
-            >
-              <span className={`size-1.5 rounded-full ${isGps ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-              {isGps ? (gpsAccuracy ? `GPS ±${gpsAccuracy}m` : 'GPS Verified') : 'Manual Pin'}
+      {/* Row 2: Location & Geotag */}
+      <div className="space-y-2.5 p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <MapPin className="size-3.5 shrink-0 text-brand-blue" aria-hidden="true" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+              Location
+            </span>
+            <span className="text-brand-line" aria-hidden="true">·</span>
+            <span className="truncate text-sm font-bold text-brand-navy">
+              {report.barangay ? `Brgy. ${report.barangay}` : 'Barangay not specified'}
             </span>
           </div>
-          <p className="mt-1.5 truncate text-xs font-bold text-brand-navy" title={report.barangay ? `Brgy. ${report.barangay}` : 'Barangay not specified'}>
-            {report.barangay ? `Brgy. ${report.barangay}` : 'Barangay not specified'}
-          </p>
+
+          <span
+            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+              isGps
+                ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border border-slate-200 bg-white text-slate-700'
+            }`}
+          >
+            <span className={`size-1.5 shrink-0 rounded-full ${isGps ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+            {isGps ? (gpsAccuracy ? `GPS Verified (±${gpsAccuracy}m)` : 'GPS Verified') : 'Manual Pin'}
+          </span>
         </div>
-        <div className="mt-2.5 space-y-1 border-t border-brand-line/50 pt-2 text-[11px]">
-          <div className="text-brand-muted truncate" title={report.landmark || 'No landmark specified'}>
-            <span className="font-semibold text-brand-ink">Landmark:</span> {report.landmark || 'None provided'}
+
+        <dl className="grid grid-cols-1 gap-2.5 text-xs @[400px]:grid-cols-[minmax(0,0.75fr)_minmax(0,1.45fr)]">
+          <div className="min-w-0">
+            <dt className="text-[10px] font-semibold uppercase tracking-wide text-brand-muted">
+              Nearest Landmark
+            </dt>
+            <dd className="mt-0.5 font-medium text-brand-ink break-words">
+              {report.landmark || 'None provided'}
+            </dd>
           </div>
-          <div className="text-brand-muted break-words leading-tight" title={report.pinnedLocation || 'Not provided'}>
-            <span className="font-semibold text-brand-ink">Address:</span> {report.pinnedLocation || 'Not provided'}
+          <div className="min-w-0">
+            <dt className="text-[10px] font-semibold uppercase tracking-wide text-brand-muted">
+              Pinned Address
+            </dt>
+            <dd className="mt-0.5 font-medium leading-snug text-brand-ink break-words">
+              {report.pinnedLocation || 'Not provided'}
+            </dd>
           </div>
-        </div>
+        </dl>
       </div>
 
-      {/* 3. Field & Crew Assignment */}
-      <div className="flex flex-col justify-between rounded-xl border border-brand-line/80 bg-brand-paper/50 p-3 transition-colors hover:border-brand-line">
-        <div>
+      {/* Row 3: Field Assignment & Responder */}
+      <div className="grid grid-cols-1 gap-3 p-3.5 @[400px]:grid-cols-2 @[400px]:items-center">
+        <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-muted">
-            <Truck className="size-3.5 text-brand-blue" aria-hidden="true" />
-            <span>Assignment</span>
+            <Truck className="size-3.5 shrink-0 text-brand-blue" aria-hidden="true" />
+            <span>Field Team</span>
           </div>
           <div className="mt-1.5">
             {assignedTeamName ? (
-              <span className="inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 bg-brand-blue/10 px-2 py-0.5 text-xs font-bold text-brand-blue">
-                <UsersIcon className="size-3" aria-hidden="true" />
-                {assignedTeamName}
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/25 bg-brand-blue/10 px-2.5 py-1 text-xs font-bold text-brand-blue">
+                <UsersIcon className="size-3.5 shrink-0" aria-hidden="true" />
+                <span>{assignedTeamName}</span>
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                Awaiting Team Dispatch
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">
+                {statusKey === 'rejected'
+                  ? 'Not dispatched'
+                  : statusKey === 'pending'
+                  ? 'Pending verification'
+                  : 'Awaiting Team Dispatch'}
               </span>
             )}
           </div>
         </div>
-        <div className="mt-2.5 border-t border-brand-line/50 pt-2 text-[11px] text-brand-muted">
-          <span className="font-semibold text-brand-ink">Assigned Lineman:</span>{' '}
-          <span className="font-medium text-brand-navy">{assignedStaffName || 'Team-wide'}</span>
+
+        <div className="min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+            {resolvedByName ? 'Resolved By' : 'Assigned Lineman'}
+          </div>
+          <p className="mt-1.5 text-xs font-semibold text-brand-navy break-words">
+            {responderLabel ||
+              (assignedTeamName
+                ? 'Team-wide dispatch'
+                : statusKey === 'rejected'
+                ? 'Closed'
+                : 'Unassigned')}
+          </p>
         </div>
       </div>
     </div>
@@ -167,6 +225,12 @@ export function ReportReviewDialog({
   )
   const isMaster = matchedCluster?.masterReportId === selectedReport.id
 
+  const resolvedByName =
+    (selectedReport.resolvedByStaffId && staffNames[selectedReport.resolvedByStaffId]) ||
+    selectedReport.photos?.find((photo) => photo.uploadedBy === 'staff' && photo.uploadedByName)
+      ?.uploadedByName ||
+    null
+
   const handleGetAiDispatch = async () => {
     if (isGeneratingDispatch || !selectedReport) return
     setIsGeneratingDispatch(true)
@@ -192,8 +256,8 @@ export function ReportReviewDialog({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[94vw] md:max-w-[1240px] lg:max-w-[1280px] h-[min(820px,90vh)] max-h-[90vh] p-0 gap-0 overflow-hidden rounded-2xl border border-brand-line bg-white shadow-2xl ring-0 flex flex-col">
-        <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 md:grid-cols-[52%_48%] overflow-hidden">
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-[94vw] md:max-w-[1240px] lg:max-w-[1300px] h-[min(820px,90vh)] max-h-[90vh] p-0 gap-0 overflow-hidden rounded-2xl border border-brand-line bg-white shadow-2xl ring-0 flex flex-col">
+        <div className="grid h-full min-h-0 w-full flex-1 grid-cols-1 md:grid-cols-[55%_45%] lg:grid-cols-[60%_40%] overflow-hidden">
           {/* Left Column: Interactive Map & Incident Geolocation */}
           <div className="relative z-0 h-64 md:h-full min-h-0 w-full overflow-hidden border-b border-brand-line bg-[#e5e9f6] md:border-b-0 md:border-r">
             <ReportLocationMap report={selectedReport} fill />
@@ -227,7 +291,7 @@ export function ReportReviewDialog({
                   )}
                 </div>
 
-                <DialogTitle className="mt-2 text-xl font-bold leading-tight tracking-tight text-brand-navy">
+                <DialogTitle className="mt-2 text-xl font-bold leading-tight tracking-[-0.02em] text-brand-navy">
                   {selectedReport.outageType}
                 </DialogTitle>
                 <DialogDescription className="mt-1 flex items-center gap-1.5 text-xs font-medium text-brand-muted">
@@ -246,12 +310,12 @@ export function ReportReviewDialog({
               </div>
             </header>
 
-            {/* Scrollable Dossier Body: Liberated from footer chokehold */}
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
+            {/* Scrollable Dossier Body */}
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
               {/* Duplicate Cluster Banner */}
               {matchedCluster && (
                 <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-3.5 text-xs space-y-2 animate-in fade-in">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5 font-bold text-amber-900 text-xs">
                       <Sparkles className="size-3.5 text-amber-600" aria-hidden="true" />
                       AI Auto-Detected Duplicate Cluster ({Math.round(matchedCluster.confidence * 100)}% match)
@@ -264,7 +328,7 @@ export function ReportReviewDialog({
                     {matchedCluster.reason}
                   </p>
                   {!selectedReport.isDuplicate && !isMaster && (
-                    <div className="flex items-center justify-between pt-1 border-t border-amber-200/60">
+                    <div className="flex items-center justify-between pt-1.5 border-t border-amber-200/60">
                       <span className="font-mono text-[10px] text-amber-700">
                         Primary Incident: #{matchedCluster.masterReportId}
                       </span>
@@ -284,7 +348,7 @@ export function ReportReviewDialog({
 
               {/* Section 1: Incident Dossier Metadata */}
               <section>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <h3 className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
                     Incident Dossier
                   </h3>
@@ -311,6 +375,7 @@ export function ReportReviewDialog({
                     report={selectedReport}
                     assignedStaffName={staffNames[selectedReport.assignedStaffId]}
                     assignedTeamName={teamNames[selectedReport.assignedTeamId]}
+                    resolvedByName={resolvedByName}
                   />
                 </div>
               </section>
@@ -323,7 +388,7 @@ export function ReportReviewDialog({
                   Resident Description & Notes
                 </h3>
                 {selectedReport.notes ? (
-                  <div className="mt-2 rounded-xl border border-brand-line/80 bg-brand-paper/40 p-3.5 text-xs font-medium leading-relaxed text-brand-ink whitespace-pre-wrap">
+                  <div className="mt-2 rounded-xl border border-brand-line/80 bg-brand-paper/35 p-3.5 text-xs font-medium leading-relaxed text-brand-ink whitespace-pre-wrap">
                     {selectedReport.notes}
                   </div>
                 ) : (
@@ -333,12 +398,36 @@ export function ReportReviewDialog({
                 )}
               </section>
 
-              {/* Section 3: Field Operations & Dispatch Command (When Verified) */}
+              {/* Section 3: Field Staff Updates (If Present) */}
+              {(selectedReport.staffRemarks || selectedReport.restorationEta) && (
+                <>
+                  <Separator className="bg-brand-line" />
+                  <section>
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
+                      Field Staff Updates
+                    </h3>
+                    <div className="mt-2.5 rounded-xl border border-brand-blue/20 bg-[#e5e9f6]/50 p-3.5 space-y-1.5 text-xs">
+                      {selectedReport.restorationEta && (
+                        <p className="font-bold text-brand-navy">
+                          Estimated Restoration: {selectedReport.restorationEta}
+                        </p>
+                      )}
+                      {selectedReport.staffRemarks && (
+                        <p className="whitespace-pre-wrap font-medium leading-relaxed text-brand-ink">
+                          {selectedReport.staffRemarks}
+                        </p>
+                      )}
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {/* Section 4: Field Operations & Dispatch Command (When Verified) */}
               {statusKey === 'verified' && (
                 <>
                   <Separator className="bg-brand-line" />
                   <section className="space-y-3.5">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
                         <Truck className="size-3.5 text-brand-blue" aria-hidden="true" />
                         Field Operations & Dispatch Command
@@ -353,7 +442,7 @@ export function ReportReviewDialog({
 
                     {/* AI Smart Dispatch & Repair Guidance */}
                     <div className="rounded-xl border border-amber-200/90 bg-amber-50/60 p-3.5 text-xs space-y-2.5">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <span className="flex items-center gap-1.5 font-bold text-brand-navy text-xs">
                           <Sparkles className="size-3.5 text-amber-600" aria-hidden="true" />
                           AI Smart Dispatch & Repair Guidance
@@ -387,7 +476,7 @@ export function ReportReviewDialog({
                         </div>
                       ) : (
                         <p className="text-[11px] text-brand-muted leading-relaxed">
-                          Click "Analyze Dispatch" to predict realistic restoration hours and generate technical instructions for the field team.
+                          Click &ldquo;Analyze Dispatch&rdquo; to predict realistic restoration hours and generate technical instructions for the field team.
                         </p>
                       )}
 
@@ -467,7 +556,7 @@ export function ReportReviewDialog({
                               size="sm"
                               onClick={onAssignStaff}
                               disabled={isSubmitting || !staffId}
-                              className="h-9 rounded-lg text-xs font-bold"
+                              className="h-9 rounded-lg text-xs font-bold cursor-pointer"
                             >
                               Assign Staff
                             </Button>
@@ -479,34 +568,10 @@ export function ReportReviewDialog({
                 </>
               )}
 
-              {/* Section 4: Field Staff Updates (If Present) */}
-              {(selectedReport.staffRemarks || selectedReport.restorationEta) && (
-                <>
-                  <Separator className="bg-brand-line" />
-                  <section>
-                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
-                      Field Staff Updates
-                    </h3>
-                    <div className="mt-2.5 rounded-xl border border-brand-blue/20 bg-[#e5e9f6]/50 p-4 space-y-1.5 text-xs">
-                      {selectedReport.restorationEta && (
-                        <p className="font-bold text-brand-navy">
-                          Estimated Restoration: {selectedReport.restorationEta}
-                        </p>
-                      )}
-                      {selectedReport.staffRemarks && (
-                        <p className="whitespace-pre-wrap font-medium leading-5 text-brand-ink">
-                          {selectedReport.staffRemarks}
-                        </p>
-                      )}
-                    </div>
-                  </section>
-                </>
-              )}
-
               {/* Section 5: Attached Evidence */}
               <Separator className="bg-brand-line" />
               <section>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <h3 className="text-[11px] font-bold uppercase tracking-wider text-brand-muted">
                     Attached Evidence ({selectedReport.photos?.length ?? 0})
                   </h3>
@@ -516,7 +581,7 @@ export function ReportReviewDialog({
                     </span>
                   )}
                 </div>
-                <ReportEvidenceGallery report={selectedReport} />
+                <ReportEvidenceGallery key={selectedReport.id} report={selectedReport} />
               </section>
 
               {/* Section 6: AI Evidence Security & Forensics */}
@@ -524,7 +589,7 @@ export function ReportReviewDialog({
                 <>
                   <Separator className="bg-brand-line" />
                   <section>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-muted">
                         <ShieldCheck className="size-3.5 text-brand-blue" aria-hidden="true" />
                         AI Evidence Security & Forensics
@@ -543,56 +608,94 @@ export function ReportReviewDialog({
                           ? 'Flagged: Non-Utility Media'
                           : selectedReport.aiVerification.isWebOrStockImage
                           ? 'Flagged: Web / Stock Photo'
+                          : selectedReport.aiVerification.analysisMode === 'full_video' ||
+                              selectedReport.aiVerification.analysisMode === 'video_keyframes'
+                          ? 'AI Verified Field Video'
+                          : selectedReport.aiVerification.analysisMode === 'mixed_media'
+                          ? 'AI Verified Field Media'
                           : 'AI Verified Field Photo'}
                       </Badge>
                     </div>
 
-                    <div className="mt-2.5 space-y-2.5 rounded-xl border border-brand-line/80 bg-brand-paper/40 p-3.5">
-                      <div className="grid grid-cols-2 gap-2.5 text-xs">
+                    <div className="mt-2.5 space-y-2.5 rounded-xl border border-brand-line/80 bg-brand-paper/35 p-3.5">
+                      <dl className="grid grid-cols-1 gap-2.5 text-xs sm:grid-cols-2">
                         <div>
-                          <span className="text-[10px] font-bold uppercase text-brand-muted">Camera Device</span>
-                          <p className="truncate font-semibold text-brand-navy" title={selectedReport.aiVerification.cameraDevice || ''}>
+                          <dt className="text-[10px] font-bold uppercase tracking-wide text-brand-muted">
+                            Camera Device
+                          </dt>
+                          <dd
+                            className="mt-0.5 truncate font-semibold text-brand-navy"
+                            title={selectedReport.aiVerification.cameraDevice || ''}
+                          >
                             {selectedReport.aiVerification.cameraDevice ||
                               (selectedReport.aiVerification.hasCameraMetadata
                                 ? 'Live camera detected'
+                                : selectedReport.aiVerification.analysisMode === 'full_video' ||
+                                    selectedReport.aiVerification.analysisMode === 'video_keyframes'
+                                ? 'Video clip (no image EXIF)'
                                 : 'No camera EXIF (Web/App)')}
-                          </p>
+                          </dd>
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold uppercase text-brand-muted">AI Match Confidence</span>
-                          <p className="font-semibold text-brand-navy">
+                          <dt className="text-[10px] font-bold uppercase tracking-wide text-brand-muted">
+                            AI Match Confidence
+                          </dt>
+                          <dd className="mt-0.5 font-semibold tabular-nums text-brand-navy">
                             {Math.round((selectedReport.aiVerification.confidence || 0.9) * 100)}% match
-                          </p>
+                          </dd>
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold uppercase text-brand-muted">Valencia Geofence</span>
-                          <p className="font-semibold text-brand-navy">
-                            {selectedReport.aiVerification.isWithinValencia === true
-                              ? '✓ Inside Valencia City'
-                              : selectedReport.aiVerification.isWithinValencia === false
-                              ? '⚠️ Outside Valencia City'
-                              : 'No GPS geotag in photo'}
-                          </p>
+                          <dt className="text-[10px] font-bold uppercase tracking-wide text-brand-muted">
+                            Valencia Geofence
+                          </dt>
+                          <dd className="mt-0.5 flex items-center gap-1.5 font-semibold text-brand-navy">
+                            {selectedReport.aiVerification.isWithinValencia === true ? (
+                              <>
+                                <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
+                                <span>Inside Valencia City</span>
+                              </>
+                            ) : selectedReport.aiVerification.isWithinValencia === false ? (
+                              <>
+                                <AlertTriangle className="size-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+                                <span className="text-amber-800">Outside Valencia City</span>
+                              </>
+                            ) : (
+                              <span>No GPS geotag in photo</span>
+                            )}
+                          </dd>
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold uppercase text-brand-muted">Evidence Age</span>
-                          <p className="font-semibold text-brand-navy">
-                            {selectedReport.aiVerification.isStale
-                              ? `⚠️ Stale (${selectedReport.aiVerification.ageHours}h old)`
-                              : '✓ Fresh (<24h)'}
-                          </p>
+                          <dt className="text-[10px] font-bold uppercase tracking-wide text-brand-muted">
+                            Evidence Age
+                          </dt>
+                          <dd className="mt-0.5 flex items-center gap-1.5 font-semibold text-brand-navy">
+                            {selectedReport.aiVerification.isStale ? (
+                              <>
+                                <AlertTriangle className="size-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+                                <span className="text-amber-800 tabular-nums">
+                                  Stale ({selectedReport.aiVerification.ageHours}h old)
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
+                                <span>Fresh (&lt;24h)</span>
+                              </>
+                            )}
+                          </dd>
                         </div>
-                      </div>
+                      </dl>
 
                       {selectedReport.aiVerification.rejectionReason && (
-                        <div className="rounded-lg bg-red-50 p-2.5 text-[11px] font-medium text-red-800">
-                          ⚠️ {selectedReport.aiVerification.rejectionReason}
+                        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-2.5 text-[11px] font-medium text-red-800">
+                          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-600" aria-hidden="true" />
+                          <span>{selectedReport.aiVerification.rejectionReason}</span>
                         </div>
                       )}
 
                       {selectedReport.aiVerification.detectedComponents?.length > 0 && (
-                        <p className="text-[11px] text-brand-muted">
-                          <strong className="text-brand-navy">Components:</strong>{' '}
+                        <p className="border-t border-brand-line/60 pt-2 text-[11px] text-brand-muted">
+                          <strong className="text-brand-navy">Detected components:</strong>{' '}
                           {selectedReport.aiVerification.detectedComponents.join(', ')}
                         </p>
                       )}
@@ -603,7 +706,7 @@ export function ReportReviewDialog({
             </div>
 
             {/* Footer: Streamlined Action Bar & Status Notices */}
-            <footer className="shrink-0 border-t border-brand-line bg-brand-paper/80 px-6 py-3">
+            <footer className="shrink-0 border-t border-brand-line bg-brand-paper/80 px-5 py-3">
               {statusKey === 'pending' && !confirmingReject && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                   <p className="text-xs text-brand-muted leading-tight text-center sm:text-left">
@@ -704,9 +807,9 @@ export function ReportReviewDialog({
                     <span>
                       Resolved
                       {selectedReport.assignedTeamId && teamNames[selectedReport.assignedTeamId]
-                        ? ` by ${teamNames[selectedReport.assignedTeamId]}`
-                        : selectedReport.assignedStaffId
-                        ? ` by ${staffNames[selectedReport.assignedStaffId] ?? 'field staff'}`
+                        ? ` by ${teamNames[selectedReport.assignedTeamId]}${resolvedByName ? ` (${resolvedByName})` : ''}`
+                        : resolvedByName
+                        ? ` by ${resolvedByName}`
                         : ''}{' '}
                       — power restored.
                     </span>

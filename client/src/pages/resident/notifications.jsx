@@ -1,5 +1,5 @@
 import { Bell, Check, ClipboardList, Megaphone } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PortalMobileNav, PortalMark } from '../../components/layout/PortalMobileNav'
 import { useLanguage } from '../../lib/i18n'
 import { loadAnnouncements } from '../../lib/announcements'
@@ -8,6 +8,8 @@ import {
   loadNotifications,
   loadNotificationPreferences,
   markAllNotificationsRead,
+  markAnnouncementsSeen,
+  markNotificationRead,
 } from '../../lib/notifications'
 import { loadActiveSchedules } from '../../lib/schedules'
 
@@ -32,6 +34,9 @@ export default function ResidentNotifications() {
   const [loadError, setLoadError] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
   const [isMarking, setIsMarking] = useState(false)
+  const [arrivalLastSeen, setArrivalLastSeen] = useState(() => getLastSeenAnnouncements())
+  const [arrivalUnreadIds, setArrivalUnreadIds] = useState(null)
+  const hasAutoMarkedRef = useRef(false)
 
   const reload = () => {
     setLoadError('')
@@ -44,7 +49,7 @@ export default function ResidentNotifications() {
 
     Promise.all([
       loadNotifications().catch(() => []),
-      loadAnnouncements(10).catch(() => []),
+      loadAnnouncements(50).catch(() => []),
       loadActiveSchedules().catch(() => []),
       loadNotificationPreferences().catch(() => null),
     ])
@@ -54,6 +59,23 @@ export default function ResidentNotifications() {
         setAnnouncements(notices)
         setSchedules(nextSchedules)
         setPreferences(prefs)
+
+        if (!hasAutoMarkedRef.current) {
+          hasAutoMarkedRef.current = true
+          const unreadStoredIds = notifications.filter((row) => !row.readAt).map((row) => row.id)
+          setArrivalUnreadIds(new Set(unreadStoredIds))
+
+          const latestNoticeMs = notices.reduce((max, row) => {
+            const ts = new Date(row.publishedAt).getTime()
+            return Number.isFinite(ts) ? Math.max(max, ts) : max
+          }, 0)
+
+          if (unreadStoredIds.length > 0) {
+            markAllNotificationsRead(latestNoticeMs).catch(() => {})
+          } else if (prefs?.outageAlerts !== false && notices.length > 0) {
+            markAnnouncementsSeen(latestNoticeMs)
+          }
+        }
       })
       .catch(() => {
         if (active) setLoadError('We could not load your notifications. Check your connection and try again.')
@@ -67,28 +89,41 @@ export default function ResidentNotifications() {
     }
   }, [reloadKey])
 
-  const items = useMemo(() => {
-    const list = stored.map((row) => ({
-      id: row.id,
-      icon: ClipboardList,
-      title: row.title,
-      body: row.body,
-      when: row.createdAt,
-      read: Boolean(row.readAt),
-      href: row.reportReference ? `/community/reports/${row.reportReference}` : null,
-    }))
+  const latestNoticeTimestamp = useMemo(
+    () =>
+      announcements.reduce((max, row) => {
+        const ts = new Date(row.publishedAt).getTime()
+        return Number.isFinite(ts) ? Math.max(max, ts) : max
+      }, 0),
+    [announcements],
+  )
 
-    const lastSeen = getLastSeenAnnouncements()
+  const items = useMemo(() => {
+    const list = stored.map((row) => {
+      const isUnreadOnArrival = arrivalUnreadIds ? arrivalUnreadIds.has(row.id) : !row.readAt
+      return {
+        id: row.id,
+        kind: 'stored',
+        icon: ClipboardList,
+        title: row.title,
+        body: row.body,
+        when: row.createdAt,
+        read: !isUnreadOnArrival,
+        href: row.reportReference ? `/community/reports/${row.reportReference}` : null,
+      }
+    })
+
     const fourteenDaysAgo = mountTime - 14 * 24 * 60 * 60 * 1000
 
     if (preferences?.outageAlerts !== false) {
       announcements.forEach((row) => {
         const isRead =
-          lastSeen > 0
-            ? new Date(row.publishedAt).getTime() <= lastSeen
+          arrivalLastSeen > 0
+            ? new Date(row.publishedAt).getTime() <= arrivalLastSeen
             : new Date(row.publishedAt).getTime() <= fourteenDaysAgo
         list.push({
           id: `announcement-${row.id}`,
+          kind: 'announcement',
           icon: Megaphone,
           title: row.title,
           body: `${t(row.category === 'restoration' ? 'Restoration update' : 'Advisory')}${row.barangay ? ` · ${t('Brgy. {barangay}', { barangay: row.barangay })}` : ''}`,
@@ -103,29 +138,46 @@ export default function ResidentNotifications() {
       schedules.forEach((row) => {
         list.push({
           id: `schedule-${row.id}`,
+          kind: 'schedule',
           icon: Bell,
           title: row.title || t('Scheduled outage'),
           body: `${row.barangay ? `${t('Brgy. {barangay}', { barangay: row.barangay })} · ` : ''}${row.dateLabel} · ${row.timeLabel}`,
           when: row.date,
-          read: false,
+          read: arrivalLastSeen > 0,
           href: '/community/schedule',
         })
       })
     }
 
     return list
-  }, [stored, announcements, schedules, preferences, mountTime, t])
+  }, [stored, announcements, schedules, preferences, mountTime, arrivalLastSeen, arrivalUnreadIds, t])
 
   const handleMarkAllRead = async () => {
     if (isMarking) return
     setIsMarking(true)
     try {
-      await markAllNotificationsRead()
+      await markAllNotificationsRead(latestNoticeTimestamp)
+      setArrivalUnreadIds(new Set())
+      setArrivalLastSeen(Math.max(Date.now(), latestNoticeTimestamp))
       reload()
     } catch {
       setLoadError('We could not mark notifications as read. Try again.')
     } finally {
       setIsMarking(false)
+    }
+  }
+
+  const handleOpenItem = (item) => {
+    if (item.kind === 'stored' && !item.read) {
+      setArrivalUnreadIds((prev) => {
+        if (!prev) return prev
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
+      })
+      markNotificationRead(item.id).catch(() => {})
+    } else if (item.kind === 'announcement' && !item.read) {
+      markAnnouncementsSeen(latestNoticeTimestamp)
     }
   }
 
@@ -190,7 +242,7 @@ export default function ResidentNotifications() {
             )
             const className = 'flex items-start gap-3 rounded-2xl border border-brand-line bg-white p-3.5 shadow-[0_6px_18px_rgba(23,43,104,0.04)] sm:p-5'
             return item.href
-              ? <a key={item.id} href={item.href} className={`${className} no-underline`}>{card}</a>
+              ? <a key={item.id} href={item.href} onClick={() => handleOpenItem(item)} className={`${className} no-underline`}>{card}</a>
               : <article key={item.id} className={className}>{card}</article>
           })}
 

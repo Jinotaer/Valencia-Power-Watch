@@ -14,6 +14,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import powerWatchLogo from '../../assets/logo.svg'
 import ResidentProfileModals from '../../components/resident/profileModals'
 import { PortalMobileNav } from '../../components/layout/PortalMobileNav'
 import { BellLink } from '../../components/layout/BellLink'
@@ -199,9 +200,7 @@ export default function ResidentProfile() {
         <div className="mx-auto flex max-w-md items-center justify-between">
           {/* Logo & Portal Branding */}
           <a href="/community" className="flex items-center gap-2.5 no-underline">
-            <span className="grid size-9 place-items-center rounded-xl bg-brand-yellow text-brand-ink shadow-xs">
-              <Zap className="size-5 fill-current" />
-            </span>
+            <img src={powerWatchLogo} alt="" className="size-9 shrink-0 rounded-xl shadow-xs" aria-hidden="true" />
             <div>
               <span className="block text-[9.5px] font-extrabold uppercase tracking-[.14em] text-brand-muted">
                 {t('Community portal')}

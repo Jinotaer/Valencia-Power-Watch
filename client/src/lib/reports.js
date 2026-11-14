@@ -1,3 +1,4 @@
+import { distanceMeters } from './routing'
 import { supabase } from './supabase'
 
 const EVIDENCE_BUCKET = 'report-evidence'
@@ -97,6 +98,7 @@ function toReport(row, urls) {
     resolvedByStaffId: row.resolved_by_staff_id ?? null,
     description: `Reported at ${createdAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}. ${meta.summary}`,
     outageType: typeLabel,
+    outageTypeId: row.outage_type ?? '',
     startedTime: row.started_time,
     notes: row.notes ?? '',
     barangay: row.barangay,
@@ -121,6 +123,84 @@ function toReport(row, urls) {
     priority: row.priority ?? 'medium',
     aiVerification: row.ai_metadata ?? (Array.isArray(row.photos) ? row.photos[0]?.ai_verification : null) ?? null,
   }
+}
+
+const ACTIVE_REPORT_TONES = new Set(['pending', 'verified'])
+export const DUPLICATE_INCIDENT_RADIUS_METERS = 300
+
+function normalizeBarangayName(value) {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+export function isActiveResidentReport(report) {
+  return Boolean(report && ACTIVE_REPORT_TONES.has(report.tone))
+}
+
+export function findMatchingResidentIncident(existingReports, candidate) {
+  if (!Array.isArray(existingReports) || !candidate) return null
+
+  const targetBarangay = normalizeBarangayName(candidate.barangay)
+  const targetOutageTypeId = candidate.outageTypeId || ''
+  const hasTargetCoords =
+    Number.isFinite(candidate.coordinates?.latitude) &&
+    Number.isFinite(candidate.coordinates?.longitude)
+  const targetCoords = hasTargetCoords
+    ? [candidate.coordinates.latitude, candidate.coordinates.longitude]
+    : null
+
+  for (const report of existingReports) {
+    if (!isActiveResidentReport(report)) continue
+
+    if (
+      targetBarangay &&
+      targetOutageTypeId &&
+      normalizeBarangayName(report.barangay) === targetBarangay &&
+      report.outageTypeId === targetOutageTypeId
+    ) {
+      return { report, reason: 'same-barangay-type', distanceMeters: null }
+    }
+
+    if (
+      targetCoords &&
+      Number.isFinite(report.coordinates?.latitude) &&
+      Number.isFinite(report.coordinates?.longitude)
+    ) {
+      const distance = distanceMeters(targetCoords, [
+        report.coordinates.latitude,
+        report.coordinates.longitude,
+      ])
+      if (distance <= DUPLICATE_INCIDENT_RADIUS_METERS) {
+        return { report, reason: 'nearby-pin', distanceMeters: Math.round(distance) }
+      }
+    }
+  }
+
+  return null
+}
+
+function createAlreadyReportedError(reference, existingReport = null) {
+  const ref = reference || existingReport?.id || ''
+  const error = new Error(ref ? `ALREADY_REPORTED:${ref}` : 'ALREADY_REPORTED')
+  error.code = 'ALREADY_REPORTED'
+  error.existingReference = ref
+  error.existingReport = existingReport
+  return error
+}
+
+export async function loadActiveResidentReports() {
+  if (!supabase) return []
+  const userId = await currentUserId()
+  if (!userId) return []
+
+  const { data, error } = await supabase
+    .from('reports')
+    .select('id, reference, outage_type, barangay, status, latitude, longitude, created_at')
+    .eq('user_id', userId)
+    .in('status', ['pending', 'verified'])
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []).map((row) => toReport(row, {}))
 }
 
 export async function loadReports() {
@@ -282,6 +362,12 @@ export async function addReport(data) {
   const userId = await currentUserId()
   if (!userId) throw new Error('You need to sign in again.')
 
+  const activeReports = await loadActiveResidentReports()
+  const duplicateMatch = findMatchingResidentIncident(activeReports, data)
+  if (duplicateMatch) {
+    throw createAlreadyReportedError(duplicateMatch.report.id, duplicateMatch.report)
+  }
+
   const uploadedPhotos = await uploadEvidence(userId, data.photos ?? [])
   if (uploadedPhotos.length > 0 && data.aiVerification) {
     uploadedPhotos[0].ai_verification = data.aiVerification
@@ -329,7 +415,13 @@ export async function addReport(data) {
       error = fallback.error
     }
 
-    if (error) throw error
+    if (error) {
+      const duplicateErrorMatch = error.message?.match(/ALREADY_REPORTED:([^\s]+)/i)
+      if (duplicateErrorMatch || error.message?.includes('ALREADY_REPORTED')) {
+        throw createAlreadyReportedError(duplicateErrorMatch?.[1] ?? '')
+      }
+      throw error
+    }
     return toReport(row, {})
   } catch (error) {
     if (uploadedPhotos.length > 0) {
